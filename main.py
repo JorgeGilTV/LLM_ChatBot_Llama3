@@ -1,13 +1,10 @@
 import requests
 import subprocess
-from config import (
-    OPENWEATHER_API_KEY,
-    SERPAPI_KEY,
-    FIRECRAWL_KEY,
-    SOURCEGRAPH_TOKEN
-)
+import tkinter as tk
+from tkinter import scrolledtext
+from config import (OPENWEATHER_API_KEY,SERPAPI_KEY,FIRECRAWL_KEY,SOURCEGRAPH_TOKEN)
 
-# 🧠 Tool: LLaMA 3
+#@Tool: LLaMA 3
 def ask_llama(prompt):
     try:
         result = subprocess.run(
@@ -20,21 +17,7 @@ def ask_llama(prompt):
     except Exception as e:
         return f"Error running LLaMA: {e}"
 
-# 🌤️ Tool: Weather
-def get_weather(city):
-    try:
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
-        response = requests.get(url)
-        data = response.json()
-        if data.get("main"):
-            temp = data["main"]["temp"]
-            desc = data["weather"][0]["description"]
-            return f"The weather in {city} is {desc} with {temp}°C."
-        return "Could not retrieve weather data."
-    except Exception as e:
-        return f"Weather error: {e}"
-
-# 🔍 Tool: Web Search
+#@Tool: Web Search
 def search_web(query):
     try:
         url = "https://serpapi.com/search"
@@ -50,7 +33,7 @@ def search_web(query):
     except Exception as e:
         return f"Search error: {e}"
 
-# 🕸️ Tool: Web Scraping
+#@Tool: Web Scraping
 def crawl_url(url):
     try:
         headers = {"Authorization": f"Bearer {FIRECRAWL_KEY}"}
@@ -60,7 +43,7 @@ def crawl_url(url):
     except Exception as e:
         return f"Scraping error: {e}"
 
-# 🧠 Tool: Code Search
+#@Tool: Code Search
 def search_code(query):
     try:
         headers = {"Authorization": f"token {SOURCEGRAPH_TOKEN}"}
@@ -86,12 +69,8 @@ def search_code(query):
     except Exception as e:
         return f"Code search error: {e}"
 
-# 🧰 Tool registry
+#@Tool registry
 TOOLS = {
-    "weather": {
-        "description": "Get current weather for a city",
-        "function": get_weather
-    },
     "search": {
         "description": "Search the web using SerpAPI",
         "function": search_web
@@ -106,27 +85,48 @@ TOOLS = {
     }
 }
 
-# 🧠 Query router
+#Query router (word selection)
 def route_query(query):
     query_lower = query.lower()
     for key, tool in TOOLS.items():
         if key in query_lower:
-            if key == "weather":
-                city = query.split("in")[-1].strip()
-                return tool["function"](city)
-            elif key == "scrape":
+            if key == "scrape":
                 url = query.split("from")[-1].strip()
                 return tool["function"](url)
             else:
                 return tool["function"](query)
     return ask_llama(query)
 
-# 🚀 Main loop
+#@Main loop
+def run_gui():
+    window = tk.Tk()
+    window.title("LLaMA 3 Agent with Tools ChatBot")
+
+    tk.Label(window, text="Please ask something:").pack(pady=5)
+    entry = tk.Entry(window, width=80)
+    entry.pack(pady=5)
+    output = scrolledtext.ScrolledText(window, wrap=tk.WORD, width=80, height=20)
+    output.pack(pady=10)
+
+    def on_submit():
+        question = entry.get()
+        response = route_query(question)
+        output.delete(1.0, tk.END)
+        output.insert(tk.END, response)
+    
+    button_frame = tk.Frame(window)
+    button_frame.pack(pady=5)
+    tk.Button(button_frame, text="Send", command=on_submit).pack(side=tk.LEFT, padx=10)
+    tk.Button(button_frame, text="Exit", command=window.destroy).pack(side=tk.LEFT, padx=10)
+    window.mainloop()
+
+#Launch GUI
 if __name__ == "__main__":
-    print("🤖 LLaMA 3 Agent with Active Tools")
+    #run_gui()
+    print("🤖 🤖 🤖 LLaMA 3 Agent with Active Tools 🤖 🤖 🤖")
     while True:
-        user_input = input("🧠 Question: ")
+        user_input = input("Please do the question: ")
         if user_input.lower() in ["exit", "quit"]:
             break
         response = route_query(user_input)
-        print(f"🔧 Answer: {response}")
+        print(f"Answering: {response}")

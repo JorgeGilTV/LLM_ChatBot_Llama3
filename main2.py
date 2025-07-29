@@ -1,12 +1,11 @@
 import requests
 import subprocess
-import tkinter as tk
-from tkinter import scrolledtext
 from config import (
     OPENWEATHER_API_KEY,
     SERPAPI_KEY,
     FIRECRAWL_KEY,
-    SOURCEGRAPH_TOKEN
+    SOURCEGRAPH_TOKEN,
+    CLAUDE_API_KEY
 )
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -23,6 +22,54 @@ def ask_llama(prompt):
         return result.stdout.decode("utf-8")
     except Exception as e:
         return f"Error running LLaMA: {e}"
+
+#@Tool: Claude
+def ask_claude(prompt):
+    try:
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": CLAUDE_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        data = {
+            "model": "claude-3-opus-20240229",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        response = requests.post(url, json=data, headers=headers)
+        result = response.json()
+        return result["content"][0]["text"]
+    except Exception as e:
+        return f"Claude error: {e}"
+
+#@Tool: MCP (Model Context Protocol)
+def ask_mcp(prompt):
+    try:
+        # Detectar herramienta desde el prompt
+        for key in TOOLS.keys():
+            if key in prompt.lower():
+                tool_name = key
+                break
+        else:
+            return "No matching MCP tool found in prompt."
+
+        # Enviar solicitud JSON-RPC al servidor MCP
+        url = "http://localhost:3333/jsonrpc"
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "call_tool",
+            "params": {
+                "tool": tool_name,
+                "input": prompt
+            },
+            "id": 1
+        }
+        response = requests.post(url, json=payload)
+        result = response.json()
+        return result.get("result", "No result from MCP.")
+    except Exception as e:
+        return f"MCP error: {e}"
 
 #@Tool: Web Search
 def search_web(query):
@@ -102,30 +149,13 @@ def route_query(query):
                 return tool["function"](url)
             else:
                 return tool["function"](query)
-    return ask_llama(query)
 
-#@GUI (optional)
-def run_gui():
-    window = tk.Tk()
-    window.title("LLaMA 3 Agent with Tools ChatBot")
-
-    tk.Label(window, text="Please ask something:").pack(pady=5)
-    entry = tk.Entry(window, width=80)
-    entry.pack(pady=5)
-    output = scrolledtext.ScrolledText(window, wrap=tk.WORD, width=80, height=20)
-    output.pack(pady=10)
-
-    def on_submit():
-        question = entry.get()
-        response = route_query(question)
-        output.delete(1.0, tk.END)
-        output.insert(tk.END, response)
-    
-    button_frame = tk.Frame(window)
-    button_frame.pack(pady=5)
-    tk.Button(button_frame, text="Send", command=on_submit).pack(side=tk.LEFT, padx=10)
-    tk.Button(button_frame, text="Exit", command=window.destroy).pack(side=tk.LEFT, padx=10)
-    window.mainloop()
+    if "claude:" in query_lower:
+        return ask_claude(query.replace("claude:", "").strip())
+    elif "mcp:" in query_lower:
+        return ask_mcp(query.replace("mcp:", "").strip())
+    else:
+        return ask_llama(query)
 
 #@Flask API
 app = Flask(__name__)
@@ -136,7 +166,7 @@ def ask():
     if request.method == "POST":
         data = request.get_json()
         question = data.get("question", "")
-    else:  # GET
+    else:
         question = request.args.get("question", "")
 
     if not question:
@@ -151,7 +181,7 @@ def index():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>LLaMA 3 Agent</title>
+        <title>Multi-Agent ChatBot</title>
         <style>
             body { font-family: Arial; padding: 20px; background-color: #f4f4f4; }
             #container { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
@@ -162,7 +192,7 @@ def index():
     </head>
     <body>
         <div id="container">
-            <h2>🧠 LLaMA 3 Agent with Tools</h2>
+            <h2>🧠 Multi-Agent ChatBot</h2>
             <input type="text" id="question" placeholder="Ask something...">
             <button onclick="sendQuestion()">Send</button>
             <textarea id="response" readonly placeholder="Response will appear here..."></textarea>

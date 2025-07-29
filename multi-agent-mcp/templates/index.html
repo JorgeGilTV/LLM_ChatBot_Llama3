@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interfaz MCP</title>
+</head>
+<body>
+    <h1>🧠 Interfaz MCP Personalizada</h1>
+    <form method="post">
+        <label for="tool">Herramienta:</label>
+        <select name="tool">
+            <option value="claude">Claude</option>
+            <option value="llama">LLaMA</option>
+            <option value="search">Web Search</option>
+            <option value="scrape">Web Scraping</option>
+            <option value="code">Code Search</option>
+        </select><br><br>
+
+        <label for="prompt">Prompt / Input:</label><br>
+        <textarea name="prompt" rows="4" cols="50"></textarea><br><br>
+
+        <input type="submit" value="Enviar">
+    </form>
+
+    {% if response %}
+        <h2>📝 Respuesta:</h2>
+        <pre>{{ response }}</pre>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,55 @@
+body {
+  font-family: "Segoe UI", Roboto, sans-serif;
+  background-color: #f9f9fb;
+  color: #333;
+  margin: 0;
+  padding: 0;
+  width: 300px;
+}
+
+header {
+  background: linear-gradient(90deg, #6f2da8, #ff6f61); /* Amdocs-inspired gradient */
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+
+main {
+  padding: 1rem;
+}
+
+label {
+  font-weight: bold;
+  margin-top: 1rem;
+  display: block;
+}
+
+select, textarea, button {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+button {
+  background: linear-gradient(90deg, #6f2da8, #ff6f61); /* Matches header */
+  color: white;
+  border: none;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+button:hover {
+  background: linear-gradient(90deg, #5a1f8e, #e85c50); /* Slightly darker hover effect */
+}
+
+pre {
+  background-color: #f4f4f6;
+  padding: 1rem;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-top: 1rem;
+}

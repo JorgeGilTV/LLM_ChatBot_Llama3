@@ -1,0 +1,10 @@
+{
+    "manifest_version": 3,
+    "name": "🧠 GenDox AI 🧠",
+    "version": "1.0",
+    "description": "Extensión to interact with MCP Server",
+    "permissions": ["activeTab"],
+    "action": {
+      "default_popup": "popup.html"
+    }
+  }

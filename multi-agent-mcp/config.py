@@ -23,7 +23,7 @@ GRAFANA_PANEL_UID = "abc123"
  
 # Wiki AT&T
 WIKI_USERNAME = "jg493a"
-WIKI_PASSWORD = "Mult1V3rs3&Cats1"
+WIKI_PASSWORD = ""
  
 # Email
 SMTP_SERVER = "smtp.amdocs.com"

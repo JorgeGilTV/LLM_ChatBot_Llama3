@@ -156,8 +156,6 @@ def wiki_search(query: str) -> str:
 
     return output
 
-
-
 #read itrack
 def read_tickets(query: str) -> str:
     session = requests.Session()
@@ -334,7 +332,6 @@ def read_tickets(query: str) -> str:
     output += "</table>"
 
     return output
-
 
 # 🧠 AI Suggestions
 def llama_suggestions(query: str) -> str:

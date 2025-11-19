@@ -12380,3 +12380,771 @@ Detailed logs are added to /opt/app/meddata/ops/KafkaGenericScripts/Logs/cmg_pro
             </table>
         
 2025-11-12 16:47:15,366 [INFO] 127.0.0.1 - - [12/Nov/2025 16:47:15] "POST / HTTP/1.1" 200 -
+2025-11-13 09:39:28,152 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-13 09:39:28,155 [INFO] 📥 Input received: omd
+2025-11-13 09:39:35,222 [ERROR] Error executing tool 'Read_Itrack': 'NoneType' object has no attribute 'replace'
+2025-11-13 09:39:35,236 [INFO] 127.0.0.1 - - [13/Nov/2025 09:39:35] "POST / HTTP/1.1" 200 -
+2025-11-13 12:21:05,877 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-13 12:21:05,879 [INFO] 📥 Input received: abv
+2025-11-13 12:21:12,081 [INFO] 📤 Full Output:
+
+        <style>
+        .ticket-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .ticket-table th, .ticket-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .ticket-table th {
+            background-color: #f2f2f2;
+        }
+        .ticket-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .status-In\ Progress { background-color: #fff3cd; }
+        .status-To\ Do { background-color: #e0f7fa; }
+        .status-Open { background-color: #e0f7fa; }
+        </style>
+        <p><strong>Tickets Found:</strong> 41</p>
+        <table class="ticket-table">
+            <tr>
+                <th>TICKET</th>
+                <th>STATUS</th>
+                <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST COMMENT</th>
+                <th>LINK</th>
+                <th>URL</th>
+            </tr>
+    <tr class='status-4\ Eyes\ Testing'><td>ARIA-2845</td><td>4 Eyes Testing</td><td>Create Flow &quot;ABV - Add Voice Mail&quot;</td><td>{color:#ff8b00}*Background:*{color}
+
+The new RVP/SPP addVM call (Add Voice Mail) needs to be called for specific numbers.  ** This will automate process that was done manually by TCC agent.
+
+{color:#ff8b00}*User Story:*{color}
+
+As product owner I want to have flow that will be triggered when ABV - Add Voice Mai task will be created. It will handle the process via RVP/SPP addVoiceMail feature.
+
+ ** 
+
+{color:#ff8b00}*Acceptance Criteria:*{color}
+
+Flow : “ABV – RVP for Add Voice Mail” is created
+ * Flow triggers on task creation
+ * Flow handles fallout of synchronous RVP call
+ * Flow has error Handling
+
+{color:#ff8b00}*Implementation Scope:* {color}
+
+Create Flow: ** “{*}ABV – RVP for Add Voice Mail{*}” (see overview diagram overview)
+ * Flow triggers on task creation
+ * Create system property for timeout property “x_att2_avcp.abv.rvp.add_voice_mail_task.wait“ that defines maximum waiting time before fallout task for BOA is created (default set is 0 – will not time out)
+ ** Read Roles: x_att2_avcp.application_owner, x_att2_avcp.admin
+ ** Write Roles: x_att2_avcp.application_owner, x_att2_avcp.admin
+ * Lookup TNs with voice mail to process in “TN List” table. Field “Add Voice Mail” value required.
+ * See RVP for TN Management v5 for Fallout, wait and Error Handling Logic.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/ARIA-2845' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/ARIA-2845</td></tr><tr class='status-Accepted'><td>CDEX-367149</td><td>Accepted</td><td>ABV Defect</td><td>1. Wireless signal default to Yes:   DEFECT – Gap in prod
+
+Default signal strength to yes was delivered and is in tst4 and tst3.  I couldn’t find the story number, but Bhanu can you check on the deployment it may have been missed in the push to prod.
+
+!image-2024-11-08-12-06-47-791.png!
+
+2. Wireless Access drop down should be Primary first and backup second. (Defect)
+
+!image-2024-11-08-12-07-20-301.png!
+
+3. Wireless access default selected but field showing blank and on summary system selects backup. Even though Seller does not choose it let them proceed and show on summary page. But on this screen its blank.
+
++!image-2024-11-08-12-07-55-947.png!+
+
+4. On configure screen service application and calling plan changes are not working. +Defect+
+
+On configure screen service application and calling plan changes are not working.  Not sure if this is the same issue Rob reported where he could not change to point of sale when editing the summary. I am not seeing this issue in tst 4.  Edit ABV change line from Voice to Point of Sale – utility line is not set automatically (does in tst 3)
+
+ 
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-367149' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-367149</td></tr><tr class='status-Accepted'><td>CDEX-369600</td><td>Accepted</td><td> ABV Defect TST4  </td><td>When you select a line in tst4 it shows ATT phone Attribute field - [Lightning Experience | Salesforce|https://absatt--tst4.sandbox.lightning.force.com/lightning/n/vlocity_cmt__EnterpriseSalesApp?c__accountId=0011U00000HXpaK&amp;c__cartId=0Q0DV00000123dI0AQ&amp;c__cartName=Test%20Ip%20Broadband&amp;c__workingCart=271]  (Not visible in tst 3 [Lightning Experience | Salesforce|https://absatt--tst3.sandbox.lightning.force.com/lightning/n/vlocity_cmt__EnterpriseSalesApp?c__accountId=0011U00000JFXuP&amp;c__cartId=0Q0DV000000ySRS0A2&amp;c__cartName=Test%20Integrated%20Quote&amp;c__workingCart=785]) or Prod (Concern this could get pushed)
+
+ 
+
+!image-2024-11-19-12-10-40-232.png!
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-369600' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-369600</td></tr><tr class='status-Accepted'><td>CDEX-423487</td><td>Accepted</td><td>PID 433772_ARIA_ABV_NS - ABV Usage Billing - MEDD (Automation control task)</td><td>PID 433772_ARIA_ABV_NS - ABV Usage Billing - MEDD (Automation control task)
+
+Order Type - NewStart
+Scenario - TC01 SV: ADI + ABV New Start: Hybrid TNs, Backup Wireless Broadband 
+Order No - ORD0171283 / ORDL0481285
+Task - ABV Usage Billing - MEDD (Automation control task) - Open 
+
+Usage Billing (MEDD) integration FAILED (attempts:1).
+
+You may set this Order Task state as below:
+ - In Progress - this OT will be reassigned to the “ASG-OM Automation” group and a new Usage Billing-MEDD integration attempt will take place.
+ - Waiting for Information - the current assignment group is kept and a new integration attempt will occur.
+ - Closing complete - this OT is immediately closed without any new integration attempts.
+---------------------------------------------------
+Action Context ID (MEDD Usage Billing): 0407711e616a2610895ff02cbecb57f7
+Timestamp: 2025-07-07 11:53:13
+Response: {&quot;status&quot;:401,&quot;message&quot;:&quot;Failed to send message with error: Not authorized to access topics: [com.att.acvp.uat.abv_medd.0.1]&quot;}
+Body: [
+{
+&quot;key&quot;: &quot;YWJ2LW1lZGQtdWI=&quot;,
+&quot;eventBody&quot;:
+Unknown macro: \{&quot;data&quot;}
+,\{\&quot;action\&quot;:\&quot;add\&quot;,\&quot;telephoneNumber\&quot;:\&quot;9728685407\&quot;,\&quot;callingPlanEnum\&quot;:1},\{\&quot;action\&quot;:\&quot;add\&quot;,\&quot;telephoneNumber\&quot;:\&quot;9727646316\&quot;,\&quot;callingPlanEnum\&quot;:1},\{\&quot;action\&quot;:\&quot;add\&quot;,\&quot;telephoneNumber\&quot;:\&quot;9727646356\&quot;,\&quot;callingPlanEnum\&quot;:1},\{\&quot;action\&quot;:\&quot;add\&quot;,\&quot;telephoneNumber\&quot;:\&quot;9727646400\&quot;,\&quot;callingPlanEnum\&quot;:3}&quot;
+]
+},
+&quot;metadata&quot;:
+{ &quot;tableName&quot;: &quot;sn_csm_om_order_line_item&quot;, &quot;recordSysId&quot;: &quot;8053dc344766e250ed53ae5a516d436b&quot;, &quot;flow_context&quot;: &quot;0407711e616a2610895ff02cbecb57f7&quot;, &quot;timestamp&quot;: &quot;2025-07-07 11:53:13&quot; }
+},
+&quot;payloadType&quot;: &quot;JSON&quot;
+}
+]
+Error Code: 0
+Error Message: Method failed: (/v2/rest-api-service/topics/com.att.acvp.uat.abv_medd.0.1/messages) with code: 401 - Invalid username/password combo
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-423487' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-423487</td></tr><tr class='status-Accepted'><td>CDEX-391598</td><td>Accepted</td><td>CloudRunner_TST3_ABV_Multiproduct(ADI+ABV) Without DD</td><td>{*}Description{*}: Address is changing from 
+
+{*}Steps{*}:
+1. Open the Parent Order
+
+2. Click on the sub-order on which the amend has been made.
+
+3. Submit the sub-order post performing the supp.
+
+4. Order should be submitted successfully.
+
+ 
+
+{*}Actual{*}: Order is submitted successfully but is not processed at downstream due to same address being used for both ADI and ABV.
+
+{*}Expectation{*}: Order must be submitted successfully.
+
+{*}Order details{*}: 
+
+Account id: 0011U00000Gfqx8QAB
+
+Inventory External Id: 801dx00000F1spKAAR:801dx00000F1lQzAAJ
+
+ABV: 801dx00000F1spKAAR:801dx00000F6mcTAAR
+
+ADI: 801dx00000F1spKAAR:801dx00000F6mcUAAR
+
+MSPS/TSCS ID: MSPS00078849SF
+
+Contract ID: 800dx00000ETdp8AAD
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-391598' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-391598</td></tr><tr class='status-Accepted'><td>CDEX-453462</td><td>Accepted</td><td>PID 433772_ARIA_ABV_NS - ABV Service Inventory (EDF)</td><td>Order Type - NS 
+Order No - ORD0206310 / ORDL0586514
+Scenario - Multiproduct: ABF (IPBB) + ABV
+Task - ABV Service Inventory (EDF)
+
+The task is in Open state 
+There has not been a change of state on the Order Task for 10 minutes. Please check the Asynchronous Responses, even if there are none, please reach out to the EDF for further assistance.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-453462' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-453462</td></tr><tr class='status-Accepted'><td>CDEX-424100</td><td>Accepted</td><td>PID 433772_ARIA_ABV_NS - Fallout: Error Occurred in ABV Add/Remove/Change CMDB Data</td><td>PID 433772_ARIA_ABV_NS - Fallout: Error Occurred in ABV Add/Remove/Change CMDB Data
+
+Order Type - NS
+Order No - ORD0171283 / ORDL0481285
+Scenario - TC01 SV: ADI + ABV New Start: Hybrid TNs, Backup Wireless Broadband 
+Task - Fallout: Error Occurred in ABV Add/Remove/Change CMDB Data
+
+
+
+Error Occurred in ABV Add/Remove/Change CMDB Data.
+To Retrigger this API - Close Complete this task. 
+To Bypass this API - Cancel This Task.
+
+See Below for Error Details - Also Check Work Notes of this task for possible additional information.
+Error Code: 1
+Error Message: No record found in Look Up Record action. Context id: 9e16c393aa2e66147dd98e93bb6c992a, table: cmdb_model, encoded query: name=CDS-VAB1
+
+
+The order is completed but seeing this above fallout is still open </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-424100' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-424100</td></tr><tr class='status-Accepted'><td>CDEX-433279</td><td>Accepted</td><td>PID 433772_ARIA_SV_ABV_MACD - Fallout: Error Occurred in ABV Post Decomp Characteristic Mapping</td><td>PID 433772_ARIA_SV_ABV_MACD - Fallout: Error Occurred in ABV Post Decomp Characteristic Mapping
+
+Order Details :
+
+Order Type - MACD
+Order No - ORD0172411 / ORDL0485879
+Scenario - MACD - TC07 MACD: Add Voice Line (on existing device)</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-433279' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-433279</td></tr><tr class='status-Accepted'><td>CDEX-370471</td><td>Accepted</td><td>SF | AOTS# 000000330741872 :ABV Wireless Backup price is not getting updated on Working Cart during Contract term update</td><td>AOTS: 000000330741872
+
++Testing Steps:+
+ # Create Oppty, quote
+ # Add and Validate Location
+ # Once ABV product is selected, select contract term to 36 with 3 TL&#x27;s and 1 CPE along with BA
+ # Change the Wireless Access type to Backup Wireless Access and Add product to Configuration.
+ # on Working Cart, with 36months price for Wireless Access type is $10.
+ # Change the contract term from 36months to 1 month.
+
+{*}Expected result{*}: Price for Wireless Access type should be updated to $20 on Working cart.
+{*}Actual Result{*}: Price for Wireless Access type is still showing $10 on Working cart.
+
+But once the product gets added to Location, the price is getting update to $20 on ESM Summary.
+
+
+Working Cart: 
+!image-2024-11-22-21-00-08-828.png|width=872,height=391!
+
+ESM Summary:
+!image-2024-11-22-21-05-59-215.png|width=861,height=253!</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-370471' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-370471</td></tr><tr class='status-Accepted'><td>CDEX-428346</td><td>Accepted</td><td>PID 433772_ARIA_SV_ABV_NS - Fallout: Error Occurred in ABV - Validate RVP Payload</td><td>Order Type - Inventory
+Scenario - TC05: Supp NS order after RVP TN Activation to Add Voice Line on existing device 
+Order No - ORD0171902
+Task - Fallout: Error Occurred in ABV - Validate RVP Payload
+
+
+
+Error Occurred in ABV - Validate RVP Payload
+To retrigger this step - Please fix issues in error details below and Close Complete this task. 
+To bypass this step - Cancel this task.
+
+Validation Type: cpe
+
+See Below for Error Details: \{&quot;serviceOrderItem[0].service.serviceCharacteristic.sim2Apn&quot;:{&quot;sim2Apn&quot;:null,&quot;error&quot;:&quot;sim2Apn is required if sim2Priority value is not &#x27;OFF&#x27;&quot;}}</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-428346' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-428346</td></tr><tr class='status-Accepted'><td>CDEX-442635</td><td>Accepted</td><td>PID 433772_ARIA_ABV_SV_IB  - Fallout: Error Occurred in ABV - TN Activation V2</td><td>Order Type - IB 
+Order No - ORD0205413 / ORDL0583451
+Scenario - New Start - TC07 MACD: Add Voice Line (on existing device) 
+
+Order Type - IB 
+Order No - ORD0205406 / ORDL0583430
+Scenario - New Start - TC10: MACD: Add Wireless Access (on existing devices) 
+
+Task - *Fallout: Error Occurred in ABV - TN Activation V2*
+
+Error Occurred in ABV - TN Activation V2.
+To Retrigger this API - Close Complete this task. 
+To Bypass this API - Cancel This Task.
+
+See Below for Error Details - Also Check Work Notes of this task for possible additional information.
+Error Code: 1
+Error Message: No record found in Look Up Record action. Context id: dd8b45f1e244f610381f361f4fbbc472, table: sn_ind_tmt_orm_product_order, encoded query: order_line_item=^specification.initial_version.nameLIKEAT&amp;T Business Voice</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-442635' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-442635</td></tr><tr class='status-Accepted'><td>CDEX-389751</td><td>Accepted</td><td>CloudRunner_ETE_ARIA_ ABV  Disconnect Single Site (all TNs) - Customer Order line Items Not Present except ABV Business voice-V6</td><td>CloudRunner_ETE_ARIA_MACD - ABV Disconnect Single Site (all TNs) - Customer Order line Items Not Present except ABV Business voice-V6
+
+Hi team,
+Order Details - #ORD0092065/ ORDL0246913
+Scenario - TC 05 ABV Disconnect Single Site (all TNs) 
+
+We are unable to see any Customer order line items except the ABV Business Voice - V6 </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-389751' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-389751</td></tr><tr class='status-Accepted'><td>CDEX-381820</td><td>Accepted</td><td>CloudRunner_ETE_ARIA_MACD_ABV  Disconnect Single Site (all TNs) - Fallout: ABV CSI R3 - SubmitTelephoneNumberIndustryData </td><td>CloudRunner_ETE_ARIA_MACD_ABV  Disconnect Single Site (all TNs) - Fallout: ABV CSI R3 - SubmitTelephoneNumberIndustryData 
+
+ 
+
+Hi Team, 
+
+Order Details - ORD0091877 / ORDL0246328
+Fallout: ABV CSI R3 - SubmitTelephoneNumberIndustryData - Inprogress
+
+Status Code: 500
+Error Code: 1
+Error Message: Method failed: (/Services/com/cingular/csi/rthreeniche/SubmitTelephoneNumberIndustryData.jws) with code: 500
+Response Body: &lt;SOAP-ENV:Envelope xmlns:SOAP-ENV=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;&gt;&lt;SOAP-ENV:Header&gt; 
+&lt;MessageHeader xmlns=&quot;http://csi.cingular.com/CSI/Namespaces/RThreeNiche/InfrastructureCommon/Types/Public/MessageHeader.xsd&quot;&gt;
+&lt;TrackingMessageHeader&gt;
+&lt;infrastructureVersion&gt;86&lt;/infrastructureVersion&gt;
+&lt;originalInfrastructureVersion&gt;86&lt;/originalInfrastructureVersion&gt;
+&lt;applicationName&gt;RThreeNiche&lt;/applicationName&gt;
+&lt;version&gt;225&lt;/version&gt;
+&lt;originalVersion&gt;225&lt;/originalVersion&gt;
+&lt;messageId&gt;c06d58ed3b93d210b9adc19704e45a15&lt;/messageId&gt;
+&lt;timeToLive&gt;300000&lt;/timeToLive&gt;
+&lt;conversationId&gt;m48190~CNG-CSI~1b0ddaef-a933-409b-8faf-e7b0b98d58ad&lt;/conversationId&gt;
+&lt;dateTimeStamp&gt;2025-01-27T14:28:04Z&lt;/dateTimeStamp&gt;
+&lt;uniqueTransactionId&gt;ServiceGateway680957@q100csg69c1_1e162d57-9160-4a08-84ec-c377bd344070&lt;/uniqueTransactionId&gt;
+&lt;/TrackingMessageHeader&gt;
+&lt;SecurityMessageHeader&gt;
+&lt;userName&gt;m48190&lt;/userName&gt;
+&lt;userPassword&gt;m481900624&lt;/userPassword&gt;
+&lt;/SecurityMessageHeader&gt;
+&lt;SequenceMessageHeader&gt;
+&lt;sequenceNumber&gt;1&lt;/sequenceNumber&gt;
+&lt;totalInSequence&gt;1&lt;/totalInSequence&gt;
+&lt;/SequenceMessageHeader&gt;
+&lt;/MessageHeader&gt;
+&lt;/SOAP-ENV:Header&gt; &lt;SOAP-ENV:Body&gt; &lt;SOAP-ENV:Fault xmlns:cer=&quot;http://csi.cingular.com/CSI/Namespaces/RThreeNiche/InfrastructureCommon/Types/Public/ErrorResponse.xsd&quot; xmlns:std=&quot;http://csi.cingular.com/CSI/Namespaces/RThreeNiche/InfrastructureCommon/Types/Public/SoapFaultDetails.xsd&quot;&gt;
+&lt;faultcode xmlns:ns1=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;&gt;ns1:Client&lt;/faultcode&gt;
+&lt;faultstring&gt;phoneStart Is Invalid&lt;/faultstring&gt;
+&lt;faultactor&gt;soap-env:Client&lt;/faultactor&gt;
+&lt;detail&gt;
+&lt;std:CSIApplicationException&gt;
+&lt;cer:Response&gt;
+&lt;cer:code&gt;300&lt;/cer:code&gt;
+&lt;cer:description&gt;Data Error&lt;/cer:description&gt;
+&lt;/cer:Response&gt;
+&lt;cer:ServiceProviderEntity&gt;
+&lt;cer:reportingServiceEntity&gt;RTHREENICHEICOMMDB&lt;/cer:reportingServiceEntity&gt;
+&lt;cer:faultDate&gt;2025-01-27Z&lt;/cer:faultDate&gt;
+&lt;cer:faultSequenceNumber&gt;1&lt;/cer:faultSequenceNumber&gt;
+&lt;cer:faultLevel&gt;ERROR&lt;/cer:faultLevel&gt;
+&lt;cer:faultCode&gt;3008108652002&lt;/cer:faultCode&gt;
+&lt;cer:faultDescription&gt;phoneStart Is Invalid&lt;/cer:faultDescription&gt;
+&lt;cer:ServiceProviderRawError&gt;
+&lt;cer:code&gt;025&lt;/cer:code&gt;
+&lt;cer:description&gt;Invalid phoneStart for TN range -&lt;/cer:description&gt;
+&lt;/cer:ServiceProviderRawError&gt;
+&lt;/cer:ServiceProviderEntity&gt;
+&lt;/std:CSIApplicationException&gt;
+&lt;/detail&gt;
+&lt;/SOAP-ENV:Fault&gt;&lt;/SOAP-ENV:Body&gt; &lt;/SOAP-ENV:Envelope&gt;</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-381820' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-381820</td></tr><tr class='status-Accepted'><td>CDEX-384406</td><td>Accepted</td><td>CloudRunner_ETE_ARIA_MACD - ABV Disconnect Single Site (all TNs) - Fallout: Error Occured in ABV Add/Remove/Change CMDB Data - Open </td><td>CloudRunner_ETE_ARIA_MACD - ABV Disconnect Single Site (all TNs) - Fallout: Error Occured in ABV Add/Remove/Change CMDB Data - Open 
+
+Hi Team, 
+Order Details - ORD0092065 / ORDL0246913
+
+Scenario - ABV Disconnect Single Site (all TNs) 
+
+*Fallout: Error Occured in ABV Add/Remove/Change CMDB Data - Open* 
+
+Error Occured in ABV Add/Remove/Change CMDB Data.
+To Retrigger this API - Close Complete this task. 
+To Bypass this API - Cancel This Task.
+
+See Below for Error Details - Also Check Work Notes of this task for possibile additional information.
+Error Code: 1
+Error Message: Value of field record is not a GlideRecord
+
+Can you please check this?</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-384406' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-384406</td></tr><tr class='status-Accepted'><td>CDEX-357486</td><td>Accepted</td><td>CloudRunner_SIT_TST4_Sprint19.3_Unable to add ABV as ABV tile is not visible</td><td>*Description:* Unable to add the ABV product as the tile itself is NOT visible.
+
+*Steps to reproduce:*
+ # Login into salesforce as direct/indirect seller.
+ # Create an opportunity
+ # Create a quote
+ # Add a location and validate it
+ # Click on &quot;Add products&quot;
+
+*Actual result:* ABV tile should appear to add the product to the location
+
+*Expected result:* ABV tile itself is not visible.
+
+Quote ID: 0Q0DV000000rJg50AE
+
+Location GLID: 000100QVI3
+
+!image-2024-10-01-12-16-49-388.png!</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-357486' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-357486</td></tr><tr class='status-Accepted'><td>CDEX-405724</td><td>Accepted</td><td>CloudRunner_ETE_ARIA_AddSite - ABV Service Inventory (EDF)</td><td>CloudRunner_ETE_ARIA_AddSite - ABV Service Inventory (EDF)
+
+ 
+
+Order Type - Addsite
+Order No - ORD0133387 / ORDL0369078
+Scenario - ABV Alliance 
+Task - ABV Service Inventory (EDF)
+
+The task is in Open state 
+There has not been a change of state on the Order Task for 10 minutes. Please check the Asynchronous Responses, even if there are none, please reach out to the EDF for further assistance.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-405724' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-405724</td></tr><tr class='status-Accepted'><td>CDEX-391246</td><td>Accepted</td><td>CloudRunner_ETE_ARIA_MACD - ABV Disconnect Single Site (all TNs) - Fallout: Error Occurred in ABV Add/Remove/Change CMDB Data - Open</td><td>CloudRunner_ETE_ARIA_MACD - ABV Disconnect Single Site (all TNs) - Fallout: Error Occurred in ABV Add/Remove/Change CMDB Data - Open
+Hi Team, 
+Order Details - ORD0092423 / ORDL0248475
+
+Scenario - ABV Disconnect Single Site (all TNs) 
+
+*Fallout: Error Occured in ABV Add/Remove/Change CMDB Data - Open*
+
+**
+
+Error Occurred in ABV Add/Remove/Change CMDB Data.
+To Retrigger this API - Close Complete this task. 
+To Bypass this API - Cancel This Task.
+
+See Below for Error Details - Also Check Work Notes of this task for possible additional information.
+Error Code: 1
+Error Message: Error occured while inserting record: Operation against file &#x27;cmdb_rel_ci&#x27; was aborted by Business Rule &#x27;Prevent Recursion in CI Relationships^8de4a25a474ca610ed53ae5a516d4304&#x27;. Business Rule Stack:Prevent Recursion in CI Relationships
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-391246' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-391246</td></tr><tr class='status-Accepted'><td>CDEX-319572</td><td>Accepted</td><td>CloudRunner_SIT_TST5_Asset status is updated to blank ABV  Orders</td><td>1.Craete ABV order
+
+2. Send the Order for Activation 
+
+3. Validate the asset status 
+
+ 
+
+Expected Result: Asset status Should be updated to Active
+
+Actual Result: Asset status is blank
+
+Test Data:
+
+&quot;externalId&quot;:&quot;801KQ0000002Sq6YAE:801KQ0000002SqBYAU&quot;
+
+ 
+
+!image-2024-05-13-16-10-59-295.png!
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-319572' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-319572</td></tr><tr class='status-Accepted'><td>CDEX-319545</td><td>Accepted</td><td>CloudRunner_SIT_TST5_Unable to view the Orchestration Plan for ABV Disconnect Orders</td><td>1.Took ABV Assest which is activated  
+
+2.Click on Modify and select &quot;Remove an entire asset or remove individual TLs/CPEs&quot;
+
+3.Choose the ABV and click on procced 
+
+4.Order Submitted Successfully
+
+5.Navigate to the Suborder and open Orchestator plan
+
+ 
+
+Expected Result: Seller Should be able to see the Orchestrator Plan
+
+Actual Result: Seller is not able to see the Orchestrator Plan
+
+Test Data:801KQ0000002XzXYAU: 801KQ0000002XzYYAU
+
+!image-2024-05-13-12-48-59-841.png!</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-319545' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-319545</td></tr><tr class='status-Accepted'><td>CDEX-444170</td><td>Accepted</td><td>SIT ABV Supps - SDW not processing ABV supp correctly on change-service-application</td><td>SIT ABD Supps - SDW not processing ABV supp correctly on change-service-application
+
+order info:
+------------
+&quot;op&quot;: &quot;change-service-application&quot; 801Ou00000VVGrcIAH:801Ou00000VrdJAIAZ , getting response of \{&quot;node&quot;:&quot;asf-orders-eapi-v2-impl&quot;,&quot;code&quot;:&quot;201&quot;,&quot;message&quot;:&quot;SUCCESS&quot;,&quot;description&quot;:&quot;The request has been submitted successfully&quot;,&quot;transactionId&quot;:&quot;88734913-6461-43a2-81e1-31d7df10df23&quot;,&quot;traceId&quot;:&quot;a6UOu000000LLnqMAG&quot;}
+
+problem description
+--------------------
+SDW not processing ABV supp correctly on change-service-application (possibly all supps need to be checked).
+order was failing on optional/mandatory handling ...
+@Ashish Arvind Thakre / ACVP check which product characteristics on change-service-application are optional
+@Carlos went thru list with Ashish documenting in ABV SUPPS Add TL and CPE.xlsx
+
+Per initial triage by Matej, fix is possibly needed on 1 (discovered) + possibly other 5 supp flows (some of them however have just 1 or 2 characteristics, the change service application has 5
+
+if something is not mandatory, code will try to update something NULL and will result in error
+for MANDATORY fields missing SDW should return error/reject
+for OPTIONAL fields missing SDW could ignore
+the list of catalog/product configuration
+
+the SDW code code is getting whole input (5 characteristics) and it&#x27;s doing update for each one of that
+it&#x27;s doing it for 6, but there is only 5 in payload, code is not handling that
+
+other flows to check
+ - change shipping address
+ - change cnam
+ - change portIN.. (TN, TN type)
+ - change cpinfo 
+ - change TN ...
+
+ 
+
+ALSO PROD CHAR in PORTIN for TN-VTN (as captured in xlsx) may be missing in SDW code for processing as it was never discussed before
+
+pending confirmation from ashish on Triage call ... @Ashish Arvind Thakre / ACVP check which product characteristics on PORTIN are optional | Ashish unable to check, the consensus (Carlos, Tim, team) was to stick to fixing change-service-application, and raise PORTIN in E2E</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-444170' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-444170</td></tr><tr class='status-Accepted'><td>CDEX-418998</td><td>Accepted</td><td>CloudRunner_SIT_Regression_FRQA_Sprint_22.3_ABV MACD_Unable to change ABV Internet priority for an existing ABV Gateway</td><td>Issue: When intent: Change ABV Internet Priority for an existing ABV Gateway is selected, and Master Order and Sub are generated. Unable to perform changes to Transport Priority
+
+Steps to Reproduce:
+ # Login to FRQA
+ # Submit one S-ABV order and once the order is Activated
+ # Navigate to Asset and click on Modify button
+ # Select Change ABV Internet Priority for an existing ABV Gateway and click on Next
+ # MACD Master order and Sub order would get generated
+ # Click on Add details &amp; Submit from the Sub order and suer lands on Product and billing configuration screen
+
+Expected Result: From Configuration Options, user should be allowed to select ABV Gateway - Site Readiness option and perform Transport priority changes
+
+Actual Result: on Product and billing configuration screen, ABV Gateway - Site Readiness is already marked as completed, and option is also disabled in dropdown, preventing user to perform changes.
+
+Master Order: 801Oy00000zU7c6IAC
+
+!image-2025-06-23-14-24-06-628.png!</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-418998' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-418998</td></tr><tr class='status-Accepted'><td>CDEX-313125</td><td>Accepted</td><td>CloudRunner_Sprint 17.5_FutureCRQA_ABV : Getting error while generating a contract for ABV NS</td><td>steps to reproduce
+ # create opportunity and quote 
+ # Add ABV product to validated location 
+ # completed credit check 
+ # click generate contract button  
+
+Expected :
+
+contract should be generated successful
+
+Actual : getting error message Hit a snag
+
+!image-2024-04-19-17-51-40-619.png|width=759,height=335!
+
+Test data - [https://absatt|https://absatt/]–futurecrqa.sandbox.lightning.force.com/lightning/n/vlocity_cmt_{_}EnterpriseSalesApp?c{_}{_}accountId=0013g00000duHDk&amp;c{_}{_}cartId=0Q0KS000000HDq60AG&amp;c{_}_cartName=NS%20Testing%20Contract&amp;ws=%2Flightning%2Fr%2FAccount%2F0013g00000duHDkAAM%2Fview
+
+Quote id - 0Q0KS000000HDn30AG
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-313125' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-313125</td></tr><tr class='status-Accepted'><td>CDEX-425444</td><td>Accepted</td><td>PID 433772_ARIA_SDW_ABV_NS - ATT SALES Contact is not present </td><td>PID 433772_ARIA_SDW_ABV_NS - ATT SALES Contact is not present 
+
+Order Type - Newstart
+Order No - ORD0171653 / ORDL0482610
+Scenario - TC01 ABV New Start - Hybrid TNs, Backup Wireless Broadband
+
+ATT SALES Contact is not present in the Order Contacts </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-425444' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-425444</td></tr><tr class='status-Accepted'><td>CDEX-309288</td><td>Accepted</td><td>CloudRunner_Sprint 17.4_FutureCRQA_ABV: Document generation not working for Contract on ABV MACD and AddSite</td><td>Steps to Reproduce:
+ # Get Bill Completed and Activated ABV Asset.
+ # Perform MACD or AddSite on It
+ # Complete the config cart and credit check process.
+ # Click on Generate Contract/Addendum
+ # Generate Contract and Click on Next.
+
+Expected Result:
+
+After clicking on Next , document should be generated for contract.
+
+Actual Result : Document is not generating, and we are getting this error.
+
+!image-2024-04-05-13-27-13-221.png|width=486,height=143!
+
+Test data :
+
+AddSite :[Generate Contract | Salesforce|https://absatt--futurecrqa.sandbox.lightning.force.com/lightning/cmp/vlocity_cmt__vlocityLWCOmniWrapper?c__layout=lightning&amp;c__tabIcon=custom%3Acustom18&amp;c__target=c%3AATTCreateContractEnglish&amp;c__ContextId=0Q0KS000000H5tS0AS&amp;c__tabLabel=Generate%20Contract&amp;ws=%2Flightning%2Fr%2FAccount%2F0013g00000duHGsAAM%2Fview&amp;uid=1712303080831]
+
+MACD :[AT&amp;T Business Voice | Asset | Salesforce|https://absatt--futurecrqa.sandbox.lightning.force.com/lightning/r/Asset/02iKS000000YEo4YAG/view?ws=%2Flightning%2Fr%2FAccount%2F0013g00000duHGiAAM%2Fview]</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-309288' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-309288</td></tr><tr class='status-Accepted'><td>CDEX-450649</td><td>Accepted</td><td>CloudRunner_ETE_TST3_SDW Multiproduct (ADI/ABV)_SDW isn&#x27;t getting ABV Cancellation completed out of ACVP</td><td>*Steps To Reproduce:*
+1.Create an opportunity in TST3 environment
+2. Create a quote for the same opportunity
+3. Add location and validate it
+4. Once the location is validated successfully, add ADI and ABV products on the same location
+5. Complete the Credit Check process
+6. Click on Generate Contract button
+7.Perform customer sign and counter sign
+8.Create order and 
+9.Create order and enrich it
+10.Order flows downstream and Cancel should be done via ACVP
+
+*Actual Result:*
+SDW isn&#x27;t getting ABV order Cancellation completed out of ACVP
+
+*Expected Result:*
+Cancellation completed in ACVP and SDW with correct status
+
+*Test Data Details:*
+Quote 
+|Account Name|EAGLES NEST CHURCHES INC|
+|Account|0011U00000JfeA6QAJ|
+|External ID|801dx00000QuiEAAAZ:801dx00000RIQKoAAP|
+|Contract|800dx00000LaipgAAB|
+|MSPS Id|MSPS00094347SF|</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-450649' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-450649</td></tr><tr class='status-Accepted'><td>CDEX-399301</td><td>Accepted</td><td>CloudRunner_PVT_Direct ABV Order status is different as expected</td><td>There is Pending Submit/ATP status in parent order, even if main Multi-product order was  fully configured and submited
+
+Account ID: 0013g00000vjxKOAAY
+Account Name: CLOUDRUNNER_TEST_26_PVT_ENDTOEND
+Opportunity ID: 006UO00000K9XndYAF
+Quote Id: 0Q0UO000001U0q20AC
+Contract ID: 800UO00000Jyoa8YAB | MSPS00185338SF
+Parent order: 801UO00000ON209YAD
+Suborder: 801UO00000ONFeuYAH
+External ID: 801UO00000ON209YAD:801UO00000ONFeuYAH
+ 
+then was splited to 2 separate sub-orders:
+ABV External ID: 801UO00000ON209YAD:801UO00000PX8ekYAD
+ADI External ID: 801UO00000ON209YAD:801UO00000PX8elYAD
+
+*Actual outcome:*
+ !image-2025-04-04-14-13-36-263.png|thumbnail! 
+
+Submitted to servicenow
+ABV order is activated
+ADI order currently provisioning
+
+Parent order show Pending submit/ATP
+
+*Expected outcome:*
+I assume that In Progress status or something more suitable to actual outcome should be here. Submit is not expected as we know that multi-product order was submitted.
+
+UPDATE: Sub-orders completed and activated, expecting suitable status for parent order too
+</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-399301' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-399301</td></tr><tr class='status-Accepted'><td>CDEX-308957</td><td>Accepted</td><td>CloudRunner_Sprint 17.4_FutureCRQA_ABV:Generate Contract/Addendum not working for ABV MACD and AddSite</td><td>Steps To Reproduce:
+ # Get Bill Completed and Activated ABV Asset.
+ # Perform MACD or AddSite on It
+ # Complete the config cart and credit check process
+ # Click on Generate Contract/Addendum
+
+Expected Result:
+
+Contract/Addendum should get generated.
+
+Actual Result:
+
+Contract/Addendum is not generating .. getting these errors.
+
+!image-2024-04-04-17-57-50-261.png|width=488,height=166!
+
+!image-2024-04-04-17-51-03-175.png|width=490,height=200!
+
+Test data AddSite:[https://absatt--futurecrqa.sandbox.lightning.force.com/lightning/n/vlocity_cmt__EnterpriseSalesApp?c__accountId=0013g00000duHGs&amp;c__cartId=0Q0KS000000H5Wd0AK&amp;c__cartName=Quote%20AddSite%20CALICO%20BIOSCIENCE%202024-04-04T11%3A24%3A33.908Z&amp;ws=%2Flightning%2Fr%2FAccount%2F0013g00000duHGsAAM%2Fview]
+
+Test data MACD :https://absatt--futurecrqa.sandbox.lightning.force.com/lightning/n/vlocity_cmt__EnterpriseSalesApp?c__cartId=0Q0KS000000H5SR0A0&amp;c__accountId=0013g00000duHGi&amp;c__cartName=Quote%20MACD%20C%20&amp;c__assetId=02iKS000000YEo4&amp;c__IsMacdQuote=true</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-308957' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-308957</td></tr><tr class='status-Accepted'><td>CDEX-294885</td><td>Accepted</td><td>CloudRunner_ETE_ABV_Order handoff is stuck at Running Status for ABV order, getting 403 Forbidden Response. </td><td>Steps To Reproduce :
+
+Stage and submit ABV order in TST1
+
+Once order is Bill Completed Validate order Handoff
+
+ACTUAL : Order Handoff is stuck at Running Status
+
+EXPECTED: Order Handoff shoudl get completed.
+
+Test Data: 80123000002ofnGAAQ 
+
+!image-2024-02-19-15-10-05-851.png!</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-294885' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-294885</td></tr><tr class='status-Accepted'><td>CDEX-344260</td><td>Accepted</td><td>Cloud Runner_ETE_ARIA_ABV MultiProduct Sales Capability_Fallout: Error Occured in ABV Service Inventory (EDF).</td><td>Hi Team 
+
+For Order #ORD0038861/ORDL0095350
+
+Fallout: Error Occured in ABV Service Inventory (EDF).
+
+ Error Details - Also Check Work Notes of this task for possibile additional information.
+Error Code: 1
+Error Message: Call block &#x27;ABV Add Site to Service Inventory (EDF).DoUntil$1.item$1&#x27; failed. Detail: Error: Cannot read property &quot;name&quot; from undefined,Detail: Cannot read property &quot;name&quot; from undefined</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-344260' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-344260</td></tr><tr class='status-Rejected'><td>ARIA-1062</td><td>Rejected</td><td>Supp to change ABV SV to ABV order</td><td>*As a* product owner,
+*I want* the system to support supplement changes (Supp) on in-flight orders to change ABV SV order to ABV order.
+ * TCC Agents can submit Supp from ABV SV to ABV, but not the other way around.
+ * Once the Supp is made it should be logged in Activity log, so that it&#x27;s clear the order was Supp&#x27;d to ABV
+ * Supp is allowed up to PONR (702?? to be verified)</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/ARIA-1062' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/ARIA-1062</td></tr><tr class='status-Resolved'><td>LARGO-26</td><td>Resolved</td><td>ABV - Scrubbing | T2R1-7098</td><td>*Link to Jira Issue: T2R1-7098*
+
+*+Description:+*
+As an ABV Engineer, I should have the ability to scrub the case fields on the Metrics Adjustment Tab (functioanlity is already built) Add the functionality for ABV Assignment Group: ASG-EMS-VOICECOE</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-26' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-26</td></tr><tr class='status-Resolved'><td>LARGO-73</td><td>Resolved</td><td>ABV - Restrict &amp; Restore</td><td>+*Description:*+
+
+ABV engineer is being informed about account being restricted (suspended) on case related to account.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-73' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-73</td></tr><tr class='status-Resolved'><td>LARGO-76</td><td>Resolved</td><td>ABV - Asset Details implementation</td><td>+*Description:*+
+
+As ABV Engineer I want to see device details in Asset details form with mapping details from below stories.
+
+ 
+
+Notes:
+
+Largo-31 provides details with map to cmdb model used by ABV product offering.
+
+Largo-32 discovery feature looked for possible reuse of APBA feature that was delivering same feature for APBA product which is also based on product offering model in ServiceNow.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-76' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-76</td></tr><tr class='status-Resolved'><td>LARGO-24</td><td>Resolved</td><td>ABV - Trouble Types | T2R1-7051</td><td>*Link to Jira Issue: T2R1-7051*
+
+*+Description:+*
+
+*Description:*
+As an ABV Engineer, I want to be able to set the appropriate CASE “Trouble Type” based on assignment group and Product Offering when manually creating a new Case.
+Trouble Types for ABV:
+TTU Broke
+Billing Issue
+Transport Network Issue
+Wireless NetworkLTE issue
+Line Issue
+Call Completion
+Device Trouble
+Feature Issue
+Other
+Voice Quality
+MACD Request
+Informational
+Disconnect
+New order
+
+Note: Once the above requirement is delivered, the 2 below requests will be a TEST ONLY step to validate the Trouble Type feature *******
+1 – As an ABV Engineer, i want ServiceNow to correctly set the CASE “Trouble Type” when a new CASE is created vie eService Portal (BC).
+2 – As An ABV Engineer, i want ServiceNow to correctly set the CASE “Trouble Type” &amp; Incident “Trouble Type” when receiving an Event from Fault Management Platform (Proactive) - Carlos to check on this.
+****************************************************************</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-24' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-24</td></tr><tr class='status-Resolved'><td>ARIA-2681</td><td>Resolved</td><td>ABV - Check MACD types - incorrect evaluation</td><td>Flow action &quot;ABV - Check MACD types&quot; evaluates what type of MACD the Order is. Based on that, another subflows/actions are triggered. 
+
+For partial disconnect (not all telephone lines are disconnected, but at least one is), this is not working properly.
+
+This needs to be fixed in order to trigger correct subflows/actions later in the process.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/ARIA-2681' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/ARIA-2681</td></tr><tr class='status-Resolved'><td>LARGO-20</td><td>Resolved</td><td>ABV - Cause Codes | T2R1-7049</td><td>*Link to Jira Issue: T2R1-7049*
+
+*+Description:+*
+
+As an ABV TEAM member, I want to be able to select relevant cause codes while resolving/ closing the case or incident.
+Refer &#x27;Resolution Set Name&#x27; tab in the attached file for cause codes.
+
+ 
+
+**cause codes are relevant for cases only 19-July</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-20' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-20</td></tr><tr class='status-Resolved'><td>LARGO-25</td><td>Resolved</td><td>ABV - Skills Based Routing | T2R1-7050</td><td>*Link to Jira Issue: T2R1-7050*
+
+*+Description:+*
+As an ABV agent,
+I want ABV cases to be routed to me based on the skill set I have,
+So that agent can work on the cases that are suited to my skill set.
+ABV agent should have the ability to manually modify the skill on a case.
+Note : Skills to be determined on a case based on rules given in the attached excel file.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-25' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-25</td></tr><tr class='status-Resolved'><td>LARGO-18</td><td>Resolved</td><td>ABV - Templates (playbooks) | T2R1-7068 </td><td>*Link to Jira Issue: T2R1-7068*
+
+*+Description:+*
+
+Utilize a set of pre-defined On Demand Templates (Playbooks) via activity log when needed throughout the life cycle of the case. Be able to fill out and modify the template.
+
+{color:#000000}VOICECOE- New Ticket Create Template - To document new ticket{color}
+{color:#000000}VOICECOE- Status update Template - To update status of the ticket{color}
+{color:#000000}VOICECOE- Escalation Template - To be used when acknowledging escalations.{color}
+{color:#000000}VOICECOE- Closure Template – For closure ticket{color}
+
+{color:#000000}Refer the attached templates for details{color}
+
+As an ABV case management user
+
+GIVEN the creation of a case
+
+WHEN the user needs to communicate with the customer throughout the lifecycle of the case
+
+THEN ServiceNow will allow User to select a pre-defined communication on demand template (Attached) throughout the life cycle of the Case.
+
+ServiceNow will prepopulate static fields from Case/incident, User will be able to View/Fill and modify any information listed on a template, Customer Contact email address and also to be able to add additional recipients if needed.
+
+&#x27;Send Email&#x27; option for each template should be enabled.
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-18' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-18</td></tr><tr class='status-Resolved'><td>LARGO-21</td><td>Resolved</td><td>ABV - Asset Search | T2R1-7067 | test-only</td><td>*Link to Jira Issue: T2R1-7067*
+
+*+Description:+*
+
+As an ABV Engineer I want ability to search all associated inventory records for the searched ASSET, ABV teams uses following to search an Asset.
+
+
+{color:#000000}Serial Numbers{color}
+{color:#000000}Telephone Numbers{color}</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/LARGO-21' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/LARGO-21</td></tr><tr class='status-Returned/Rejected'><td>CDEX-448958</td><td>Returned/Rejected</td><td>SSP-ABV-Share your cart-At 100% zoom overlay &quot;Cancel &amp; Share Cart&quot; CTA are not visible.</td><td>1.Access the ABV flow: https://business-stage.att.com/buy/?product=abv
+2.Enter your service address:3400 W Plano Pkwy Plano TX 75075
+3.Select Premium or Standard plan &amp; click on add to cart
+4.Click on Continue button.
+5.Click on Share button and Observe
+
+Expected Result: At 100% zoom overlay &quot;Cancel &amp; Share Cart&quot; CTA should visible properly.
+
+Actual Result: At 100% zoom overlay &quot;Cancel &amp; Share Cart&quot; CTA not visible.
+
+ 
+
+Note: This issue is observed in prod also.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-448958' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-448958</td></tr><tr class='status-Solutioning\ in\ Progress'><td>ARIA-1155</td><td>Solutioning in Progress</td><td>ABV Data Validation</td><td>As an Application Owner, I want to have the Right data in AVCP. 
+So there&#x27;s need to be an validation for Order to have it&#x27;s locations and Characteristics filled to process the Order in the most efficient way.</td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/ARIA-1155' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/ARIA-1155</td></tr></table>
+2025-11-13 12:21:12,102 [INFO] 127.0.0.1 - - [13/Nov/2025 12:21:12] "POST / HTTP/1.1" 200 -
+2025-11-13 12:23:23,252 [INFO] 🛠 Executing tool: Read_Wiki
+2025-11-13 12:23:23,252 [INFO] 📥 Input received: abv
+2025-11-13 12:23:24,772 [INFO] 📤 Full Output:
+<h2>📚 Wiki Search Results</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+        </tr>
+    
+        <tr>
+            <td>ABV with AIA-B aka ABV Voice Prioritization</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2456814343" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>Enterprise (Multi- Site) SDW SIT PLAN |(ADI, ADI+DD, O@H, ABV, &amp; HSIA)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2441852536" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>ABV Tasks Sequence</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2441855895" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>AT&amp;T Business Voice (aka ABV)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2088213598" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>ABV Maestro Options for OE emails</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2463631630" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>2025-10-03 - DSS ABV Sync</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2429301034" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>2025-07-28 - DSS ABV Sync</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2385485936" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>2025-09-19 - DSS ABV Sync</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2421524532" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>2025-09-05 - DSS ABV Sync</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2413274454" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>[ABV + ADI] ABV and ADI (+DD) Combined Cart</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2298649253" target="_blank">Open</a></td>
+        </tr>
+        </table>
+2025-11-13 12:23:24,780 [INFO] 127.0.0.1 - - [13/Nov/2025 12:23:24] "POST / HTTP/1.1" 200 -
+2025-11-19 08:50:26,931 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-19 08:50:26,933 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-19 09:28:44,741 [INFO] 10.71.116.233 - - [19/Nov/2025 09:28:44] "GET / HTTP/1.1" 200 -
+2025-11-19 09:28:45,124 [INFO] 10.71.116.233 - - [19/Nov/2025 09:28:45] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-11-19 09:29:20,460 [INFO] 10.71.117.7 - - [19/Nov/2025 09:29:20] "GET / HTTP/1.1" 200 -
+2025-11-19 09:29:22,602 [INFO] 10.71.117.7 - - [19/Nov/2025 09:29:22] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -

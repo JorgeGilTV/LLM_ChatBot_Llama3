@@ -648,7 +648,7 @@ if __name__ == "__main__":
 
     def run_flask():
         print("🌐 Flask interface available at http://127.0.0.1:5000")
-        flask_app.run(port=5000)
+        flask_app.run(host="0.0.0.0", port=5000)
 
     threading.Thread(target=run_mcp).start()
     run_flask()

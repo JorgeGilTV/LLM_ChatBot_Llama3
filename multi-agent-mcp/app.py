@@ -484,246 +484,173 @@ for name, tool_def in TOOLS.items():
 
 # 🌐 Flask Interface
 flask_app = Flask(__name__)
-CORS(flask_app)  # ✅ Enables CORS for all routes and origins
+CORS(flask_app)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>MCP Tools</title>
+    <title>GenDox AI</title>
     <style>
-        body {
-            font-family: "Segoe UI", Roboto, sans-serif;
-            background-color: #f9f9fb;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }
-        header {
-            background: linear-gradient(90deg, #6f2da8, #ff6f61);
-            color: white;
-            padding: 1rem 2rem;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        main {
-            max-width: 800px;
-            margin: 2rem auto;
-            background-color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-        h1 {
-            margin-top: 0;
-            font-size: 1.8rem;
-        }
-        label {
-            font-weight: 600;
-            display: block;
-            margin-top: 1rem;
-        }
-        textarea {
-            width: 100%;
-            padding: 0.75rem;
-            margin-top: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-        button {
-            padding: 0.75rem 1rem;
-            background: linear-gradient(90deg, #6f2da8, #ff6f61);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-        button:hover {
-            background: linear-gradient(90deg, #5a1f8e, #e85c50);
-        }
-        .tool-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-        pre {
-            background-color: #f4f4f6;
-            padding: 1rem;
-            border-radius: 8px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            margin-top: 1rem;
-        }
-        footer {
-            text-align: center;
-            font-size: 0.9rem;
-            color: #777;
-            margin-top: 2rem;
-        }
-        /* Spinner */
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #6f2da8;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            vertical-align: middle;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .counter {
-            display: inline-block;
-            margin-left: 10px;
-            font-weight: bold;
-            color: #6f2da8;
-            vertical-align: middle;
-        }
+        body { margin:0; font-family:"Segoe UI", Roboto, sans-serif; background:#1e1e1e; color:#f0f0f0; display:flex; height:100vh; }
+        aside.sidebar { width:240px; background:#2c2c2c; padding:1rem; display:flex; flex-direction:column; justify-content:space-between; }
+        .sidebar .new-chat { background:#6f2da8; color:white; border:none; padding:0.75rem; border-radius:8px; cursor:pointer; }
+        .sidebar .section { margin-top:1.5rem; font-weight:bold; color:#aaa; }
+        .sidebar ul { list-style:none; padding:0; margin:0.5rem 0; }
+        .sidebar ul li { padding:0.5rem; color:#ddd; }
+        .sidebar ul li label { cursor:pointer; }
+        .sidebar button { background:#444; color:#f0f0f0; border:none; padding:0.5rem 1rem; border-radius:6px; cursor:pointer; margin-top:0.5rem; width:100%; text-align:left; }
+        .sidebar button:hover { background:#555; }
+        main.chat-area { flex:1; display:flex; flex-direction:column; padding:1rem 2rem; overflow-y:auto; }
+        header.top-bar { background:linear-gradient(90deg,#6f2da8,#ff6f61); padding:1rem; text-align:center; font-size:1.5rem; font-weight:bold; color:white; border-radius:8px; margin-bottom:1rem; }
+        .prompt { font-size:1rem; margin-bottom:1rem; color:#bbb; }
+        #final-counter { font-weight:bold; margin-bottom:1rem; color:#ccc; }
+        #results-box { flex:1; overflow-x:auto; background:#2a2a2a; padding:1rem; border-radius:8px; margin-bottom:1rem; }
+        form.input-form { display:flex; flex-direction:column; gap:0.5rem; background:#2c2c2c; padding:1rem; border-top:1px solid #444; }
+        .tool-list { display:flex; flex-wrap:wrap; gap:0.5rem; }
+        .tool-item { background:#1e1e1e; padding:0.5rem; border-radius:6px; }
+        form.input-form textarea { background:#1e1e1e; color:#f0f0f0; border:1px solid #444; border-radius:8px; padding:0.75rem; resize:none; }
+        form.input-form button { background:#6f2da8; color:white; border:none; padding:0.75rem 1rem; border-radius:8px; cursor:pointer; }
+        .spinner { border:4px solid #f3f3f3; border-top:4px solid #6f2da8; border-radius:50%; width:24px; height:24px; animation:spin 1s linear infinite; display:inline-block; vertical-align:middle; }
+        @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+        .counter { margin-left:10px; font-weight:bold; color:#6f2da8; vertical-align:middle; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>🧠 GenDox AI 🧠</h1>
-    </header>
-    <main>
-        <form method="post" onsubmit="return showLoading()">
-            <label>Select a tool to use:</label>
-            <div class="tool-buttons">
+    <aside class="sidebar">
+        <button class="new-chat" onclick="newChat()">➕ New Chat</button>
+        <div>
+            <div class="section">Selection</div>
+            <ul>
                 {% for name, desc in tools %}
-                    <button type="submit" name="tool" value="{{ name }}" title="{{ desc }}">{{ name }}</button>
+                    <li>
+                        <label>
+                            <input type="checkbox" name="tool" value="{{ name }}">
+                            {{ name }}
+                        </label>
+                    </li>
                 {% endfor %}
-                <button type="button" onclick="clearInput()">🧹 Clean Input</button>
+            </ul>
+            <div class="section"><button onclick="alert('Settings clicked')">⚙️ Settings</button></div>
+            <div class="section"><button onclick="alert('About clicked')">ℹ️ About</button></div>
+            <div class="section"><button onclick="alert('Help clicked')">❓ Help</button></div>
+        </div>
+    </aside>
+
+    <main class="chat-area">
+        <header class="top-bar">🧠 GenDox AI 🧠</header>
+        <div class="prompt">Please start typing some prompt...</div>
+        <div id="final-counter">{% if exec_time %}⏱ Execution time: {{ exec_time }}s{% endif %}</div>
+        <div id="results-box">{{ result|safe }}</div>
+
+        <form method="post" onsubmit="return showLoading()" class="input-form">
+            <div class="tool-list">
+                {% for name, desc in tools %}
+                    <label class="tool-item" title="{{ desc }}">
+                        <input type="checkbox" name="tool" value="{{ name }}">
+                        {{ name }}
+                    </label>
+                {% endfor %}
             </div>
-            <label for="input">Enter your input:</label>
-            <textarea name="input" rows="5" placeholder="Can be Application name or exact filter Example: DIGITAL or OMV or BSSE, etc">{{ input_text }}</textarea>
 
-            <p id="loading-message" style="margin-top:1rem;"></p>
+            <textarea name="input" placeholder="What I can help you with?">{{ input_text }}</textarea>
+            <button type="submit">Send</button>
         </form>
-
-        <script>
-            let counterInterval;
-            let startTime;
-
-            function showLoading() {
-                // Muestra spinner + contador
-                document.getElementById("loading-message").innerHTML =
-                    '<span class="spinner"></span><span class="counter" id="counter">0s</span>';
-
-                // Limpia Results antes de enviar
-                const resultBox = document.getElementById("results-box");
-                if (resultBox) {
-                    resultBox.innerHTML = "";
-                }
-
-                // Inicia contador
-                startTime = Date.now();
-                counterInterval = setInterval(() => {
-                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                    document.getElementById("counter").innerText = elapsed + "s";
-                }, 1000);
-
-                return true; // permite que el form se envíe
-            }
-
-            function clearInput() {
-                document.querySelector("textarea[name='input']").value = "";
-                document.getElementById("loading-message").innerText = "🧹 Input Cleaned";
-
-                const resultBox = document.getElementById("results-box");
-                if (resultBox) {
-                    resultBox.innerHTML = "";
-                }
-
-                // Detiene contador si estaba activo
-                if (counterInterval) {
-                    clearInterval(counterInterval);
-                }
-            }
-        </script>
-
-        {% if result %}
-            <h2>Response:</h2>
-            <div id="results-box">{{ result|safe }}</div>
-            <script>
-                // 🔹 Cuando llega la respuesta, detener el contador
-                if (counterInterval) {
-                    clearInterval(counterInterval);
-                }
-            </script>
-        {% else %}
-            <div id="results-box"></div>
-        {% endif %}
+        <p id="loading-message"></p>
     </main>
-    <footer>
-        MCP Server running ........... Welcome to GenDox AI✨
-    </footer>
+
+    <script>
+        let counterInterval;
+        let startTime;
+
+        function showLoading() {
+            if (!Array.from(document.querySelectorAll("input[name='tool']")).some(el => el.checked)) {
+                alert("Selecciona al menos una herramienta antes de enviar.");
+                return false;
+            }
+
+            document.getElementById("loading-message").innerHTML =
+                '<span class="spinner"></span><span class="counter" id="counter">0s</span>';
+
+            document.getElementById("results-box").innerHTML = "";
+            document.getElementById("final-counter").innerText = "";
+
+            startTime = Date.now();
+            if (counterInterval) clearInterval(counterInterval);
+            counterInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById("counter").innerText = elapsed + "s";
+            }, 1000);
+
+            return true;
+        }
+
+        function newChat() {
+            document.querySelector("textarea[name='input']").value = "";
+            document.getElementById("results-box").innerHTML = "";
+            document.getElementById("final-counter").innerText = "";
+            document.getElementById("loading-message").innerText = "";
+            document.querySelectorAll("input[type='checkbox'][name='tool']").forEach(cb => cb.checked = false);
+            if (counterInterval) clearInterval(counterInterval);
+        }
+    </script>
+
+    {% if result %}
+    <script>
+        if (counterInterval) clearInterval(counterInterval);
+        document.getElementById("loading-message").innerHTML = "";
+    </script>
+    {% endif %}
 </body>
-</html>"""
+</html>
+"""
 
-
-@flask_app.route("/tool", methods=["POST"])
-def tool_only():
-    tool_name = request.form.get("tool", "")
-    input_text = request.form.get("input", "")
-    func = TOOLS.get(tool_name, {}).get("function")
-
-    if not func:
-        return f"<p>Tool '{tool_name}' not found.</p>"
-
-    try:
-        result = func(input_text)
-        return result
-    except Exception as e:
-        return f"<p>Error executing tool '{tool_name}': {html.escape(str(e))}</p>"
-    
-@flask_app.route("/", methods=["GET", "POST"])    
+@flask_app.route("/", methods=["GET","POST"])
 def index():
     result = None
     input_text = ""
+    exec_time = None
 
     if request.method == "POST":
-        tool_name = request.form["tool"]
-        input_text = request.form["input"]
-        func = TOOLS[tool_name]["function"]
-        logging.info(f"🛠 Executing tool: {tool_name}")
-        logging.info(f"📥 Input received: {input_text}")
-        try:
-            result = func(input_text if input_text else "")
-            logging.info(f"📤 Full Output:\\n{result}")
-        except Exception as e:
-            result = f"Error executing tool '{tool_name}': {e}"
-            logging.error(result)
+        selected_tools = request.form.getlist("tool")  # ✅ obtiene lista de herramientas seleccionadas
+        input_text = request.form.get("input", "")
 
-    return render_template_string(HTML_TEMPLATE, tools=registered_tools, result=result, input_text=input_text)
+        # fallback si no se selecciona ninguna herramienta
+        if not selected_tools:
+            selected_tools = ["How_to_fix"]
 
-# 💬 Teams Endpoint https://teams.microsoft.com/l/chat/19:0e649888e1324801a86352030fdc9b41@thread.v2/conversations?context=%7B%22contextType%22%3A%22chat%22%7D
-@flask_app.route("/teams", methods=["POST"])
-def teams_webhook():
-    message = request.json.get("text", "")
-    if "status" in message.lower():
-        summary = llama_suggestions("")
-        return jsonify({"text": summary})
-    return jsonify({"text": "Unrecognized command"})
+        results = []
+        start = time.time()
+        for tool_name in selected_tools:
+            func = TOOLS.get(tool_name, {}).get("function")
+            if not func:
+                results.append(f"<pre>No tool found for {tool_name}</pre>")
+                continue
+            try:
+                res = func(input_text)
+                results.append(f"<div style='border:1px solid #444; padding:1rem; margin-bottom:1rem; border-radius:8px; background:#1e1e1e;'><h3>{tool_name}</h3>{res}</div>")
+            except Exception as e:
+                results.append(f"<pre>Error executing tool '{tool_name}': {e}</pre>")
+        exec_time = round(time.time() - start, 2)
+        result = "<br>".join(results)
+
+    return render_template_string(
+        HTML_TEMPLATE,
+        tools=registered_tools,
+        result=result,
+        input_text=input_text,
+        exec_time=exec_time
+    )
 
 # 🚀 Run Servers
 if __name__ == "__main__":
     import threading
-
     def run_mcp():
         print("🧠 MCP Server running in background")
         mcp.run(transport="sse")
-
     def run_flask():
         print("🌐 Flask interface available at http://127.0.0.1:5000")
         flask_app.run(host="0.0.0.0", port=5000)
-
     threading.Thread(target=run_mcp).start()
     run_flask()

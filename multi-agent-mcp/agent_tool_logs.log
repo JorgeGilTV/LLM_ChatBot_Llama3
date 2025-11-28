@@ -31615,3 +31615,869 @@ Package_CVEs |Action Plan |
 
 keep this ticket in developer queue until and unless it resolves.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806</td></tr></table>
 2025-11-28 15:08:48,487 [INFO] 127.0.0.1 - - [28/Nov/2025 15:08:48] "POST / HTTP/1.1" 200 -
+2025-11-28 15:11:09,538 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:11:09,542 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:11:12,226 [INFO] 127.0.0.1 - - [28/Nov/2025 15:11:12] "GET / HTTP/1.1" 200 -
+2025-11-28 15:11:15,242 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-28 15:11:15,242 [INFO] 📥 Input received: omv
+2025-11-28 15:11:50,760 [INFO] 📤 Full Output:\n
+        <style>
+        .ticket-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .ticket-table th, .ticket-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .ticket-table th {
+            background-color: #f2f2f2;
+        }
+        .ticket-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .status-In\ Progress { background-color: #fff3cd; }
+        .status-To\ Do { background-color: #e0f7fa; }
+        .status-Open { background-color: #e0f7fa; }
+        </style>
+        <p><strong>Tickets Found:</strong> 3</p>
+        <table class="ticket-table">
+            <tr>
+                <th>TICKET</th>
+                <th>STATUS</th>
+                <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST 2 COMMENTS</th>
+                <th>LINK</th>
+                <th>URL</th>
+            </tr>
+    <tr class='status-In\ Progress'><td>CDEX-405380</td><td>In Progress</td><td>OMD/OMV - Enable the Duplicate check at ingestion level </td><td>Hello,
+
+Currently duplicate check is disabled at ingestion level for OMD and OMV , Can we enable it back ?  to avoid processing same files tiwce and sending the records/files to downstream  &quot;file.duplicate.check: &quot;false&quot;&quot; to &quot;True&quot;
+
+We had a scenario on OMV FFA ARIA production where legecy placed the *16* ABV  test calls made on *4/23 and 4/24  +* Legacy has resent an additional  *13 files*  from *4/11 and 4/15 (these files* *have already been processed by OMV and sent to vetter )*
+
+FTS has  a duplicate check for 1 day  which is why they still sent the old files to OMV 
+
+So to avoid these kind of scenarios   can we enable the  dublicate check in OMV and OMD ingestion level ? any performance impact if we enable it ? if this can be enabled please let us know in which upcoming patch this can be delivered as this is part of Main code repo 
+
+Also can FTS increase the duplicate check for 1 day to 7 days 
+
+ </td><td>the Ticket was not assigned to right group and has been reassigned today
+
+ <br>Hi [~fc2953]: this ticket needs discussion with Architect and if agreed to implement this change, we need a developer to work on this. can you please take care of this.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380</td></tr><tr class='status-To\ Do'><td>CDEX-461443</td><td>To Do</td><td>CDO LAG - Partition 43 -  VOICE Stats Production :topic</td><td>For com.att.omv.prod.prod.omv-stats-out topic , IEBUS is 78B 281M events LAG. Confluent Associate mentioned that &quot;partition 43 in particular seems to host the vast majority of data for this topic. This is very likely the cause of the lag for this connector. You may want to review the partitioning/keying strategy for the producer for this topic.&quot; Please look into this urgently 
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443</td></tr><tr class='status-To\ Do'><td>CDEX-375806</td><td>To Do</td><td>OMV | Software Vuln | ANDF Version Upgrade</td><td>Hi Team,
+
+ 
+
+We have exported the latest ASTRA software vuln dump and it seems we are using older version of ANDF in OMV application which needs to upgrade to latest ANDF 24.09 MR3 to mitigate the Software CVE&#x27;s. Please share the Plan o resolve all CVE&#x27;s reported for OMV. please find the attached excel, refer the OMV tab and fill the last three columns.
+ 
+|Key Owner |Critical|High|Medium|Low|Total 
+Number of 
+Package_CVEs |Action Plan |
+| | | | | | | |
+|Product|433|460|496|26|1415|SD to Upgrade to latest ANDF product MR03 Release , Product to share CVE|
+|SD|0|189|421|28|638|</td><td>OMV will be upgraded to ANDF24.12 version during project PID 421299 - project is ongoing and timeline is under discussion between DEV and QA teams.<br> Hi Fabio,
+
+ 
+
+keep this ticket in developer queue until and unless it resolves.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806</td></tr></table>
+2025-11-28 15:11:50,767 [INFO] 127.0.0.1 - - [28/Nov/2025 15:11:50] "POST / HTTP/1.1" 200 -
+2025-11-28 15:12:07,630 [INFO] 🛠 Executing tool: Read_Wiki
+2025-11-28 15:12:07,631 [INFO] 📥 Input received: omv
+2025-11-28 15:12:10,748 [INFO] 📤 Full Output:\n<h2>📚 Wiki Search Results</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+        </tr>
+    
+        <tr>
+            <td>OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473696908" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OneMediation Voice (OMV)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2402787191" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Circle Flow</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2284096431" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>PMMS OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473690536" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>DEFECTS/TICKETS TRACKING - OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2299179648" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Weekly Status</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2268504235" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Reference Topics</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2237633250" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Environment Details</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2264867745" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Performance Test Updates</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2278598588" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV E911</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2408516507" target="_blank">Open</a></td>
+        </tr>
+        </table>
+2025-11-28 15:12:10,755 [INFO] 127.0.0.1 - - [28/Nov/2025 15:12:10] "POST / HTTP/1.1" 200 -
+2025-11-28 15:13:55,469 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:13:55,469 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:13:56,304 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-28 15:13:56,304 [INFO] 📥 Input received: omv
+2025-11-28 15:14:31,791 [INFO] 📤 Full Output:\n
+        <style>
+        .ticket-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .ticket-table th, .ticket-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .ticket-table th {
+            background-color: #f2f2f2;
+        }
+        .ticket-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .status-In\ Progress { background-color: #fff3cd; }
+        .status-To\ Do { background-color: #e0f7fa; }
+        .status-Open { background-color: #e0f7fa; }
+        </style>
+        <p><strong>Tickets Found:</strong> 3</p>
+        <table class="ticket-table">
+            <tr>
+                <th>TICKET</th>
+                <th>STATUS</th>
+                <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST 2 COMMENTS</th>
+                <th>LINK</th>
+                <th>URL</th>
+            </tr>
+    <tr class='status-In\ Progress'><td>CDEX-405380</td><td>In Progress</td><td>OMD/OMV - Enable the Duplicate check at ingestion level </td><td>Hello,
+
+Currently duplicate check is disabled at ingestion level for OMD and OMV , Can we enable it back ?  to avoid processing same files tiwce and sending the records/files to downstream  &quot;file.duplicate.check: &quot;false&quot;&quot; to &quot;True&quot;
+
+We had a scenario on OMV FFA ARIA production where legecy placed the *16* ABV  test calls made on *4/23 and 4/24  +* Legacy has resent an additional  *13 files*  from *4/11 and 4/15 (these files* *have already been processed by OMV and sent to vetter )*
+
+FTS has  a duplicate check for 1 day  which is why they still sent the old files to OMV 
+
+So to avoid these kind of scenarios   can we enable the  dublicate check in OMV and OMD ingestion level ? any performance impact if we enable it ? if this can be enabled please let us know in which upcoming patch this can be delivered as this is part of Main code repo 
+
+Also can FTS increase the duplicate check for 1 day to 7 days 
+
+ </td><td>the Ticket was not assigned to right group and has been reassigned today
+
+ <br>Hi [~fc2953]: this ticket needs discussion with Architect and if agreed to implement this change, we need a developer to work on this. can you please take care of this.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380</td></tr><tr class='status-To\ Do'><td>CDEX-461443</td><td>To Do</td><td>CDO LAG - Partition 43 -  VOICE Stats Production :topic</td><td>For com.att.omv.prod.prod.omv-stats-out topic , IEBUS is 78B 281M events LAG. Confluent Associate mentioned that &quot;partition 43 in particular seems to host the vast majority of data for this topic. This is very likely the cause of the lag for this connector. You may want to review the partitioning/keying strategy for the producer for this topic.&quot; Please look into this urgently 
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443</td></tr><tr class='status-To\ Do'><td>CDEX-375806</td><td>To Do</td><td>OMV | Software Vuln | ANDF Version Upgrade</td><td>Hi Team,
+
+ 
+
+We have exported the latest ASTRA software vuln dump and it seems we are using older version of ANDF in OMV application which needs to upgrade to latest ANDF 24.09 MR3 to mitigate the Software CVE&#x27;s. Please share the Plan o resolve all CVE&#x27;s reported for OMV. please find the attached excel, refer the OMV tab and fill the last three columns.
+ 
+|Key Owner |Critical|High|Medium|Low|Total 
+Number of 
+Package_CVEs |Action Plan |
+| | | | | | | |
+|Product|433|460|496|26|1415|SD to Upgrade to latest ANDF product MR03 Release , Product to share CVE|
+|SD|0|189|421|28|638|</td><td>OMV will be upgraded to ANDF24.12 version during project PID 421299 - project is ongoing and timeline is under discussion between DEV and QA teams.<br> Hi Fabio,
+
+ 
+
+keep this ticket in developer queue until and unless it resolves.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806</td></tr></table>
+2025-11-28 15:14:31,797 [INFO] 127.0.0.1 - - [28/Nov/2025 15:14:31] "POST / HTTP/1.1" 200 -
+2025-11-28 15:14:38,008 [INFO] 🛠 Executing tool: Read_Wiki
+2025-11-28 15:14:38,008 [INFO] 📥 Input received: omv
+2025-11-28 15:14:39,005 [INFO] 📤 Full Output:\n<h2>📚 Wiki Search Results</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+        </tr>
+    
+        <tr>
+            <td>OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473696908" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OneMediation Voice (OMV)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2402787191" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Circle Flow</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2284096431" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>PMMS OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473690536" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>DEFECTS/TICKETS TRACKING - OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2299179648" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Weekly Status</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2268504235" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Reference Topics</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2237633250" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Environment Details</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2264867745" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Performance Test Updates</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2278598588" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV E911</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2408516507" target="_blank">Open</a></td>
+        </tr>
+        </table>
+2025-11-28 15:14:39,006 [INFO] 127.0.0.1 - - [28/Nov/2025 15:14:39] "POST / HTTP/1.1" 200 -
+2025-11-28 15:17:39,847 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:17:39,847 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:17:43,659 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-28 15:17:43,659 [INFO] 📥 Input received: omv
+2025-11-28 15:18:14,179 [INFO] 📤 Full Output:\n
+        <style>
+        .ticket-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .ticket-table th, .ticket-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .ticket-table th {
+            background-color: #f2f2f2;
+        }
+        .ticket-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .status-In\ Progress { background-color: #fff3cd; }
+        .status-To\ Do { background-color: #e0f7fa; }
+        .status-Open { background-color: #e0f7fa; }
+        </style>
+        <p><strong>Tickets Found:</strong> 3</p>
+        <table class="ticket-table">
+            <tr>
+                <th>TICKET</th>
+                <th>STATUS</th>
+                <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST 2 COMMENTS</th>
+                <th>LINK</th>
+                <th>URL</th>
+            </tr>
+    <tr class='status-In\ Progress'><td>CDEX-405380</td><td>In Progress</td><td>OMD/OMV - Enable the Duplicate check at ingestion level </td><td>Hello,
+
+Currently duplicate check is disabled at ingestion level for OMD and OMV , Can we enable it back ?  to avoid processing same files tiwce and sending the records/files to downstream  &quot;file.duplicate.check: &quot;false&quot;&quot; to &quot;True&quot;
+
+We had a scenario on OMV FFA ARIA production where legecy placed the *16* ABV  test calls made on *4/23 and 4/24  +* Legacy has resent an additional  *13 files*  from *4/11 and 4/15 (these files* *have already been processed by OMV and sent to vetter )*
+
+FTS has  a duplicate check for 1 day  which is why they still sent the old files to OMV 
+
+So to avoid these kind of scenarios   can we enable the  dublicate check in OMV and OMD ingestion level ? any performance impact if we enable it ? if this can be enabled please let us know in which upcoming patch this can be delivered as this is part of Main code repo 
+
+Also can FTS increase the duplicate check for 1 day to 7 days 
+
+ </td><td>the Ticket was not assigned to right group and has been reassigned today
+
+ <br>Hi [~fc2953]: this ticket needs discussion with Architect and if agreed to implement this change, we need a developer to work on this. can you please take care of this.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380</td></tr><tr class='status-To\ Do'><td>CDEX-461443</td><td>To Do</td><td>CDO LAG - Partition 43 -  VOICE Stats Production :topic</td><td>For com.att.omv.prod.prod.omv-stats-out topic , IEBUS is 78B 281M events LAG. Confluent Associate mentioned that &quot;partition 43 in particular seems to host the vast majority of data for this topic. This is very likely the cause of the lag for this connector. You may want to review the partitioning/keying strategy for the producer for this topic.&quot; Please look into this urgently 
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443</td></tr><tr class='status-To\ Do'><td>CDEX-375806</td><td>To Do</td><td>OMV | Software Vuln | ANDF Version Upgrade</td><td>Hi Team,
+
+ 
+
+We have exported the latest ASTRA software vuln dump and it seems we are using older version of ANDF in OMV application which needs to upgrade to latest ANDF 24.09 MR3 to mitigate the Software CVE&#x27;s. Please share the Plan o resolve all CVE&#x27;s reported for OMV. please find the attached excel, refer the OMV tab and fill the last three columns.
+ 
+|Key Owner |Critical|High|Medium|Low|Total 
+Number of 
+Package_CVEs |Action Plan |
+| | | | | | | |
+|Product|433|460|496|26|1415|SD to Upgrade to latest ANDF product MR03 Release , Product to share CVE|
+|SD|0|189|421|28|638|</td><td>OMV will be upgraded to ANDF24.12 version during project PID 421299 - project is ongoing and timeline is under discussion between DEV and QA teams.<br> Hi Fabio,
+
+ 
+
+keep this ticket in developer queue until and unless it resolves.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806</td></tr></table>
+2025-11-28 15:18:14,181 [INFO] ⏱ Execution time: 30.52s
+2025-11-28 15:18:14,186 [INFO] 127.0.0.1 - - [28/Nov/2025 15:18:14] "POST / HTTP/1.1" 200 -
+2025-11-28 15:18:29,474 [INFO] 🛠 Executing tool: Read_Wiki
+2025-11-28 15:18:29,474 [INFO] 📥 Input received: omv
+2025-11-28 15:18:31,064 [INFO] 📤 Full Output:\n<h2>📚 Wiki Search Results</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+        </tr>
+    
+        <tr>
+            <td>OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473696908" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OneMediation Voice (OMV)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2402787191" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Circle Flow</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2284096431" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>PMMS OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473690536" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>DEFECTS/TICKETS TRACKING - OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2299179648" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Weekly Status</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2268504235" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Reference Topics</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2237633250" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Environment Details</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2264867745" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Performance Test Updates</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2278598588" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV E911</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2408516507" target="_blank">Open</a></td>
+        </tr>
+        </table>
+2025-11-28 15:18:31,064 [INFO] ⏱ Execution time: 1.59s
+2025-11-28 15:18:31,064 [INFO] 127.0.0.1 - - [28/Nov/2025 15:18:31] "POST / HTTP/1.1" 200 -
+2025-11-28 15:18:34,184 [INFO] 🛠 Executing tool: How_to_fix
+2025-11-28 15:18:34,184 [INFO] 📥 Input received: omv
+2025-11-28 15:21:38,516 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:21:38,516 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:21:38,546 [INFO] 127.0.0.1 - - [28/Nov/2025 15:21:38] "GET / HTTP/1.1" 200 -
+2025-11-28 15:21:39,053 [INFO] 127.0.0.1 - - [28/Nov/2025 15:21:39] "GET / HTTP/1.1" 200 -
+2025-11-28 15:21:42,118 [INFO] 127.0.0.1 - - [28/Nov/2025 15:21:42] "GET / HTTP/1.1" 200 -
+2025-11-28 15:21:47,086 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-28 15:21:47,086 [INFO] 📥 Input received: omv
+2025-11-28 15:22:22,340 [INFO] 📤 Full Output:\n
+        <style>
+        .ticket-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .ticket-table th, .ticket-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .ticket-table th {
+            background-color: #f2f2f2;
+        }
+        .ticket-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .status-In\ Progress { background-color: #fff3cd; }
+        .status-To\ Do { background-color: #e0f7fa; }
+        .status-Open { background-color: #e0f7fa; }
+        </style>
+        <p><strong>Tickets Found:</strong> 3</p>
+        <table class="ticket-table">
+            <tr>
+                <th>TICKET</th>
+                <th>STATUS</th>
+                <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST 2 COMMENTS</th>
+                <th>LINK</th>
+                <th>URL</th>
+            </tr>
+    <tr class='status-In\ Progress'><td>CDEX-405380</td><td>In Progress</td><td>OMD/OMV - Enable the Duplicate check at ingestion level </td><td>Hello,
+
+Currently duplicate check is disabled at ingestion level for OMD and OMV , Can we enable it back ?  to avoid processing same files tiwce and sending the records/files to downstream  &quot;file.duplicate.check: &quot;false&quot;&quot; to &quot;True&quot;
+
+We had a scenario on OMV FFA ARIA production where legecy placed the *16* ABV  test calls made on *4/23 and 4/24  +* Legacy has resent an additional  *13 files*  from *4/11 and 4/15 (these files* *have already been processed by OMV and sent to vetter )*
+
+FTS has  a duplicate check for 1 day  which is why they still sent the old files to OMV 
+
+So to avoid these kind of scenarios   can we enable the  dublicate check in OMV and OMD ingestion level ? any performance impact if we enable it ? if this can be enabled please let us know in which upcoming patch this can be delivered as this is part of Main code repo 
+
+Also can FTS increase the duplicate check for 1 day to 7 days 
+
+ </td><td>the Ticket was not assigned to right group and has been reassigned today
+
+ <br>Hi [~fc2953]: this ticket needs discussion with Architect and if agreed to implement this change, we need a developer to work on this. can you please take care of this.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380</td></tr><tr class='status-To\ Do'><td>CDEX-461443</td><td>To Do</td><td>CDO LAG - Partition 43 -  VOICE Stats Production :topic</td><td>For com.att.omv.prod.prod.omv-stats-out topic , IEBUS is 78B 281M events LAG. Confluent Associate mentioned that &quot;partition 43 in particular seems to host the vast majority of data for this topic. This is very likely the cause of the lag for this connector. You may want to review the partitioning/keying strategy for the producer for this topic.&quot; Please look into this urgently 
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443</td></tr><tr class='status-To\ Do'><td>CDEX-375806</td><td>To Do</td><td>OMV | Software Vuln | ANDF Version Upgrade</td><td>Hi Team,
+
+ 
+
+We have exported the latest ASTRA software vuln dump and it seems we are using older version of ANDF in OMV application which needs to upgrade to latest ANDF 24.09 MR3 to mitigate the Software CVE&#x27;s. Please share the Plan o resolve all CVE&#x27;s reported for OMV. please find the attached excel, refer the OMV tab and fill the last three columns.
+ 
+|Key Owner |Critical|High|Medium|Low|Total 
+Number of 
+Package_CVEs |Action Plan |
+| | | | | | | |
+|Product|433|460|496|26|1415|SD to Upgrade to latest ANDF product MR03 Release , Product to share CVE|
+|SD|0|189|421|28|638|</td><td>OMV will be upgraded to ANDF24.12 version during project PID 421299 - project is ongoing and timeline is under discussion between DEV and QA teams.<br> Hi Fabio,
+
+ 
+
+keep this ticket in developer queue until and unless it resolves.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806</td></tr></table>
+2025-11-28 15:22:22,341 [INFO] ⏱ Execution time: 35.25s
+2025-11-28 15:22:22,343 [INFO] 127.0.0.1 - - [28/Nov/2025 15:22:22] "POST / HTTP/1.1" 200 -
+2025-11-28 15:22:43,599 [INFO] 🛠 Executing tool: Read_Wiki
+2025-11-28 15:22:43,599 [INFO] 📥 Input received: omv
+2025-11-28 15:22:44,416 [INFO] 📤 Full Output:\n<h2>📚 Wiki Search Results</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+        </tr>
+    
+        <tr>
+            <td>OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473696908" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OneMediation Voice (OMV)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2402787191" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Circle Flow</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2284096431" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>PMMS OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473690536" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>DEFECTS/TICKETS TRACKING - OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2299179648" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Weekly Status</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2268504235" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Reference Topics</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2237633250" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Environment Details</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2264867745" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Performance Test Updates</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2278598588" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV E911</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2408516507" target="_blank">Open</a></td>
+        </tr>
+        </table>
+2025-11-28 15:22:44,416 [INFO] ⏱ Execution time: 0.82s
+2025-11-28 15:22:44,416 [INFO] 127.0.0.1 - - [28/Nov/2025 15:22:44] "POST / HTTP/1.1" 200 -
+2025-11-28 15:22:46,592 [INFO] 🛠 Executing tool: How_to_fix
+2025-11-28 15:22:46,592 [INFO] 📥 Input received: omv
+2025-11-28 15:24:03,816 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:24:03,816 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:24:09,434 [INFO] 127.0.0.1 - - [28/Nov/2025 15:24:09] "GET / HTTP/1.1" 200 -
+2025-11-28 15:24:13,558 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-28 15:24:13,558 [INFO] 📥 Input received: omv
+2025-11-28 15:24:47,295 [INFO] 📤 Full Output:\n
+        <style>
+        .ticket-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .ticket-table th, .ticket-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .ticket-table th {
+            background-color: #f2f2f2;
+        }
+        .ticket-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .status-In\ Progress { background-color: #fff3cd; }
+        .status-To\ Do { background-color: #e0f7fa; }
+        .status-Open { background-color: #e0f7fa; }
+        </style>
+        <p><strong>Tickets Found:</strong> 3</p>
+        <table class="ticket-table">
+            <tr>
+                <th>TICKET</th>
+                <th>STATUS</th>
+                <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST 2 COMMENTS</th>
+                <th>LINK</th>
+                <th>URL</th>
+            </tr>
+    <tr class='status-In\ Progress'><td>CDEX-405380</td><td>In Progress</td><td>OMD/OMV - Enable the Duplicate check at ingestion level </td><td>Hello,
+
+Currently duplicate check is disabled at ingestion level for OMD and OMV , Can we enable it back ?  to avoid processing same files tiwce and sending the records/files to downstream  &quot;file.duplicate.check: &quot;false&quot;&quot; to &quot;True&quot;
+
+We had a scenario on OMV FFA ARIA production where legecy placed the *16* ABV  test calls made on *4/23 and 4/24  +* Legacy has resent an additional  *13 files*  from *4/11 and 4/15 (these files* *have already been processed by OMV and sent to vetter )*
+
+FTS has  a duplicate check for 1 day  which is why they still sent the old files to OMV 
+
+So to avoid these kind of scenarios   can we enable the  dublicate check in OMV and OMD ingestion level ? any performance impact if we enable it ? if this can be enabled please let us know in which upcoming patch this can be delivered as this is part of Main code repo 
+
+Also can FTS increase the duplicate check for 1 day to 7 days 
+
+ </td><td>the Ticket was not assigned to right group and has been reassigned today
+
+ <br>Hi [~fc2953]: this ticket needs discussion with Architect and if agreed to implement this change, we need a developer to work on this. can you please take care of this.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380</td></tr><tr class='status-To\ Do'><td>CDEX-461443</td><td>To Do</td><td>CDO LAG - Partition 43 -  VOICE Stats Production :topic</td><td>For com.att.omv.prod.prod.omv-stats-out topic , IEBUS is 78B 281M events LAG. Confluent Associate mentioned that &quot;partition 43 in particular seems to host the vast majority of data for this topic. This is very likely the cause of the lag for this connector. You may want to review the partitioning/keying strategy for the producer for this topic.&quot; Please look into this urgently 
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443</td></tr><tr class='status-To\ Do'><td>CDEX-375806</td><td>To Do</td><td>OMV | Software Vuln | ANDF Version Upgrade</td><td>Hi Team,
+
+ 
+
+We have exported the latest ASTRA software vuln dump and it seems we are using older version of ANDF in OMV application which needs to upgrade to latest ANDF 24.09 MR3 to mitigate the Software CVE&#x27;s. Please share the Plan o resolve all CVE&#x27;s reported for OMV. please find the attached excel, refer the OMV tab and fill the last three columns.
+ 
+|Key Owner |Critical|High|Medium|Low|Total 
+Number of 
+Package_CVEs |Action Plan |
+| | | | | | | |
+|Product|433|460|496|26|1415|SD to Upgrade to latest ANDF product MR03 Release , Product to share CVE|
+|SD|0|189|421|28|638|</td><td>OMV will be upgraded to ANDF24.12 version during project PID 421299 - project is ongoing and timeline is under discussion between DEV and QA teams.<br> Hi Fabio,
+
+ 
+
+keep this ticket in developer queue until and unless it resolves.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806</td></tr></table>
+2025-11-28 15:24:47,297 [INFO] ⏱ Execution time: 33.74s
+2025-11-28 15:24:47,298 [INFO] 127.0.0.1 - - [28/Nov/2025 15:24:47] "POST / HTTP/1.1" 200 -
+2025-11-28 15:24:55,000 [INFO] 🛠 Executing tool: Read_Wiki
+2025-11-28 15:24:55,000 [INFO] 📥 Input received: omv
+2025-11-28 15:24:55,982 [INFO] 📤 Full Output:\n<h2>📚 Wiki Search Results</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+        </tr>
+    
+        <tr>
+            <td>OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473696908" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OneMediation Voice (OMV)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2402787191" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Circle Flow</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2284096431" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>PMMS OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473690536" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>DEFECTS/TICKETS TRACKING - OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2299179648" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Weekly Status</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2268504235" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Reference Topics</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2237633250" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Environment Details</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2264867745" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Performance Test Updates</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2278598588" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV E911</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2408516507" target="_blank">Open</a></td>
+        </tr>
+        </table>
+2025-11-28 15:24:55,982 [INFO] ⏱ Execution time: 0.98s
+2025-11-28 15:24:55,982 [INFO] 127.0.0.1 - - [28/Nov/2025 15:24:55] "POST / HTTP/1.1" 200 -
+2025-11-28 15:32:36,950 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:32:36,961 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:32:38,955 [INFO] 127.0.0.1 - - [28/Nov/2025 15:32:38] "GET / HTTP/1.1" 200 -
+2025-11-28 15:32:42,439 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-28 15:32:42,439 [INFO] 📥 Input received: omv
+2025-11-28 15:33:06,597 [INFO] 📤 Full Output:\n
+        <style>
+        .ticket-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .ticket-table th, .ticket-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .ticket-table th {
+            background-color: #f2f2f2;
+        }
+        .ticket-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .status-In\ Progress { background-color: #fff3cd; }
+        .status-To\ Do { background-color: #e0f7fa; }
+        .status-Open { background-color: #e0f7fa; }
+        </style>
+        <p><strong>Tickets Found:</strong> 3</p>
+        <table class="ticket-table">
+            <tr>
+                <th>TICKET</th>
+                <th>STATUS</th>
+                <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST 2 COMMENTS</th>
+                <th>LINK</th>
+                <th>URL</th>
+            </tr>
+    <tr class='status-In\ Progress'><td>CDEX-405380</td><td>In Progress</td><td>OMD/OMV - Enable the Duplicate check at ingestion level </td><td>Hello,
+
+Currently duplicate check is disabled at ingestion level for OMD and OMV , Can we enable it back ?  to avoid processing same files tiwce and sending the records/files to downstream  &quot;file.duplicate.check: &quot;false&quot;&quot; to &quot;True&quot;
+
+We had a scenario on OMV FFA ARIA production where legecy placed the *16* ABV  test calls made on *4/23 and 4/24  +* Legacy has resent an additional  *13 files*  from *4/11 and 4/15 (these files* *have already been processed by OMV and sent to vetter )*
+
+FTS has  a duplicate check for 1 day  which is why they still sent the old files to OMV 
+
+So to avoid these kind of scenarios   can we enable the  dublicate check in OMV and OMD ingestion level ? any performance impact if we enable it ? if this can be enabled please let us know in which upcoming patch this can be delivered as this is part of Main code repo 
+
+Also can FTS increase the duplicate check for 1 day to 7 days 
+
+ </td><td>the Ticket was not assigned to right group and has been reassigned today
+
+ <br>Hi [~fc2953]: this ticket needs discussion with Architect and if agreed to implement this change, we need a developer to work on this. can you please take care of this.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-405380</td></tr><tr class='status-To\ Do'><td>CDEX-461443</td><td>To Do</td><td>CDO LAG - Partition 43 -  VOICE Stats Production :topic</td><td>For com.att.omv.prod.prod.omv-stats-out topic , IEBUS is 78B 281M events LAG. Confluent Associate mentioned that &quot;partition 43 in particular seems to host the vast majority of data for this topic. This is very likely the cause of the lag for this connector. You may want to review the partitioning/keying strategy for the producer for this topic.&quot; Please look into this urgently 
+
+ </td><td>No comments available</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-461443</td></tr><tr class='status-To\ Do'><td>CDEX-375806</td><td>To Do</td><td>OMV | Software Vuln | ANDF Version Upgrade</td><td>Hi Team,
+
+ 
+
+We have exported the latest ASTRA software vuln dump and it seems we are using older version of ANDF in OMV application which needs to upgrade to latest ANDF 24.09 MR3 to mitigate the Software CVE&#x27;s. Please share the Plan o resolve all CVE&#x27;s reported for OMV. please find the attached excel, refer the OMV tab and fill the last three columns.
+ 
+|Key Owner |Critical|High|Medium|Low|Total 
+Number of 
+Package_CVEs |Action Plan |
+| | | | | | | |
+|Product|433|460|496|26|1415|SD to Upgrade to latest ANDF product MR03 Release , Product to share CVE|
+|SD|0|189|421|28|638|</td><td>OMV will be upgraded to ANDF24.12 version during project PID 421299 - project is ongoing and timeline is under discussion between DEV and QA teams.<br> Hi Fabio,
+
+ 
+
+keep this ticket in developer queue until and unless it resolves.</td><td><a href='https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806' target='_blank'>Open</a></td><td>https://itrack.web.att.com/projects/CDEX/issues/CDEX-375806</td></tr></table>
+2025-11-28 15:33:06,600 [INFO] ⏱ Execution time: 24.16s
+2025-11-28 15:33:06,601 [INFO] 127.0.0.1 - - [28/Nov/2025 15:33:06] "POST / HTTP/1.1" 200 -
+2025-11-28 15:33:11,163 [INFO] 🛠 Executing tool: Read_Wiki
+2025-11-28 15:33:11,164 [INFO] 📥 Input received: omv
+2025-11-28 15:33:12,164 [INFO] 📤 Full Output:\n<h2>📚 Wiki Search Results</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Title</th>
+            <th>Link</th>
+        </tr>
+    
+        <tr>
+            <td>OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473696908" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OneMediation Voice (OMV)</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2402787191" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Circle Flow</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2284096431" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>PMMS OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2473690536" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>DEFECTS/TICKETS TRACKING - OMV</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2299179648" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Weekly Status</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2268504235" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Reference Topics</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2237633250" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Environment Details</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2264867745" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV Performance Test Updates</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2278598588" target="_blank">Open</a></td>
+        </tr>
+        
+        <tr>
+            <td>OMV E911</td>
+            <td><a href="https://wiki.web.att.com/pages/viewpage.action?pageId=2408516507" target="_blank">Open</a></td>
+        </tr>
+        </table>
+2025-11-28 15:33:12,164 [INFO] ⏱ Execution time: 1.0s
+2025-11-28 15:33:12,164 [INFO] 127.0.0.1 - - [28/Nov/2025 15:33:12] "POST / HTTP/1.1" 200 -
+2025-11-28 15:34:20,446 [INFO] 🛠 Executing tool: Read_Itrack
+2025-11-28 15:34:20,446 [INFO] 📥 Input received: omd
+2025-11-28 15:36:45,436 [INFO] 📤 Full Output:\n<p>We didnt found any ticket open for: 'omd'</p>
+2025-11-28 15:36:45,437 [INFO] ⏱ Execution time: 144.99s
+2025-11-28 15:36:45,442 [INFO] 127.0.0.1 - - [28/Nov/2025 15:36:45] "POST / HTTP/1.1" 200 -
+2025-11-28 15:45:29,079 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:45:29,079 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:45:31,029 [INFO] 127.0.0.1 - - [28/Nov/2025 15:45:31] "GET / HTTP/1.1" 200 -
+2025-11-28 15:45:56,611 [INFO] 127.0.0.1 - - [28/Nov/2025 15:45:56] "[31m[1mPOST / HTTP/1.1[0m" 400 -
+2025-11-28 15:49:13,461 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:49:13,461 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:49:19,244 [INFO] 127.0.0.1 - - [28/Nov/2025 15:49:19] "GET / HTTP/1.1" 200 -
+2025-11-28 15:49:26,241 [INFO] 127.0.0.1 - - [28/Nov/2025 15:49:26] "[31m[1mPOST / HTTP/1.1[0m" 400 -
+2025-11-28 15:50:03,373 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:50:03,374 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:50:06,936 [INFO] 127.0.0.1 - - [28/Nov/2025 15:50:06] "GET / HTTP/1.1" 200 -
+2025-11-28 15:50:11,371 [INFO] 🛠 Executing tool: How_to_fix
+2025-11-28 15:50:11,371 [INFO] 📥 Input received: omv
+2025-11-28 15:52:14,410 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 15:52:14,410 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 15:52:15,066 [INFO] 127.0.0.1 - - [28/Nov/2025 15:52:15] "GET / HTTP/1.1" 200 -
+2025-11-28 15:52:20,908 [INFO] 127.0.0.1 - - [28/Nov/2025 15:52:20] "POST / HTTP/1.1" 200 -
+2025-11-28 15:52:26,553 [INFO] 127.0.0.1 - - [28/Nov/2025 15:52:26] "POST / HTTP/1.1" 200 -
+2025-11-28 15:52:29,102 [INFO] 127.0.0.1 - - [28/Nov/2025 15:52:29] "POST / HTTP/1.1" 200 -
+2025-11-28 15:52:31,623 [INFO] 127.0.0.1 - - [28/Nov/2025 15:52:31] "POST / HTTP/1.1" 200 -
+2025-11-28 15:52:34,049 [INFO] 127.0.0.1 - - [28/Nov/2025 15:52:34] "POST / HTTP/1.1" 200 -

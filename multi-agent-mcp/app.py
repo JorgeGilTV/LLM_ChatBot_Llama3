@@ -574,11 +574,18 @@ HTML_TEMPLATE = """
             height: 24px;
             animation: spin 1s linear infinite;
             display: inline-block;
-            margin-top: 1rem;
+            vertical-align: middle;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        .counter {
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: bold;
+            color: #6f2da8;
+            vertical-align: middle;
         }
     </style>
 </head>
@@ -598,19 +605,30 @@ HTML_TEMPLATE = """
             <label for="input">Enter your input:</label>
             <textarea name="input" rows="5" placeholder="Can be Application name or exact filter Example: DIGITAL or OMV or BSSE, etc">{{ input_text }}</textarea>
 
-            <p id="loading-message" style="font-weight:bold; color:#6f2da8; margin-top:1rem;"></p>
+            <p id="loading-message" style="margin-top:1rem;"></p>
         </form>
 
         <script>
+            let counterInterval;
+            let startTime;
+
             function showLoading() {
-                // 🔹 Muestra el spinner en lugar de texto
-                document.getElementById("loading-message").innerHTML = '<span class="spinner"></span>';
+                // Muestra spinner + contador
+                document.getElementById("loading-message").innerHTML =
+                    '<span class="spinner"></span><span class="counter" id="counter">0s</span>';
 
                 // Limpia Results antes de enviar
                 const resultBox = document.getElementById("results-box");
                 if (resultBox) {
                     resultBox.innerHTML = "";
                 }
+
+                // Inicia contador
+                startTime = Date.now();
+                counterInterval = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    document.getElementById("counter").innerText = elapsed + "s";
+                }, 1000);
 
                 return true; // permite que el form se envíe
             }
@@ -623,12 +641,23 @@ HTML_TEMPLATE = """
                 if (resultBox) {
                     resultBox.innerHTML = "";
                 }
+
+                // Detiene contador si estaba activo
+                if (counterInterval) {
+                    clearInterval(counterInterval);
+                }
             }
         </script>
 
         {% if result %}
             <h2>Response:</h2>
             <div id="results-box">{{ result|safe }}</div>
+            <script>
+                // 🔹 Cuando llega la respuesta, detener el contador
+                if (counterInterval) {
+                    clearInterval(counterInterval);
+                }
+            </script>
         {% else %}
             <div id="results-box"></div>
         {% endif %}

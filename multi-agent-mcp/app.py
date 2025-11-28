@@ -493,6 +493,29 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <title>GenDox AI</title>
     <style>
+        .llama-response {
+            background-color: #fdfdfd;
+            color: #222; /* texto oscuro para fondo claro */
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .llama-response h3 {
+            color: #6f2da8; /* encabezado llamativo */
+        }
+        .llama-response p {
+            color: #333;
+        }
+        .llama-response ul {
+            margin-left: 1rem;
+        }
+        .llama-response li {
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+        .llama-response a {
+            color: #0077cc;
+        }
         body { margin:0; font-family:"Segoe UI", Roboto, sans-serif; background:#1e1e1e; color:#f0f0f0; display:flex; height:100vh; }
         aside.sidebar { width:240px; background:#2c2c2c; padding:1rem; display:flex; flex-direction:column; justify-content:space-between; }
         .sidebar .new-chat { background:#6f2da8; color:white; border:none; padding:0.75rem; border-radius:8px; cursor:pointer; }
@@ -521,17 +544,6 @@ HTML_TEMPLATE = """
     <aside class="sidebar">
         <button class="new-chat" onclick="newChat()">➕ New Chat</button>
         <div>
-            <div class="section">Selection</div>
-            <ul>
-                {% for name, desc in tools %}
-                    <li>
-                        <label>
-                            <input type="checkbox" name="tool" value="{{ name }}">
-                            {{ name }}
-                        </label>
-                    </li>
-                {% endfor %}
-            </ul>
             <div class="section"><button onclick="alert('Settings clicked')">⚙️ Settings</button></div>
             <div class="section"><button onclick="alert('About clicked')">ℹ️ About</button></div>
             <div class="section"><button onclick="alert('Help clicked')">❓ Help</button></div>
@@ -554,7 +566,7 @@ HTML_TEMPLATE = """
                 {% endfor %}
             </div>
 
-            <textarea name="input" placeholder="What I can help you with?">{{ input_text }}</textarea>
+            <textarea name="input" placeholder="Please insert your search, select the tool in check box and press Send?">{{ input_text }}</textarea>
             <button type="submit">Send</button>
         </form>
         <p id="loading-message"></p>
@@ -629,7 +641,7 @@ def index():
                 continue
             try:
                 res = func(input_text)
-                results.append(f"<div style='border:1px solid #444; padding:1rem; margin-bottom:1rem; border-radius:8px; background:#1e1e1e;'><h3>{tool_name}</h3>{res}</div>")
+                results.append(f"<div class='llama-response'><h3>{tool_name}</h3>{res}</div>")
             except Exception as e:
                 results.append(f"<pre>Error executing tool '{tool_name}': {e}</pre>")
         exec_time = round(time.time() - start, 2)

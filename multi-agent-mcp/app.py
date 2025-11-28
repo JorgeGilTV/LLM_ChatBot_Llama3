@@ -61,7 +61,6 @@ def wiki_search(query: str) -> str:
     }
 
     summary_context = None
-
     # ✅ Si query es un ticket ID tipo CDEX-xxxxx, obtener el summary desde Jira
     if query.startswith("CDEX-") and query[5:].isdigit():
         jira_session = requests.Session()
@@ -77,7 +76,7 @@ def wiki_search(query: str) -> str:
         trimmed_query = summary_context[:50].strip()  # usar summary como query, recortado
     else:
         # 🔍 Usar solo las primeras 20 letras del query normal
-        trimmed_query = query[:20].strip()
+        trimmed_query = query
 
     # 🧠 CQL con filtros: buscar en texto y título, excluir imágenes
     cql = (
@@ -161,9 +160,12 @@ def read_tickets(query: str) -> str:
     session = requests.Session()
     session.auth = (os.getenv("ITRACK_USER"), os.getenv("ITRACK_PASSWORD"))
 
-    # ✅ Si el query es un ticket ID tipo CDEX-xxxxx, obtener directamente sus fields
+    if "accepted_tickets" not in globals():
+        globals()["accepted_tickets"] = {}
+
+    # ✅ Caso directo: query es un ticket ID tipo CDEX-xxxxx
     if query.startswith("CDEX-") and query[5:].isdigit():
-        ticket_url = f"https://itrack.web.att.com/rest/api/2/issue/{query}"
+        ticket_url = f"https://itrack.web.att.com/rest/api/2/issue/{query}?expand=comments"
         response = session.get(ticket_url)
 
         if response.status_code != 200:
@@ -176,63 +178,37 @@ def read_tickets(query: str) -> str:
         description = issue["fields"].get("description", "No description available")
 
         comments = issue["fields"].get("comment", {}).get("comments", [])
-        last_comment = comments[-1]["body"] if comments else "No comments available"
+        last_two_comments = [c.get("body", "") for c in comments[-2:]] if comments else ["No comments available"]
 
         url = f"https://itrack.web.att.com/projects/CDEX/issues/{key}"
 
-        # ✅ HTML con los mismos fields
-        output = f"""
-            <style>
-            .ticket-table {{
-                border-collapse: collapse;
-                width: 100%;
-                font-family: Arial, sans-serif;
-                font-size: 14px;
-            }}
-            .ticket-table th, .ticket-table td {{
-                border: 1px solid #ccc;
-                padding: 8px;
-                text-align: left;
-                vertical-align: top;
-            }}
-            .ticket-table th {{
-                background-color: #f2f2f2;
-            }}
-            .ticket-table tr:nth-child(even) {{
-                background-color: #fafafa;
-            }}
-            .status-In\\ Progress {{ background-color: #fff3cd; }}
-            .status-To\\ Do {{ background-color: #e0f7fa; }}
-            .status-Open {{ background-color: #e0f7fa; }}
-            </style>
-            <p><strong>Ticket Details:</strong></p>
-            <table class="ticket-table">
-                <tr>
-                    <th>TICKET</th>
-                    <th>STATUS</th>
-                    <th>SUMMARY</th>
-                    <th>DESCRIPTION</th>
-                    <th>LAST COMMENT</th>
-                    <th>LINK</th>
-                    <th>URL</th>
-                </tr>
-                <tr class='status-{status.replace(" ", "\\ ")}'>
-                    <td>{html.escape(key)}</td>
-                    <td>{html.escape(status)}</td>
-                    <td>{html.escape(summary)}</td>
-                    <td>{html.escape(description)}</td>
-                    <td>{html.escape(last_comment)}</td>
-                    <td><a href='{url}' target='_blank'>Open</a></td>
-                    <td>{html.escape(url)}</td>
-                </tr>
-            </table>
-        """
-        return output
+        if status.lower() == "accepted":
+            globals()["accepted_tickets"][key] = {
+                "status": status,
+                "summary": summary,
+                "description": description,
+                "comments": last_two_comments,
+                "url": url
+            }
+            return f"<p>Ticket {key} almacenado en Accepted (no mostrado en tabla).</p>"
 
-    # ✅ Caso normal: búsqueda por texto con JQL
-    jql = f'text~"{query}"'
-    ticket_url = f'https://itrack.web.att.com/rest/api/2/search?jql={jql}&maxResults=50'
-    response = session.get(ticket_url)
+        # ✅ Mostrar solo si empieza con CDEX
+        if key.startswith("CDEX-"):
+            return _render_table([{
+                "key": key,
+                "status": status,
+                "summary": summary,
+                "description": description,
+                "last_comments": last_two_comments,
+                "url": url
+            }])
+        else:
+            return f"<p>Ticket {key} no mostrado (no es CDEX).</p>"
+
+    # ✅ Caso normal: búsqueda por texto en summary/description
+    jql = f'(description ~ "{query}")'
+    search_url = f'https://itrack.web.att.com/rest/api/2/search?jql={jql}&maxResults=50'
+    response = session.get(search_url)
 
     if response.status_code != 200:
         return f"<p>Error {response.status_code}: {response.reason}</p>"
@@ -241,44 +217,55 @@ def read_tickets(query: str) -> str:
     issues = data.get("issues", [])
 
     if not issues:
-        return f"<p>No se encontró información para: '{query}'</p>"
+        return f"<p>No se encontró información para: '{html.escape(query)}'</p>"
 
     tabla = []
-    procesados = set()
-
     for issue in issues:
         key = issue["key"]
-        status = issue["fields"]["status"]["name"]
-        summary = issue["fields"]["summary"]
-        description = issue["fields"].get("description", "No description available")
 
-        comments = issue["fields"].get("comment", {}).get("comments", [])
-        last_comment = comments[-1]["body"] if comments else "No comments available"
+        # 🔎 Segunda llamada para traer comentarios completos
+        issue_url = f'https://itrack.web.att.com/rest/api/2/issue/{key}?expand=comments'
+        issue_resp = session.get(issue_url)
+        if issue_resp.status_code != 200:
+            continue
+        full_issue = issue_resp.json()
 
-        if status in ["Closed", "Cancelled", "Dev Complete"]:
+        status = full_issue["fields"]["status"]["name"]
+        summary = full_issue["fields"]["summary"]
+        description = full_issue["fields"].get("description", "No description available")
+        comments = full_issue["fields"].get("comment", {}).get("comments", [])
+        last_two_comments = [c.get("body", "") for c in comments[-2:]] if comments else ["No comments available"]
+
+        url = f"https://itrack.web.att.com/projects/CDEX/issues/{key}"
+
+        if status.lower() == "accepted" or status.lower() == "closed" or status.lower() == "test complete" or status.lower() == "dev complete" or status.lower() == "cancelled":
+            globals()["accepted_tickets"][key] = {
+                "status": status,
+                "summary": summary,
+                "description": description,
+                "comments": last_two_comments,
+                "url": url
+            }
             continue
 
-        if query.lower() in summary.lower():
-            if key in procesados:
-                continue
-            procesados.add(key)
-
-            url = f"https://itrack.web.att.com/projects/CDEX/issues/{key}"
+        # ✅ Mostrar solo si empieza con CDEX
+        if key.startswith("CDEX-"):
             tabla.append({
                 "key": key,
                 "status": status,
                 "summary": summary,
                 "description": description,
-                "last_comment": last_comment,
+                "last_comments": last_two_comments,
                 "url": url
             })
 
     if not tabla:
-        return f"<p>No se encontró información para: '{query}'</p>"
+        return f"<p>We didnt found any ticket open for: '{html.escape(query)}'</p>"
 
-    tabla.sort(key=lambda x: x['status'])
+    return _render_table(tabla)
 
-    # ✅ HTML con tabla completa
+
+def _render_table(tabla):
     output = f"""
         <style>
         .ticket-table {{
@@ -310,7 +297,7 @@ def read_tickets(query: str) -> str:
                 <th>STATUS</th>
                 <th>SUMMARY</th>
                 <th>DESCRIPTION</th>
-                <th>LAST COMMENT</th>
+                <th>LAST 2 COMMENTS</th>
                 <th>LINK</th>
                 <th>URL</th>
             </tr>
@@ -324,14 +311,14 @@ def read_tickets(query: str) -> str:
         output += f"<td>{html.escape(status_value)}</td>"
         output += f"<td>{html.escape(row['summary'])}</td>"
         output += f"<td>{html.escape(row['description'])}</td>"
-        output += f"<td>{html.escape(row['last_comment'])}</td>"
+        output += f"<td>{"<br>".join([html.escape(c) for c in row['last_comments']])}</td>"
         output += f"<td><a href='{row['url']}' target='_blank'>Open</a></td>"
         output += f"<td>{html.escape(row['url'])}</td>"
         output += "</tr>"
 
     output += "</table>"
-
     return output
+
 
 # 🧠 AI Suggestions
 def llama_suggestions(query: str) -> str:
@@ -343,21 +330,49 @@ def llama_suggestions(query: str) -> str:
 
     for row in rows:
         cols = row.find_all("td")
-        if len(cols) >= 4:
-            resumen = f"{cols[0].text.strip()} | {cols[1].text.strip()} | {cols[2].text.strip()} | {cols[3].text.strip()}"
-            resumen_tickets.append(resumen)
+        if len(cols) >= 5:  # aseguramos que haya comentarios
+            ticket_id = cols[0].text.strip()
+            status = cols[1].text.strip()
+            summary = cols[2].text.strip()
+            description = cols[3].text.strip()
+            last_comment = cols[4].text.strip()
+
+            # ✅ Solo incluir tickets en In Progress, To Do, Retest
+            if status.lower() in ["in progress", "to do", "retest"]:
+                resumen = f"{ticket_id} | {status} | {summary} | {last_comment}"
+                resumen_tickets.append(resumen)
+
+            # ✅ Para Accepted, incluir últimos 2 comentarios
+            elif status.lower() == "accepted":
+                comments = row.find_all("td")[4].text.strip().split("\n")
+                last_two = comments[-2:] if len(comments) >= 2 else comments
+                resumen = f"{ticket_id} | {status} | {summary} | Last 2 Comments: {' | '.join(last_two)}"
+                resumen_tickets.append(resumen)
 
     texto_tickets = "\n".join(resumen_tickets)
 
+    # Prompt ajustado
     prompt = f"""
     You are a senior DevOps service engineer specializing in troubleshooting and ticket analysis. 
-    Based on the following list of all open,in progress, to do, and retest tickets, last comment, summary and the query context provided, generate a structured set of recommendations to resolve each issue.
-    Your output must follow this exact format, using HTML tags for styling. Each ticket must be wrapped in the following block:
+    Your task is to generate structured recommendations to resolve each issue based on the provided tickets.
+
+    ⚠️ Rules:
+    - Only include tickets with status "In Progress", "To Do", or "Retest" for recommendations.
+    - For grouped tickets include tickets in "Accepted" status , and list the last 2 comments available.
+    - Always use HTML tags exactly as shown in the format below.
+    - Do not use Markdown.
+    - Do not collapse fields into single lines.
+    - Do not add commentary, explanations, or text outside the required structure.
+    - Include only the valid siggestions but always inside <ul><li>.
+    - Group similar tickets together by technical context (e.g., SSL errors, ELK cleanup).
+
+    Each ticket must follow this exact block:
 
     <div style="border:1px solid #ccc; padding:1rem; margin-bottom:1rem; border-radius:8px; background-color:#fdfdfd;">
         <h3>🎫 <strong>Ticket ID:</strong> CDEX-xxxxx</h3>
-        <p><strong>Status:</strong> Open</p>
+        <p><strong>Status:</strong> In Progress</p>
         <p><strong>Summary:</strong> Short description of the issue</p>
+        <p><strong>Last comments:</strong> Last Comments</p>
         <p><strong>Ticket URL:</strong> <a href="https://itrack.web.att.com/projects/CDEX/issues/CDEX-xxxxx" target="_blank">Open</a></p>
         <p><strong>Recommendations:</strong></p>
         <ul>
@@ -367,16 +382,29 @@ def llama_suggestions(query: str) -> str:
         </ul>
     </div>
 
-    Repeat this block for each ticket.
-
-    Before the individual tickets, include a section for similar tickets grouped together:
+    Before listing individual tickets, include a section for grouped tickets:
 
     <h2>🔗 Similar Tickets (Grouped)</h2>
     <p><strong>Ticket Group:</strong> Short description</p>
     <ul>
         <li>CDEX-xxxxx: Summary</li>
-        <li>CDEX-xxxxx: Summary</li>
-        <li>CDEX-xxxxx: Summary</li>
+        <p><strong>Last 2 Comments:</strong></p>
+        <ul>
+            <li>Comment 1</li>
+            <li>Comment 2</li>
+        </ul>
+            <li>CDEX-xxxxx: Summary</li>
+            <p><strong>Last 2 Comments:</strong></p>
+        <ul>
+            <li>Comment 1</li>
+            <li>Comment 2</li>
+        </ul>
+            <li>CDEX-xxxxx: Summary</li>
+            <p><strong>Last 2 Comments:</strong></p>
+        <ul>
+            <li>Comment 1</li>
+            <li>Comment 2</li>
+        </ul>
     </ul>
     <p><strong>Recommendations:</strong></p>
     <ul>
@@ -384,16 +412,10 @@ def llama_suggestions(query: str) -> str:
         <li>Group recommendation 2</li>
         <li>Group recommendation 3</li>
     </ul>
+    
 
-    At the end, include a section for external documentation links suggested by GenAI related the applications or technologies used in the summary ticket:
-    sample: 
-    <h2>📚 External Documentation Links</h2>
-    <ul>
-        <li>Azure Queues: <a href="https://docs.microsoft.com/en-us/azure/queues" target="_blank">https://docs.microsoft.com/en-us/azure/queues</a></li>
-        <li>API Management: <a href="https://docs.microsoft.com/en-us/azure/api-management" target="_blank">https://docs.microsoft.com/en-us/azure/api-management</a></li>
-    </ul>
-
-    Do not use Markdown. Do not collapse fields into single lines. Use only HTML tags as shown. Do not add extra commentary or change the structure.
+    At the end, include a section for external documentation links suggested by GenAI related to the applications or technologies mentioned in the tickets. 
+    Only use official documentation sources (Microsoft, Elastic, Kubernetes, etc.).
 
     Query context: {query}
 
@@ -401,6 +423,7 @@ def llama_suggestions(query: str) -> str:
     {texto_tickets}
     """
     print(prompt)
+
     raw_response = ask_llama(prompt)
     wiki_html = wiki_search(query[:20])
 
@@ -478,7 +501,7 @@ HTML_TEMPLATE = """
             padding: 0;
         }
         header {
-            background: linear-gradient(90deg, #6f2da8, #ff6f61); /* Amdocs-inspired gradient */
+            background: linear-gradient(90deg, #6f2da8, #ff6f61);
             color: white;
             padding: 1rem 2rem;
             text-align: center;
@@ -511,7 +534,7 @@ HTML_TEMPLATE = """
         }
         button {
             padding: 0.75rem 1rem;
-            background: linear-gradient(90deg, #6f2da8, #ff6f61); /* Matches header */
+            background: linear-gradient(90deg, #6f2da8, #ff6f61);
             color: white;
             border: none;
             border-radius: 8px;
@@ -520,7 +543,7 @@ HTML_TEMPLATE = """
             transition: background 0.3s ease;
         }
         button:hover {
-            background: linear-gradient(90deg, #5a1f8e, #e85c50); /* Darker hover */
+            background: linear-gradient(90deg, #5a1f8e, #e85c50);
         }
         .tool-buttons {
             display: flex;
@@ -542,6 +565,21 @@ HTML_TEMPLATE = """
             color: #777;
             margin-top: 2rem;
         }
+        /* Spinner */
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #6f2da8;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-top: 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -549,7 +587,7 @@ HTML_TEMPLATE = """
         <h1>🧠 GenDox AI 🧠</h1>
     </header>
     <main>
-        <form method="post" onsubmit="showLoading()">
+        <form method="post" onsubmit="return showLoading()">
             <label>Select a tool to use:</label>
             <div class="tool-buttons">
                 {% for name, desc in tools %}
@@ -565,26 +603,34 @@ HTML_TEMPLATE = """
 
         <script>
             function showLoading() {
-                const buttons = document.querySelectorAll("button[name='tool']");
-                let selectedTool = "";
-                buttons.forEach(btn => {
-                    if (btn === document.activeElement) {
-                        selectedTool = btn.value;
-                    }
-                });
-                document.getElementById("loading-message").innerText = "⏳ Please wait, im executing " + selectedTool + " tool...";
+                // 🔹 Muestra el spinner en lugar de texto
+                document.getElementById("loading-message").innerHTML = '<span class="spinner"></span>';
+
+                // Limpia Results antes de enviar
+                const resultBox = document.getElementById("results-box");
+                if (resultBox) {
+                    resultBox.innerHTML = "";
+                }
+
+                return true; // permite que el form se envíe
             }
-        </script>
-        <script>
+
             function clearInput() {
                 document.querySelector("textarea[name='input']").value = "";
                 document.getElementById("loading-message").innerText = "🧹 Input Cleaned";
+
+                const resultBox = document.getElementById("results-box");
+                if (resultBox) {
+                    resultBox.innerHTML = "";
+                }
             }
         </script>
 
         {% if result %}
             <h2>Response:</h2>
-            <div>{{ result|safe }}</div>
+            <div id="results-box">{{ result|safe }}</div>
+        {% else %}
+            <div id="results-box"></div>
         {% endif %}
     </main>
     <footer>
@@ -605,7 +651,7 @@ def tool_only():
 
     try:
         result = func(input_text)
-        return result  # ✅ Solo el HTML generado por la herramienta
+        return result
     except Exception as e:
         return f"<p>Error executing tool '{tool_name}': {html.escape(str(e))}</p>"
     
@@ -622,7 +668,7 @@ def index():
         logging.info(f"📥 Input received: {input_text}")
         try:
             result = func(input_text if input_text else "")
-            logging.info(f"📤 Full Output:\n{result}")
+            logging.info(f"📤 Full Output:\\n{result}")
         except Exception as e:
             result = f"Error executing tool '{tool_name}': {e}"
             logging.error(result)

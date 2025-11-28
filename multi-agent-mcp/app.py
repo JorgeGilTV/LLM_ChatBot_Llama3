@@ -350,8 +350,8 @@ def llama_suggestions(query: str) -> str:
     texto_tickets = "\n".join(resumen_tickets)
 
     prompt = f"""
-    You are a senior DevOps service engineer specializing in troubleshooting and ticket analysis. Based on the following list of open tickets and the query context provided, generate a structured set of recommendations to resolve each issue.
-
+    You are a senior DevOps service engineer specializing in troubleshooting and ticket analysis. 
+    Based on the following list of all open,in progress, to do, and retest tickets, last comment, summary and the query context provided, generate a structured set of recommendations to resolve each issue.
     Your output must follow this exact format, using HTML tags for styling. Each ticket must be wrapped in the following block:
 
     <div style="border:1px solid #ccc; padding:1rem; margin-bottom:1rem; border-radius:8px; background-color:#fdfdfd;">

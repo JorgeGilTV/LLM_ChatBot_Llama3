@@ -32523,3 +32523,148 @@ keep this ticket in developer queue until and unless it resolves.</td><td><a hre
 2025-11-28 16:28:12,526 [INFO] 127.0.0.1 - - [28/Nov/2025 16:28:12] "POST / HTTP/1.1" 200 -
 2025-11-28 16:28:58,626 [INFO] 127.0.0.1 - - [28/Nov/2025 16:28:58] "POST / HTTP/1.1" 200 -
 2025-11-28 16:30:09,927 [INFO] 127.0.0.1 - - [28/Nov/2025 16:30:09] "POST / HTTP/1.1" 200 -
+2025-11-28 16:38:36,734 [INFO] 127.0.0.1 - - [28/Nov/2025 16:38:36] "POST / HTTP/1.1" 200 -
+2025-11-28 16:39:18,286 [INFO] 127.0.0.1 - - [28/Nov/2025 16:39:18] "POST / HTTP/1.1" 200 -
+2025-11-28 16:39:30,850 [INFO] 127.0.0.1 - - [28/Nov/2025 16:39:30] "POST / HTTP/1.1" 200 -
+2025-11-28 16:40:24,449 [INFO] 127.0.0.1 - - [28/Nov/2025 16:40:24] "POST / HTTP/1.1" 200 -
+2025-11-28 16:41:09,632 [INFO] 127.0.0.1 - - [28/Nov/2025 16:41:09] "POST / HTTP/1.1" 200 -
+2025-11-28 16:52:04,328 [INFO] 127.0.0.1 - - [28/Nov/2025 16:52:04] "POST / HTTP/1.1" 200 -
+2025-11-28 17:07:47,990 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 17:07:47,991 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 17:07:56,007 [INFO] 127.0.0.1 - - [28/Nov/2025 17:07:56] "GET / HTTP/1.1" 200 -
+2025-11-28 17:08:31,894 [INFO] 127.0.0.1 - - [28/Nov/2025 17:08:31] "POST / HTTP/1.1" 200 -
+2025-11-28 17:08:37,794 [INFO] 127.0.0.1 - - [28/Nov/2025 17:08:37] "POST / HTTP/1.1" 200 -
+2025-11-28 17:09:04,474 [INFO] 127.0.0.1 - - [28/Nov/2025 17:09:04] "POST / HTTP/1.1" 200 -
+2025-11-28 17:11:20,297 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-11-28 17:11:20,299 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-28 17:13:48,313 [INFO] 127.0.0.1 - - [28/Nov/2025 17:13:48] "POST / HTTP/1.1" 200 -
+2025-11-28 17:13:59,827 [INFO] 127.0.0.1 - - [28/Nov/2025 17:13:59] "POST / HTTP/1.1" 200 -
+2025-11-28 17:14:38,531 [INFO] 127.0.0.1 - - [28/Nov/2025 17:14:38] "POST / HTTP/1.1" 200 -
+2025-11-30 09:10:17,864 [INFO] 127.0.0.1 - - [30/Nov/2025 09:10:17] "POST / HTTP/1.1" 200 -
+2025-11-30 09:21:02,895 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.27.41.238:5000
+2025-11-30 09:21:02,895 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-30 09:22:07,674 [INFO] 127.0.0.1 - - [30/Nov/2025 09:22:07] "POST / HTTP/1.1" 200 -
+2025-11-30 09:45:37,952 [INFO] 127.0.0.1 - - [30/Nov/2025 09:45:37] "POST / HTTP/1.1" 200 -
+2025-11-30 10:00:45,444 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.27.41.238:5000
+2025-11-30 10:00:45,445 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-30 10:00:51,689 [INFO] 127.0.0.1 - - [30/Nov/2025 10:00:51] "GET / HTTP/1.1" 200 -
+2025-11-30 10:01:30,783 [ERROR] Exception on / [POST]
+Traceback (most recent call last):
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\Python Scripts\LLM\LLM_ChatBot_Llama3\multi-agent-mcp\app1.py", line 722, in index
+    add_to_history(input_text) if input_text else None
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\Python Scripts\LLM\LLM_ChatBot_Llama3\multi-agent-mcp\app1.py", line 531, in add_to_history
+    json.dump(history[-10:], f)
+    ^^^^
+NameError: name 'json' is not defined. Did you forget to import 'json'
+2025-11-30 10:01:30,821 [INFO] 127.0.0.1 - - [30/Nov/2025 10:01:30] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+2025-11-30 10:01:34,309 [INFO] 127.0.0.1 - - [30/Nov/2025 10:01:34] "GET / HTTP/1.1" 200 -
+2025-11-30 10:01:46,144 [ERROR] Exception on / [POST]
+Traceback (most recent call last):
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\Python Scripts\LLM\LLM_ChatBot_Llama3\multi-agent-mcp\app1.py", line 722, in index
+    add_to_history(input_text) if input_text else None
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\Python Scripts\LLM\LLM_ChatBot_Llama3\multi-agent-mcp\app1.py", line 531, in add_to_history
+    json.dump(history[-10:], f)
+    ^^^^
+NameError: name 'json' is not defined. Did you forget to import 'json'
+2025-11-30 10:01:46,146 [INFO] 127.0.0.1 - - [30/Nov/2025 10:01:46] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+2025-11-30 10:02:28,571 [ERROR] Exception on / [POST]
+Traceback (most recent call last):
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\Python Scripts\LLM\LLM_ChatBot_Llama3\multi-agent-mcp\app1.py", line 722, in index
+    add_to_history(input_text) if input_text else None
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jorgeagi\Python Scripts\LLM\LLM_ChatBot_Llama3\multi-agent-mcp\app1.py", line 531, in add_to_history
+    json.dump(history[-10:], f)
+    ^^^^
+NameError: name 'json' is not defined. Did you forget to import 'json'
+2025-11-30 10:02:28,573 [INFO] 127.0.0.1 - - [30/Nov/2025 10:02:28] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+2025-11-30 10:03:23,409 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.27.41.238:5000
+2025-11-30 10:03:23,410 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-30 10:03:23,538 [INFO] 127.0.0.1 - - [30/Nov/2025 10:03:23] "GET / HTTP/1.1" 200 -
+2025-11-30 10:03:52,841 [INFO] 127.0.0.1 - - [30/Nov/2025 10:03:52] "POST / HTTP/1.1" 200 -
+2025-11-30 10:04:01,989 [INFO] 127.0.0.1 - - [30/Nov/2025 10:04:01] "POST / HTTP/1.1" 200 -
+2025-11-30 10:04:56,175 [INFO] 127.0.0.1 - - [30/Nov/2025 10:04:56] "POST / HTTP/1.1" 200 -
+2025-11-30 10:09:16,362 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.27.41.238:5000
+2025-11-30 10:09:16,363 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-30 10:09:16,473 [INFO] 127.0.0.1 - - [30/Nov/2025 10:09:16] "GET / HTTP/1.1" 200 -
+2025-11-30 10:12:02,120 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.27.41.238:5000
+2025-11-30 10:12:02,120 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-30 10:12:04,864 [INFO] 127.0.0.1 - - [30/Nov/2025 10:12:04] "GET / HTTP/1.1" 200 -
+2025-11-30 10:12:41,675 [INFO] 127.0.0.1 - - [30/Nov/2025 10:12:41] "POST / HTTP/1.1" 200 -
+2025-11-30 10:13:06,911 [INFO] 127.0.0.1 - - [30/Nov/2025 10:13:06] "POST / HTTP/1.1" 200 -
+2025-11-30 10:14:01,424 [INFO] 127.0.0.1 - - [30/Nov/2025 10:14:01] "POST / HTTP/1.1" 200 -
+2025-11-30 10:16:50,027 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.27.41.238:5000
+2025-11-30 10:16:50,027 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-30 10:16:50,789 [INFO] 127.0.0.1 - - [30/Nov/2025 10:16:50] "GET / HTTP/1.1" 200 -
+2025-11-30 10:17:23,767 [INFO] 127.0.0.1 - - [30/Nov/2025 10:17:23] "POST / HTTP/1.1" 200 -
+2025-11-30 10:18:12,689 [INFO] 127.0.0.1 - - [30/Nov/2025 10:18:12] "POST / HTTP/1.1" 200 -

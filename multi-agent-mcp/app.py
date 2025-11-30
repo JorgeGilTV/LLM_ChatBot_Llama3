@@ -13,6 +13,8 @@ from flask_cors import CORS
 from jira import JIRA
 import datetime
 import sys
+import google.generativeai as genai
+
 
 # 🔐 Configuración
 from config import (
@@ -31,6 +33,37 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)  # ✅ Usa stdout que respeta UTF-8 en la mayoría de entornos
     ]
 )
+
+# 🧠 Gemini (Google AI Studio)
+def ask_gemini(prompt: str) -> str:
+    #client = genai.Client()
+    try:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return "Error: GEMINI_API_KEY no está definido en las variables de entorno."
+
+        # Usa un modelo válido, por ejemplo gemini-1.5-flash-latest
+        model="models/gemini-2.5-pro"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent?key={api_key}"
+
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [
+                {"parts": [{"text": prompt}]}
+            ]
+        }
+
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code != 200:
+            return f"Error {response.status_code}: {response.text}"
+
+        data = response.json()
+        output = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return output.strip() if output else "No se recibió respuesta de Gemini."
+
+    except Exception as e:
+        return f"Error ejecutando Gemini: {e}"
+
 
 # 🧠 LLaMA 3
 def ask_llama(prompt: str) -> str:
@@ -423,8 +456,9 @@ def llama_suggestions(query: str) -> str:
     {texto_tickets}
     """
     print(prompt)
-
-    raw_response = ask_llama(prompt)
+    
+    #raw_response = ask_llama(prompt)
+    raw_response = ask_gemini(prompt)
     wiki_html = wiki_search(query[:20])
 
     raw_response += f"""

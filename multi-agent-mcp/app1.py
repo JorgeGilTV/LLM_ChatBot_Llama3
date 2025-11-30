@@ -6,13 +6,16 @@ import logging
 import os
 import html
 import re
+import json
 import time
 from bs4 import BeautifulSoup
-from email.message import EmailMessage
 from flask import Flask, request, render_template
 from flask_cors import CORS
 from jira import JIRA
 import datetime
+import sys
+import google.generativeai as genai
+
 
 # 🔐 Configuración
 from config import (
@@ -27,10 +30,41 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("agent_tool_logs.log"),
-        logging.StreamHandler()
+        logging.FileHandler("agent_tool_logs.log", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout)  # ✅ Usa stdout que respeta UTF-8 en la mayoría de entornos
     ]
 )
+
+# 🧠 Gemini (Google AI Studio)
+def ask_gemini(prompt: str) -> str:
+    #client = genai.Client()
+    try:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return "Error: GEMINI_API_KEY no está definido en las variables de entorno."
+
+        # Usa un modelo válido, por ejemplo gemini-1.5-flash-latest
+        model="models/gemini-2.5-pro"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent?key={api_key}"
+
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [
+                {"parts": [{"text": prompt}]}
+            ]
+        }
+
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code != 200:
+            return f"Error {response.status_code}: {response.text}"
+
+        data = response.json()
+        output = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return output.strip() if output else "No se recibió respuesta de Gemini."
+
+    except Exception as e:
+        return f"Error ejecutando Gemini: {e}"
+
 
 # 🧠 LLaMA 3
 def ask_llama(prompt: str) -> str:
@@ -48,7 +82,7 @@ def ask_llama(prompt: str) -> str:
         return output
     except Exception as e:
         return f"Error running LLaMA: {e}"
-
+    
 # 📚 AT&T Wiki
 def wiki_search(query: str) -> str:
     token = os.getenv("WIKI_TOKEN")
@@ -60,8 +94,23 @@ def wiki_search(query: str) -> str:
         "Content-Type": "application/json"
     }
 
-    # 🔍 Usar solo las primeras 20 letras del query
-    trimmed_query = query[:20].strip()
+    summary_context = None
+    # ✅ Si query es un ticket ID tipo CDEX-xxxxx, obtener el summary desde Jira
+    if query.startswith("CDEX-") and query[5:].isdigit():
+        jira_session = requests.Session()
+        jira_session.auth = (os.getenv("ITRACK_USER"), os.getenv("ITRACK_PASSWORD"))
+        jira_url = f"https://itrack.web.att.com/rest/api/2/issue/{query}"
+        jira_response = jira_session.get(jira_url)
+
+        if jira_response.status_code != 200:
+            return f"<p>Error fetching Jira ticket {query}: {jira_response.status_code} {jira_response.reason}</p>"
+
+        jira_data = jira_response.json()
+        summary_context = jira_data["fields"]["summary"]
+        trimmed_query = summary_context[:50].strip()  # usar summary como query, recortado
+    else:
+        # 🔍 Usar solo las primeras 20 letras del query normal
+        trimmed_query = query
 
     # 🧠 CQL con filtros: buscar en texto y título, excluir imágenes
     cql = (
@@ -102,20 +151,24 @@ def wiki_search(query: str) -> str:
             try:
                 dt = datetime.datetime.strptime(last_modified[:10], "%Y-%m-%d")
                 days_ago = (datetime.datetime.now() - dt).days
-                score += max(0, 30 - days_ago) // 10  # más puntos si es reciente
+                score += max(0, 30 - days_ago) // 10
             except:
                 pass
 
         return score
 
-    # 🔽 Ordenar por score descendente y limitar a 5
-    scored_results = sorted(results, key=relevance_score, reverse=True)[:5]
+    # 🔽 Ordenar por score descendente y limitar a 10
+    scored_results = sorted(results, key=relevance_score, reverse=True)[:10]
 
     if not scored_results:
         return f"<p>No relevant troubleshooting documents found for: <strong>{html.escape(trimmed_query)}</strong></p>"
 
-    # 🧾 Construir tabla HTML
-    output = """
+    # 🧾 Construir tabla HTML con encabezado de contexto
+    output = "<h2>📚 Wiki Search Results</h2>"
+    if summary_context:
+        output += f"<p><strong>Search Context (Ticket Summary):</strong> {html.escape(summary_context)}</p>"
+
+    output += """
     <table border="1" cellpadding="5" cellspacing="0">
         <tr>
             <th>Title</th>
@@ -136,60 +189,117 @@ def wiki_search(query: str) -> str:
 
     return output
 
-
-# ITRACK TICKETS
+#read itrack
 def read_tickets(query: str) -> str:
     session = requests.Session()
     session.auth = (os.getenv("ITRACK_USER"), os.getenv("ITRACK_PASSWORD"))
 
-    ticket_url = 'https://itrack.web.att.com/projects/CDEX/issues/?filter=allopenissues'
-    response = session.get(ticket_url)
+    if "accepted_tickets" not in globals():
+        globals()["accepted_tickets"] = {}
+
+    # ✅ Caso directo: query es un ticket ID tipo CDEX-xxxxx
+    if query.startswith("CDEX-") and query[5:].isdigit():
+        ticket_url = f"https://itrack.web.att.com/rest/api/2/issue/{query}?expand=comments"
+        response = session.get(ticket_url)
+
+        if response.status_code != 200:
+            return f"<p>Error {response.status_code}: {response.reason}</p>"
+
+        issue = response.json()
+        key = issue["key"]
+        status = issue["fields"]["status"]["name"]
+        summary = issue["fields"]["summary"]
+        description = issue["fields"].get("description", "No description available")
+
+        comments = issue["fields"].get("comment", {}).get("comments", [])
+        last_two_comments = [c.get("body", "") for c in comments[-2:]] if comments else ["No comments available"]
+
+        url = f"https://itrack.web.att.com/projects/CDEX/issues/{key}"
+
+        if status.lower() == "accepted":
+            globals()["accepted_tickets"][key] = {
+                "status": status,
+                "summary": summary,
+                "description": description,
+                "comments": last_two_comments,
+                "url": url
+            }
+            return f"<p>Ticket {key} almacenado en Accepted (no mostrado en tabla).</p>"
+
+        # ✅ Mostrar solo si empieza con CDEX
+        if key.startswith("CDEX-"):
+            return _render_table([{
+                "key": key,
+                "status": status,
+                "summary": summary,
+                "description": description,
+                "last_comments": last_two_comments,
+                "url": url
+            }])
+        else:
+            return f"<p>Ticket {key} no mostrado (no es CDEX).</p>"
+
+    # ✅ Caso normal: búsqueda por texto en summary/description
+    jql = f'(description ~ "{query}")'
+    search_url = f'https://itrack.web.att.com/rest/api/2/search?jql={jql}&maxResults=50'
+    response = session.get(search_url)
 
     if response.status_code != 200:
         return f"<p>Error {response.status_code}: {response.reason}</p>"
 
-    raw_html = response.text
-    pattern = re.compile(r'WRM\._unparsedData\["[^"]*"\]\s*=\s*"(.+?)";', re.DOTALL)
-    matches_raw = pattern.findall(raw_html)
+    data = response.json()
+    issues = data.get("issues", [])
 
-    if not matches_raw:
-        return "<p>We didnt found WRM._unparsedData block</p>"
+    if not issues:
+        return f"<p>No se encontró información para: '{html.escape(query)}'</p>"
 
     tabla = []
-    procesados = set()
+    for issue in issues:
+        key = issue["key"]
 
-    for raw_json_str in matches_raw:
-        try:
-            decoded_json_str = raw_json_str.encode().decode('unicode_escape')
-            ticket_pattern = re.compile(
-                r'"key":"(CDEX-\d+)",\s*"status":"([^"]+)",\s*"summary":"([^"]*?)"',
-                re.IGNORECASE
-            )
-            resultados = ticket_pattern.findall(decoded_json_str)
+        # 🔎 Segunda llamada para traer comentarios completos
+        issue_url = f'https://itrack.web.att.com/rest/api/2/issue/{key}?expand=comments'
+        issue_resp = session.get(issue_url)
+        if issue_resp.status_code != 200:
+            continue
+        full_issue = issue_resp.json()
 
-            for key, status, summary in resultados:
-                if query.lower() in summary.lower():
-                    if key in procesados:
-                        continue
-                    procesados.add(key)
+        status = full_issue["fields"]["status"]["name"]
+        summary = full_issue["fields"]["summary"]
+        description = full_issue["fields"].get("description", "No description available")
+        comments = full_issue["fields"].get("comment", {}).get("comments", [])
+        last_two_comments = [c.get("body", "") for c in comments[-2:]] if comments else ["No comments available"]
 
-                    url = f"url: https://itrack.web.att.com/projects/CDEX/issues/{key}"
-                    tabla.append({
-                        "key": key,
-                        "status": status,
-                        "summary": summary,
-                        "url": url
-                    })
+        url = f"https://itrack.web.att.com/projects/CDEX/issues/{key}"
 
-        except Exception as e:
-            return f"<p>Decode Error: {str(e)}</p>"
+        if status.lower() == "accepted" or status.lower() == "closed" or status.lower() == "test complete" or status.lower() == "dev complete" or status.lower() == "cancelled":
+            globals()["accepted_tickets"][key] = {
+                "status": status,
+                "summary": summary,
+                "description": description,
+                "comments": last_two_comments,
+                "url": url
+            }
+            continue
+
+        # ✅ Mostrar solo si empieza con CDEX
+        if key.startswith("CDEX-"):
+            tabla.append({
+                "key": key,
+                "status": status,
+                "summary": summary,
+                "description": description,
+                "last_comments": last_two_comments,
+                "url": url
+            })
 
     if not tabla:
-        return f"<p>We didnt found information for: '{query}'</p>"
-    # 🔽 Ordenar por STATUS
-    tabla.sort(key=lambda x: x['status'])
-    
-    # HTML con estilos y colores por estado
+        return f"<p>We didnt found any ticket open for: '{html.escape(query)}'</p>"
+
+    return _render_table(tabla)
+
+
+def _render_table(tabla):
     output = f"""
         <style>
         .ticket-table {{
@@ -211,8 +321,7 @@ def read_tickets(query: str) -> str:
             background-color: #fafafa;
         }}
         .status-In\\ Progress {{ background-color: #fff3cd; }}
-        .status-Resolved {{ background-color: #d4edda; }}
-        .status-Closed {{ background-color: #f8d7da; }}
+        .status-To\\ Do {{ background-color: #e0f7fa; }}
         .status-Open {{ background-color: #e0f7fa; }}
         </style>
         <p><strong>Tickets Found:</strong> {len(tabla)}</p>
@@ -221,24 +330,29 @@ def read_tickets(query: str) -> str:
                 <th>TICKET</th>
                 <th>STATUS</th>
                 <th>SUMMARY</th>
+                <th>DESCRIPTION</th>
+                <th>LAST 2 COMMENTS</th>
                 <th>LINK</th>
                 <th>URL</th>
             </tr>
     """
 
     for row in tabla:
-        status_class = f"status-{row['status'].replace(' ', '\\ ')}"
+        status_value = row.get('status') or "Unknown"
+        status_class = f"status-{status_value.replace(' ', '\\ ')}"
         output += f"<tr class='{status_class}'>"
         output += f"<td>{html.escape(row['key'])}</td>"
-        output += f"<td>{html.escape(row['status'])}</td>"
+        output += f"<td>{html.escape(status_value)}</td>"
         output += f"<td>{html.escape(row['summary'])}</td>"
+        output += f"<td>{html.escape(row['description'])}</td>"
+        output += f"<td>{"<br>".join([html.escape(c) for c in row['last_comments']])}</td>"
         output += f"<td><a href='{row['url']}' target='_blank'>Open</a></td>"
         output += f"<td>{html.escape(row['url'])}</td>"
         output += "</tr>"
 
     output += "</table>"
-
     return output
+
 
 # 🧠 AI Suggestions
 def llama_suggestions(query: str) -> str:
@@ -250,21 +364,49 @@ def llama_suggestions(query: str) -> str:
 
     for row in rows:
         cols = row.find_all("td")
-        if len(cols) >= 4:
-            resumen = f"{cols[0].text.strip()} | {cols[1].text.strip()} | {cols[2].text.strip()} | {cols[3].text.strip()}"
-            resumen_tickets.append(resumen)
+        if len(cols) >= 5:  # aseguramos que haya comentarios
+            ticket_id = cols[0].text.strip()
+            status = cols[1].text.strip()
+            summary = cols[2].text.strip()
+            description = cols[3].text.strip()
+            last_comment = cols[4].text.strip()
+
+            # ✅ Solo incluir tickets en In Progress, To Do, Retest
+            if status.lower() in ["in progress", "to do", "retest"]:
+                resumen = f"{ticket_id} | {status} | {summary} | {last_comment}"
+                resumen_tickets.append(resumen)
+
+            # ✅ Para Accepted, incluir últimos 2 comentarios
+            elif status.lower() == "accepted":
+                comments = row.find_all("td")[4].text.strip().split("\n")
+                last_two = comments[-2:] if len(comments) >= 2 else comments
+                resumen = f"{ticket_id} | {status} | {summary} | Last 2 Comments: {' | '.join(last_two)}"
+                resumen_tickets.append(resumen)
 
     texto_tickets = "\n".join(resumen_tickets)
 
+    # Prompt ajustado
     prompt = f"""
-    You are a senior DevOps service engineer specializing in troubleshooting and ticket analysis. Based on the following list of open tickets and the query context provided, generate a structured set of recommendations to resolve each issue.
+    You are a senior DevOps service engineer specializing in troubleshooting and ticket analysis. 
+    Your task is to generate structured recommendations to resolve each issue based on the provided tickets.
 
-    Your output must follow this exact format, using HTML tags for styling. Each ticket must be wrapped in the following block:
+    ⚠️ Rules:
+    - Only include tickets with status "In Progress", "To Do", or "Retest" for recommendations.
+    - For grouped tickets include tickets in "Accepted" status , and list the last 2 comments available.
+    - Always use HTML tags exactly as shown in the format below.
+    - Do not use Markdown.
+    - Do not collapse fields into single lines.
+    - Do not add commentary, explanations, or text outside the required structure.
+    - Include only the valid siggestions but always inside <ul><li>.
+    - Group similar tickets together by technical context (e.g., SSL errors, ELK cleanup).
+
+    Each ticket must follow this exact block:
 
     <div style="border:1px solid #ccc; padding:1rem; margin-bottom:1rem; border-radius:8px; background-color:#fdfdfd;">
         <h3>🎫 <strong>Ticket ID:</strong> CDEX-xxxxx</h3>
-        <p><strong>Status:</strong> Open</p>
+        <p><strong>Status:</strong> In Progress</p>
         <p><strong>Summary:</strong> Short description of the issue</p>
+        <p><strong>Last comments:</strong> Last Comments</p>
         <p><strong>Ticket URL:</strong> <a href="https://itrack.web.att.com/projects/CDEX/issues/CDEX-xxxxx" target="_blank">Open</a></p>
         <p><strong>Recommendations:</strong></p>
         <ul>
@@ -274,16 +416,29 @@ def llama_suggestions(query: str) -> str:
         </ul>
     </div>
 
-    Repeat this block for each ticket.
-
-    Before the individual tickets, include a section for similar tickets grouped together:
+    Before listing individual tickets, include a section for grouped tickets:
 
     <h2>🔗 Similar Tickets (Grouped)</h2>
     <p><strong>Ticket Group:</strong> Short description</p>
     <ul>
         <li>CDEX-xxxxx: Summary</li>
-        <li>CDEX-xxxxx: Summary</li>
-        <li>CDEX-xxxxx: Summary</li>
+        <p><strong>Last 2 Comments:</strong></p>
+        <ul>
+            <li>Comment 1</li>
+            <li>Comment 2</li>
+        </ul>
+            <li>CDEX-xxxxx: Summary</li>
+            <p><strong>Last 2 Comments:</strong></p>
+        <ul>
+            <li>Comment 1</li>
+            <li>Comment 2</li>
+        </ul>
+            <li>CDEX-xxxxx: Summary</li>
+            <p><strong>Last 2 Comments:</strong></p>
+        <ul>
+            <li>Comment 1</li>
+            <li>Comment 2</li>
+        </ul>
     </ul>
     <p><strong>Recommendations:</strong></p>
     <ul>
@@ -291,24 +446,20 @@ def llama_suggestions(query: str) -> str:
         <li>Group recommendation 2</li>
         <li>Group recommendation 3</li>
     </ul>
+    
 
-    At the end, include a section for external documentation links:
-
-    <h2>📚 External Documentation Links</h2>
-    <ul>
-        <li>Azure Queues: <a href="https://docs.microsoft.com/en-us/azure/queues" target="_blank">https://docs.microsoft.com/en-us/azure/queues</a></li>
-        <li>API Management: <a href="https://docs.microsoft.com/en-us/azure/api-management" target="_blank">https://docs.microsoft.com/en-us/azure/api-management</a></li>
-    </ul>
-
-    Do not use Markdown. Do not collapse fields into single lines. Use only HTML tags as shown. Do not add extra commentary or change the structure.
+    At the end, include a section for external documentation links suggested by GenAI related to the applications or technologies mentioned in the tickets. 
+    Only use official documentation sources (Microsoft, Elastic, Kubernetes, etc.).
 
     Query context: {query}
 
     Tickets:
     {texto_tickets}
     """
-
-    raw_response = ask_llama(prompt)
+    print(prompt)
+    
+    #raw_response = ask_llama(prompt)
+    raw_response = ask_gemini(prompt)
     wiki_html = wiki_search(query[:20])
 
     raw_response += f"""
@@ -354,6 +505,7 @@ def register_tool(name, tool_def):
             result = tool_def["function"](input)
             duration = time.perf_counter() - start_time
             logging.info(f"Result: {result[:500]}")
+            logging.info(f"Full result from '{name}':\n{result}")
             logging.info(f"Execution time: {duration:.2f} seconds")
             return result
         except Exception as e:
@@ -365,152 +517,167 @@ def register_tool(name, tool_def):
 for name, tool_def in TOOLS.items():
     register_tool(name, tool_def)
 
+
+# --- NUEVO: Manejo de historial ---
+import json
+HISTORY_FILE = 'search_history.json'
+
+def add_to_history(query):
+    try:
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+    except:
+        history = []
+    history.append({'query': query})
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(history[-10:], f)
+
+def get_history():
+    try:
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return []
+
+if not os.path.exists(HISTORY_FILE):
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump([], f)
+
 # 🌐 Flask Interface
 flask_app = Flask(__name__)
-CORS(flask_app)  # ✅ Enables CORS for all routes and origins
+CORS(flask_app)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>MCP Tools</title>
-    <style>
-        body {
-            font-family: "Segoe UI", Roboto, sans-serif;
-            background-color: #f9f9fb;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }
-        header {
-            background: linear-gradient(90deg, #6f2da8, #ff6f61); /* Amdocs-inspired gradient */
-            color: white;
-            padding: 1rem 2rem;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        main {
-            max-width: 800px;
-            margin: 2rem auto;
-            background-color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-        h1 {
-            margin-top: 0;
-            font-size: 1.8rem;
-        }
-        label {
-            font-weight: 600;
-            display: block;
-            margin-top: 1rem;
-        }
-        textarea {
-            width: 100%;
-            padding: 0.75rem;
-            margin-top: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-        button {
-            padding: 0.75rem 1rem;
-            background: linear-gradient(90deg, #6f2da8, #ff6f61); /* Matches header */
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-        button:hover {
-            background: linear-gradient(90deg, #5a1f8e, #e85c50); /* Darker hover */
-        }
-        .tool-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-        pre {
-            background-color: #f4f4f6;
-            padding: 1rem;
-            border-radius: 8px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            margin-top: 1rem;
-        }
-        footer {
-            text-align: center;
-            font-size: 0.9rem;
-            color: #777;
-            margin-top: 2rem;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>GenDox AI</title>
+<style>
+body { margin:0; font-family:"Segoe UI", Roboto, sans-serif; background:#1e1e1e; color:#f0f0f0; display:flex; height:100vh; }
+aside.sidebar { width:240px; background:#2c2c2c; padding:1rem; display:flex; flex-direction:column; }
+.sidebar .new-chat { background:#6f2da8; color:white; border:none; padding:0.75rem; border-radius:8px; cursor:pointer; margin-bottom:1rem; }
+.sidebar-nav a { display:block; color:#fff; text-decoration:none; padding:0.5rem; margin:0.25rem 0; background:#444; border-radius:6px; text-align:center; }
+.sidebar-nav a:hover { background:#6f2da8; }
+.sidebar .history { margin-top:1rem; color:#ddd; }
+.sidebar .history h2 { font-size:1.2rem; margin-bottom:0.5rem; }
+.sidebar .history ul { list-style:none; padding:0; margin:0; }
+.sidebar .history li { padding:0.5rem 0; border-bottom:1px solid #444; }
+main.chat-area { flex:1; display:flex; flex-direction:column; padding:1rem 2rem; overflow-y:auto; }
+header.top-bar { background:linear-gradient(90deg,#6f2da8,#ff6f61); padding:1rem; text-align:center; font-size:1.5rem; font-weight:bold; color:white; border-radius:8px; margin-bottom:1rem; }
+#results-box { background:#fff; color:#000; padding:1rem; border-radius:8px; margin-top:1rem; white-space:pre-wrap; word-wrap:break-word; }
+form.input-form { display:flex; flex-direction:column; gap:0.5rem; background:#2c2c2c; padding:1rem; border-radius:8px; margin-bottom:1rem; }
+.tool-list { display:flex; flex-wrap:wrap; gap:0.5rem; }
+.tool-item { background:#1e1e1e; padding:0.5rem; border-radius:6px; }
+form.input-form textarea { background:#1e1e1e; color:#f0f0f0; border:1px solid #444; border-radius:8px; padding:0.75rem; resize:none; width:100%; }
+form.input-form button { background:#6f2da8; color:white; border:none; padding:0.75rem 1rem; border-radius:8px; cursor:pointer; margin-top:0.5rem; }
+#loading-icon { display:none; text-align:center; margin-top:1rem; }
+#loading-icon img { width:40px; animation:spin 1s linear infinite; }
+@keyframes spin { 100% { transform:rotate(360deg); } }
+</style>
 </head>
 <body>
-    <header>
-        <h1>🧠 GenDox AI 🧠</h1>
-    </header>
-    <main>
-        <form method="post">
-            <label>Select a tool to use:</label>
-            <div class="tool-buttons">
-                {% for name, desc in tools %}
-                    <button type="submit" name="tool" value="{{ name }}" title="{{ desc }}">{{ name }}</button>
-                {% endfor %}
-            </div>
-
-            <label for="input">Enter your input:</label>
-            <textarea name="input" rows="5" placeholder="Can be Application name or exact filter Example: DIGITAL or OMV or BSSE, etc"></textarea>
-        </form>
-
-        {% if result %}
-            <h2>Response:</h2>
-            <div>{{ result|safe }}</div>
-        {% endif %}
-    </main>
-    <footer>
-        MCP Server running ........... Claude Style✨
-    </footer>
+<aside class="sidebar">
+<button class="new-chat" onclick="newChat()">➕ New Chat</button>
+<nav class="sidebar-nav">
+<a href="/about">ℹ️ About</a>
+<a href="/help">❓ Help</a>
+<a href="/settings">⚙️ Settings</a>
+</nav>
+<div class="history">
+<h2>Historial</h2>
+<ul>
+{% for item in history %}
+<li>{{ item.query }}</li>
+{% endfor %}
+</ul>
+</div>
+</aside>
+<main class="chat-area">
+<header class="top-bar">🤖 GenDox AI 🤖</header>
+<div id="final-counter">{% if exec_time %}⏱ Execution time: {{ exec_time }}s{% endif %}</div>
+<form method="post" class="input-form" onsubmit="showLoading()">
+<div class="tool-list">
+{% for name, desc in tools %}
+<label class="tool-item" title="{{ desc }}">
+<input type="checkbox" name="tool" value="{{ name }}"> {{ name }}
+</label>
+{% endfor %}
+</div>
+<textarea name="input" placeholder="Escribe tu búsqueda...">{{ input_text }}</textarea>
+<button type="submit">Enviar</button>
+</form>
+<div id="loading-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/d/de/Ajax-loader.gif" alt="Loading..."></div>
+<div id="results-box">{{ result|safe }}</div>
+</main>
+<script>
+function showLoading(){document.getElementById('loading-icon').style.display='block';}
+function newChat(){document.querySelector("textarea[name='input']").value="";document.getElementById("results-box").innerHTML="";document.getElementById("final-counter").innerText="";document.getElementById("loading-icon").style.display='none';document.querySelectorAll("input[type='checkbox'][name='tool']").forEach(cb=>cb.checked=false);}
+</script>
 </body>
-</html>"""
+</html>
+"""
 
-@flask_app.route("/", methods=["GET", "POST"])
+@flask_app.route("/", methods=["GET","POST"])
 def index():
     result = None
-    if request.method == "POST":
-        tool_name = request.form["tool"]
-        input_text = request.form["input"]
-        func = TOOLS[tool_name]["function"]
-        try:
-            result = func(input_text if input_text else "")
-        except Exception as e:
-            result = f"Error executing tool '{tool_name}': {e}"
-    return render_template_string(HTML_TEMPLATE, tools=registered_tools, result=result)
+    input_text = ""
+    exec_time = None
 
-# 💬 Teams Endpoint https://teams.microsoft.com/l/chat/19:0e649888e1324801a86352030fdc9b41@thread.v2/conversations?context=%7B%22contextType%22%3A%22chat%22%7D
-@flask_app.route("/teams", methods=["POST"])
-def teams_webhook():
-    message = request.json.get("text", "")
-    if "status" in message.lower():
-        summary = llama_suggestions("")
-        return jsonify({"text": summary})
-    return jsonify({"text": "Unrecognized command"})
+    if request.method == "POST":
+        selected_tools = request.form.getlist("tool")  # ✅ obtiene lista de herramientas seleccionadas
+        input_text = request.form.get("input", "")
+
+        # fallback si no se selecciona ninguna herramienta
+        if not selected_tools:
+            selected_tools = ["How_to_fix"]
+
+        results = []
+        start = time.time()
+        for tool_name in selected_tools:
+            func = TOOLS.get(tool_name, {}).get("function")
+            if not func:
+                results.append(f"<pre>No tool found for {tool_name}</pre>")
+                continue
+            try:
+                res = func(input_text)
+                results.append(f"<div class='llama-response'><h3>{tool_name}</h3>{res}</div>")
+            except Exception as e:
+                results.append(f"<pre>Error executing tool '{tool_name}': {e}</pre>")
+        exec_time = round(time.time() - start, 2)
+        result = "<br>".join(results)
+
+    history = get_history()
+    add_to_history(input_text) if input_text else None
+    return render_template_string(
+        HTML_TEMPLATE,
+        tools=registered_tools,
+        result=result,
+        input_text=input_text,
+        exec_time=exec_time, history=history
+    )
 
 # 🚀 Run Servers
 if __name__ == "__main__":
     import threading
-
     def run_mcp():
         print("🧠 MCP Server running in background")
         mcp.run(transport="sse")
-
     def run_flask():
         print("🌐 Flask interface available at http://127.0.0.1:5000")
-        flask_app.run(port=5000)
-
+        flask_app.run(host="0.0.0.0", port=5000)
     threading.Thread(target=run_mcp).start()
     run_flask()
+
+
+@flask_app.route('/about')
+def about():
+    return render_template('about.html')
+
+@flask_app.route('/settings')
+def settings():
+    return render_template('settings.html')
+
+@flask_app.route('/help')
+def help_page():
+    return render_template('help.html')

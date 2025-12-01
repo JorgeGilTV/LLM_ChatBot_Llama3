@@ -1,29 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Interfaz MCP</title>
+    <meta charset="UTF-8">
+    <title>GenDox AI</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-    <h1>🧠 Interfaz MCP Personalizada</h1>
-    <form method="post">
-        <label for="tool">Herramienta:</label>
-        <select name="tool">
-            <option value="claude">Claude</option>
-            <option value="llama">LLaMA</option>
-            <option value="search">Web Search</option>
-            <option value="scrape">Web Scraping</option>
-            <option value="code">Code Search</option>
-        </select><br><br>
+    <aside class="sidebar">
+        <button class="new-chat" onclick="newChat()">➕ New Chat</button>
+        <div class="history">
+            <h2>History</h2>
+            <ul id="history-list"></ul>
+        </div>
+    </aside>
+    <main class="chat-area">
+        <header class="top-bar">🧠 GenDox AI 🧠</header>
+        <div class="prompt">
+            Please start typing some prompt, CDEX or Topic to search... 
+            /help❓ Help /settings⚙️ Settings /aboutℹ️ About
+        </div>
+        
+        <!-- ✅ Formulario con ID para JS -->
+        <form id="search-form" class="input-form">
+            <div class="tool-list" id="tool-list"></div>
+            <textarea name="input" id="input-text" placeholder="Please insert your search, select the tool in check box and press Send?"></textarea>
+            <button type="submit">Send</button>
+        </form>
 
-        <label for="prompt">Prompt / Input:</label><br>
-        <textarea name="prompt" rows="4" cols="50"></textarea><br><br>
+        <!-- ✅ Elementos para mensajes y contador -->
+        <p id="loading-message"></p>
+        <p id="counter"></p>
+        <div id="final-counter"></div>
+        <div id="results-box"></div>
+    </main>
 
-        <input type="submit" value="Enviar">
-    </form>
+    <script src="/static/js/scripts.js"> </script>
+    <script>
+        // Simulación inicial (puede eliminarse si API ya está lista)
+        const historyData = [
+            { query: "Consulta 1", result: "<p>Resultado 1</p>" },
+            { query: "Consulta 2", result: "<p>Resultado 2</p>" }
+        ];
 
-    {% if response %}
-        <h2>📝 Respuesta:</h2>
-        <pre>{{ response }}</pre>
-    {% endif %}
+        const tools = [
+            { name: "Read_Itrack", desc: "Read workarounds from AT&T itrack" },
+            { name: "Read_Wiki", desc: "Read documents from AT&T Wiki" },
+            { name: "How_to_fix", desc: "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki" },
+            { name: "MCP_Connect", desc: "Check if MCP server is active" },
+            { name: "Ask_Gemini", desc: "Ask LLM Gemini about anything" }
+        ];
+
+        // Renderizar historial
+        const historyList = document.getElementById("history-list");
+        historyData.forEach((item, index) => {
+            const li = document.createElement("li");
+            const btn = document.createElement("button");
+            btn.textContent = item.query;
+            btn.onclick = () => showHistoryResult(index);
+            li.appendChild(btn);
+            historyList.appendChild(li);
+        });
+
+        // Renderizar herramientas con checkbox ✅
+        const toolList = document.getElementById("tool-list");
+        tools.forEach(tool => {
+            const label = document.createElement("label");
+            label.className = "tool-item";
+            label.title = tool.desc;
+            label.innerHTML = `<input type="checkbox" name="tool" value="${tool.name}"> ${tool.name}`;
+            toolList.appendChild(label);
+        });
+    </script>
 </body>
 </html>

@@ -37,14 +37,14 @@ def ask_gemini(prompt: str, selected_tools: list) -> str:
     try:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            return "Error: GEMINI_API_KEY no está definido en las variables de entorno."
+            return "Error: GEMINI_API_KEY is not defined in env file."
         
         # ✅ Check if wiki_search is selected
         if "Ask_Gemini" in selected_tools:
             # Apply special formatting to the prompt
-            prompt = f"Please provide the following prompt in legible format like html:\n{prompt}"
+            prompt = f"Execute the following prompt, and dont provide output in markdown, i need legible like html formated but preserving the current style.:\n{prompt}"
 
-        # Usa un modelo válido, por ejemplo gemini-1.5-flash-latest
+        # valid model, models/gemini-2.5-pro models/gemini-2.5-flash
         model="models/gemini-2.5-pro"
         url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
@@ -58,9 +58,9 @@ def ask_gemini(prompt: str, selected_tools: list) -> str:
             return f"Error {response.status_code}: {response.text}"
         data = response.json()
         output = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        return output if output else "No se recibió respuesta de Gemini."
+        return output if output else "Gemini is not working properly."
     except Exception as e:
-        return f"Error ejecutando Gemini: {e}"
+        return f"Error executing Gemini: {e}"
     
 # 🧠 LLaMA 3
 def ask_llama(prompt: str) -> str:
@@ -78,6 +78,7 @@ def ask_llama(prompt: str) -> str:
         return output
     except Exception as e:
         return f"Error running LLaMA: {e}"
+    
 # 📚 AT&T Wiki
 def wiki_search(query: str) -> str:
     token = os.getenv("WIKI_TOKEN")
@@ -88,7 +89,7 @@ def wiki_search(query: str) -> str:
         "Content-Type": "application/json"
     }
     summary_context = None
-    # ✅ Si query es un ticket ID tipo CDEX-xxxxx, obtener el summary desde Jira
+    # ✅ if query is a ticket like CDEX-xxxxx, get summary from Jira
     if query.startswith("CDEX-") and query[5:].isdigit():
         jira_session = requests.Session()
         jira_session.auth = (os.getenv("ITRACK_USER"), os.getenv("ITRACK_PASSWORD"))
@@ -98,11 +99,10 @@ def wiki_search(query: str) -> str:
             return f"<p>Error fetching Jira ticket {query}: {jira_response.status_code} {jira_response.reason}</p>"
         jira_data = jira_response.json()
         summary_context = jira_data["fields"]["summary"]
-        trimmed_query = summary_context[:50].strip()  # usar summary como query, recortado
+        trimmed_query = summary_context[:50].strip() 
     else:
-        # 🔍 Usar solo las primeras 20 letras del query normal
         trimmed_query = query
-    # 🧠 CQL con filtros: buscar en texto y título, excluir imágenes
+    # 🧠 CQL with filters: search in text & title, exclude images
     cql = (
         f'(text ~ "{trimmed_query}" OR title ~ "{trimmed_query}") '
         f'AND type = "page" '
@@ -119,7 +119,7 @@ def wiki_search(query: str) -> str:
     results = data.get("results", [])
     if not results:
         return f"<p>No documents found related to: <strong>{html.escape(trimmed_query)}</strong></p>"
-    # 🔍 Palabras clave para priorizar relevancia
+    # 🔍 key words
     keywords = ["troubleshooting", "debug", "issue", "error", "fix", "failure", "incident", "how-to"]
     def relevance_score(item):
         title = item.get("title", "").lower()
@@ -127,7 +127,7 @@ def wiki_search(query: str) -> str:
         score = sum(1 for kw in keywords if kw in title)
         score += sum(1 for kw in keywords if kw in labels)
         score += 2 if trimmed_query.lower() in title else 0
-        # 📅 Priorizar por fecha si disponible
+        # 📅 Priorice by date
         last_modified = item.get("version", {}).get("when")
         if last_modified:
             try:
@@ -137,11 +137,11 @@ def wiki_search(query: str) -> str:
             except:
                 pass
         return score
-    # 🔽 Ordenar por score descendente y limitar a 10
+    # 🔽 Order by score desc & limit to 10
     scored_results = sorted(results, key=relevance_score, reverse=True)[:10]
     if not scored_results:
         return f"<p>No relevant troubleshooting documents found for: <strong>{html.escape(trimmed_query)}</strong></p>"
-    # 🧾 Construir tabla HTML con encabezado de contexto
+    # 🧾 build HTML table with context header
     output = "<h2>📚 Wiki Search Results</h2>"
     if summary_context:
         output += f"<p><strong>Search Context (Ticket Summary):</strong> {html.escape(summary_context)}</p>"
@@ -164,13 +164,14 @@ def wiki_search(query: str) -> str:
         """
     output += "</table>"
     return output
+
 #read itrack
 def read_tickets(query: str) -> str:
     session = requests.Session()
     session.auth = (os.getenv("ITRACK_USER"), os.getenv("ITRACK_PASSWORD"))
     if "accepted_tickets" not in globals():
         globals()["accepted_tickets"] = {}
-    # ✅ Caso directo: query es un ticket ID tipo CDEX-xxxxx
+    # ✅ query is a ticket ID like CDEX-xxxxx
     if query.startswith("CDEX-") and query[5:].isdigit():
         ticket_url = f"https://itrack.web.att.com/rest/api/2/issue/{query}?expand=comments"
         response = session.get(ticket_url)
@@ -192,8 +193,8 @@ def read_tickets(query: str) -> str:
                 "comments": last_two_comments,
                 "url": url
             }
-            return f"<p>Ticket {key} almacenado en Accepted (no mostrado en tabla).</p>"
-        # ✅ Mostrar solo si empieza con CDEX
+            return f"<p>Ticket {key} stored in Accepted (not in the screen).</p>"
+        # ✅ show only if starts with CDEX
         if key.startswith("CDEX-"):
             return _render_table([{
                 "key": key,
@@ -204,8 +205,8 @@ def read_tickets(query: str) -> str:
                 "url": url
             }])
         else:
-            return f"<p>Ticket {key} no mostrado (no es CDEX).</p>"
-    # ✅ Caso normal: búsqueda por texto en summary/description
+            return f"<p>Ticket {key} not showed (not a CDEX).</p>"
+    # ✅ search by text in summary/description
     jql = f'(description ~ "{query}")'
     search_url = f'https://itrack.web.att.com/rest/api/2/search?jql={jql}&maxResults=50'
     response = session.get(search_url)
@@ -214,11 +215,11 @@ def read_tickets(query: str) -> str:
     data = response.json()
     issues = data.get("issues", [])
     if not issues:
-        return f"<p>No se encontró información para: '{html.escape(query)}'</p>"
+        return f"<p>Información not found for: '{html.escape(query)}'</p>"
     tabla = []
     for issue in issues:
         key = issue["key"]
-        # 🔎 Segunda llamada para traer comentarios completos
+        # 🔎 full comments 
         issue_url = f'https://itrack.web.att.com/rest/api/2/issue/{key}?expand=comments'
         issue_resp = session.get(issue_url)
         if issue_resp.status_code != 200:
@@ -239,7 +240,7 @@ def read_tickets(query: str) -> str:
                 "url": url
             }
             continue
-        # ✅ Mostrar solo si empieza con CDEX
+        # ✅ show only if start with CDEX
         if key.startswith("CDEX-"):
             tabla.append({
                 "key": key,
@@ -252,6 +253,7 @@ def read_tickets(query: str) -> str:
     if not tabla:
         return f"<p>We didnt found any ticket open for: '{html.escape(query)}'</p>"
     return _render_table(tabla)
+
 def _render_table(tabla):
     output = f"""
         <style>
@@ -331,31 +333,31 @@ if not os.path.exists(HISTORY_FILE):
         json.dump([], f)
 
 # 🧠 AI Suggestions
-def llama_suggestions(query: str) -> str:
+def AI_suggestions(query: str) -> str:
     html_tickets = read_tickets(query)
     soup = BeautifulSoup(html_tickets, "html.parser")
-    rows = soup.select("table.ticket-table tr")[1:]  # omitir encabezado
+    rows = soup.select("table.ticket-table tr")[1:] 
     resumen_tickets = []
     for row in rows:
         cols = row.find_all("td")
-        if len(cols) >= 5:  # aseguramos que haya comentarios
+        if len(cols) >= 5: 
             ticket_id = cols[0].text.strip()
             status = cols[1].text.strip()
             summary = cols[2].text.strip()
             description = cols[3].text.strip()
             last_comment = cols[4].text.strip()
-            # ✅ Solo incluir tickets en In Progress, To Do, Retest
+            # ✅ only tickets In Progress, To Do, Retest
             if status.lower() in ["in progress", "to do", "retest"]:
                 resumen = f"{ticket_id} | {status} | {summary} | {last_comment}"
                 resumen_tickets.append(resumen)
-            # ✅ Para Accepted, incluir últimos 2 comentarios
+            # ✅ for Accepted, include last 2 coments
             elif status.lower() == "accepted":
                 comments = row.find_all("td")[4].text.strip().split("\n")
                 last_two = comments[-2:] if len(comments) >= 2 else comments
                 resumen = f"{ticket_id} | {status} | {summary} | Last 2 Comments: {' | '.join(last_two)}"
                 resumen_tickets.append(resumen)
     texto_tickets = "\n".join(resumen_tickets)
-    # Prompt ajustado
+    # Prompt adjusted
     prompt = f"""
     You are a senior DevOps service engineer specializing in troubleshooting and ticket analysis. 
     Your task is to generate structured recommendations to resolve each issue based on the provided tickets.
@@ -419,7 +421,7 @@ def llama_suggestions(query: str) -> str:
     """
     print(prompt)
     #raw_response = ask_llama(prompt)
-    raw_response = ask_gemini(prompt)
+    raw_response = ask_gemini(prompt,"How_to_fix")
     wiki_html = wiki_search(query[:20])
     raw_response += f"""
             <p><strong>Related Wiki Pages:</strong></p>
@@ -443,7 +445,7 @@ TOOLS = {
     },
     "How_to_fix": {
         "description": "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki",
-        "function": llama_suggestions
+        "function": AI_suggestions
     },
     "MCP_Connect": {
         "description": "Check if MCP server is active",
@@ -475,7 +477,7 @@ def register_tool(name, tool_def):
 for name, tool_def in TOOLS.items():
     register_tool(name, tool_def)
 # 🌐 Flask Interface
-flask_app = Flask(__name__)
+flask_app = Flask(__name__, template_folder='templates')
 CORS(flask_app)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -483,7 +485,12 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <title>GenDox AI</title>
-    <style>
+    <style>     
+        .sidebar-link {
+        display:block; background:#444; color:#fff; text-decoration:none;
+        padding:0.5rem; border-radius:6px; margin-top:0.5rem; text-align:center;
+        }
+        .sidebar-link:hover { background:#6f2da8; }
         .llama-response {
             background-color: #fdfdfd;
             color: #222; /* texto oscuro para fondo claro */
@@ -516,6 +523,62 @@ HTML_TEMPLATE = """
         .sidebar ul li label { cursor:pointer; }
         .sidebar button { background:#444; color:#f0f0f0; border:none; padding:0.5rem 1rem; border-radius:6px; cursor:pointer; margin-top:0.5rem; width:100%; text-align:left; }
         .sidebar button:hover { background:#555; }
+        aside.sidebar-down {
+        width: 240px;
+        background: #1e1e1e;   /* un tono distinto para diferenciar */
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start; /* diferente comportamiento */
+        margin-top: 1rem;            /* separación respecto al sidebar */
+        border-top: 2px solid #444;  /* línea divisoria opcional */
+        }
+
+        .sidebar-down .new-chat {
+        background: #2da86f;   /* color distinto para diferenciar */
+        color: white;
+        border: none;
+        padding: 0.75rem;
+        border-radius: 8px;
+        cursor: pointer;
+        }
+
+        .sidebar-down .section {
+        margin-top: 1.5rem;
+        font-weight: bold;
+        color: #bbb;
+        }
+
+        .sidebar-down ul {
+        list-style: none;
+        padding: 0;
+        margin: 0.5rem 0;
+        }
+
+        .sidebar-down ul li {
+        padding: 0.5rem;
+        color: #eee;
+        }
+
+        .sidebar-down ul li label {
+        cursor: pointer;
+        }
+
+        .sidebar-down button {
+        background: #333;
+        color: #f0f0f0;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-top: 0.5rem;
+        width: 100%;
+        text-align: left;
+        }
+
+        .sidebar-down button:hover {
+        background: #444;
+        }
         main.chat-area { flex:1; display:flex; flex-direction:column; padding:1rem 2rem; overflow-y:auto; }
         header.top-bar { background:linear-gradient(90deg,#6f2da8,#ff6f61); padding:1rem; text-align:center; font-size:1.5rem; font-weight:bold; color:white; border-radius:8px; margin-bottom:1rem; }
         .prompt { font-size:1rem; margin-bottom:1rem; color:#bbb; }
@@ -550,14 +613,10 @@ HTML_TEMPLATE = """
     document.getElementById("results-box").innerHTML = historyData[index].result;
     }
     </script>
-    <div class="section"> /help❓ Help</a></div>
-    <div class="section"> /settings⚙️ Settings</a></div>
-    <div class="section"> /aboutℹ️ About</a></div>
-    </div>
     </aside>
     <main class="chat-area">
         <header class="top-bar">🧠 GenDox AI 🧠</header>
-        <div class="prompt">Please start typing some prompt...</div>
+        <div class="prompt">Please start typing some prompt, CDEX or Topic to search...                        /help❓ Help /settings⚙️ Settings /aboutℹ️ About</div>
         <form method="post" onsubmit="return showLoading()" class="input-form">
             <div class="tool-list">
                 {% for name, desc in tools %}

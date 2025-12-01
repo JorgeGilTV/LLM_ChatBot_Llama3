@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,7 +15,7 @@
     }
 
     header {
-      background: linear-gradient(90deg, #510296, #9b1cba); /* Amdocs-inspired gradient */
+      background: linear-gradient(90deg, #510296, #9b1cba);
       color: white;
       padding: 1rem;
       text-align: center;
@@ -37,21 +38,23 @@
       border: 1px solid #ccc;
       border-radius: 8px;
       font-size: 0.9rem;
+      resize: none;
     }
 
-    button.tool-btn {
-      margin: 0.25rem 0.25rem 0 0;
+    button {
+      margin-top: 1rem;
       padding: 0.5rem 0.75rem;
-      background: linear-gradient(90deg, #6f2da8, #ff6f61); /* Matches header */
+      background: linear-gradient(90deg, #6f2da8, #ff6f61);
       color: white;
       border: none;
       border-radius: 6px;
       font-size: 0.85rem;
       cursor: pointer;
+      width: 100%;
     }
 
-    button.tool-btn:hover {
-      background: linear-gradient(90deg, #5a1f8e, #e85c50); /* Slightly darker hover effect */
+    button:hover {
+      background: linear-gradient(90deg, #5a1f8e, #e85c50);
     }
 
     #result {
@@ -61,6 +64,8 @@
       margin-top: 1rem;
       font-size: 0.85rem;
       white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
     }
   </style>
 </head>
@@ -69,13 +74,21 @@
     <h1 style="font-size: 1.2rem;">🧠 GenDox AI 🧠</h1>
   </header>
   <main>
-    <label>Select a tool:</label>
-    <div id="tool-buttons" style="display: flex; flex-wrap: wrap;"></div>
     <label for="input">Enter your input:</label>
-    <textarea id="input" rows="4" placeholder="Example: Digital, OMV or BSSe"></textarea>
+    <textarea id="input" placeholder="Type your query here..."></textarea>
 
+    <label>Select tools:</label>
+    <div>
+      <label><input type="checkbox" value="Read_Itrack"> Read Itrack</label>
+      <label><input type="checkbox" value="Read_Wiki"> Read Wiki</label>
+      <label><input type="checkbox" value="How_to_fix"> How to Fix</label>
+      <label><input type="checkbox" value="Ask_Gemini"> Ask Gemini</label>
+    </div>
+
+    <button id="sendBtn">Send</button>
     <div id="result"></div>
   </main>
-  <script src="popup.js" defer></script>
+
+  popup.js</script>
 </body>
 </html>

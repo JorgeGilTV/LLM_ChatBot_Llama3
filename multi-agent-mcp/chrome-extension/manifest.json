@@ -3,7 +3,8 @@
     "name": "🧠 GenDox AI 🧠",
     "version": "1.0",
     "description": "Extensión to interact with MCP Server",
-    "permissions": ["activeTab"],
+    "permissions": ["storage", "activeTab", "scripting"],
+    "host_permissions": ["http://127.0.0.1:5000/*"],
     "action": {
       "default_popup": "popup.html"
     }

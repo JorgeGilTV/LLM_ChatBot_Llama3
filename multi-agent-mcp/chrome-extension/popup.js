@@ -1,54 +1,45 @@
+
 document.addEventListener("DOMContentLoaded", () => {
-  const tools = {
-    Read_Itrack: "Read open tickets from Itrack",
-    Read_Wiki: "Read documents from AT&T Wiki",
-    How_to_fix: "Generate recommendations using LLaMA, Wiki, Itrack and prompt provided",
-    MCP_Connect: "Check if the MCP server is active",
-    Clean_Input: "Clean the input"
-  };
-
-  const container = document.getElementById("tool-buttons");
+  const sendBtn = document.getElementById("sendBtn");
   const inputField = document.getElementById("input");
-  const resultBox = document.getElementById("result");
+  const resultDiv = document.getElementById("result");
 
-  Object.entries(tools).forEach(([name, desc]) => {
-    const btn = document.createElement("button");
-    btn.className = "tool-btn";
-    btn.textContent = name;
-    btn.title = desc;
+  sendBtn.addEventListener("click", async () => {
+    const query = inputField.value.trim();
+    const selectedTools = Array.from(document.querySelectorAll("input[type=checkbox]:checked"))
+                               .map(cb => cb.value);
 
-    btn.addEventListener("click", async () => {
-      if (name === "Clean_Input") {
-        inputField.value = "";
-        resultBox.textContent = "✂️ Input erased.";
-        return;
+    if (!query) {
+      alert("Por favor ingresa un texto.");
+      return;
+    }
+    if (selectedTools.length === 0) {
+      alert("Selecciona al menos una herramienta.");
+      return;
+    }
+
+    // Mostrar mensaje de carga
+    resultDiv.innerHTML = `<p>⏳ Procesando...</p>`;
+
+    try {
+      const formData = new URLSearchParams();
+      formData.append("input", query);
+      selectedTools.forEach(tool => formData.append("tool", tool));
+
+      const response = await fetch("http://127.0.0.1:5000/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
-      const input = inputField.value.trim();
-      resultBox.textContent = `⏳ Running "${name}"...`;
-
-      try {
-        const response = await fetch("http://127.0.0.1:5000/tool", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: `tool=${encodeURIComponent(name)}&input=${encodeURIComponent(input)}`
-        });
-
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-
-        const resultHeader = Array.from(doc.querySelectorAll("h2")).find(h => h.textContent.includes("Response:"));
-        const resultDiv = resultHeader?.nextElementSibling;
-        resultBox.innerHTML = resultDiv?.innerHTML || html; // fallback to full HTML if no header found
-
-      } catch (error) {
-        resultBox.textContent = `❌ Error: ${error.message}`;
-      }
-    });
-
-    container.appendChild(btn);
+      const html = await response.text();
+      resultDiv.innerHTML = html;
+    } catch (error) {
+      resultDiv.innerHTML = `<p style="color:red;">❌ Error: ${error.message}</p>`;
+    }
   });
 });

@@ -33,21 +33,32 @@ function showHistoryResult(index) {
 // Cargar historial y herramientas al iniciar
 document.addEventListener('DOMContentLoaded', () => {
     // Cargar historial desde API
-    fetch('/api/history')
-        .then(res => res.json())
+    fetch('/static/search_history.json')
+        .then(res => {
+            if (!res.ok) throw new Error("No se pudo cargar el archivo JSON");
+            return res.json();
+        })
         .then(data => {
             window.historyData = data;
             const historyList = document.getElementById('history-list');
             historyList.innerHTML = '';
+
             data.forEach((item, i) => {
                 const li = document.createElement('li');
                 const btn = document.createElement('button');
-                btn.textContent = item.query;
+                btn.textContent = item.query; // aquí se usa el nombre real de la consulta
                 btn.onclick = () => showHistoryResult(i);
                 li.appendChild(btn);
                 historyList.appendChild(li);
             });
-        });
+        })
+        .catch(err => console.error('Error cargando historial:', err));
+
+// Función para mostrar el resultado de la consulta seleccionada
+function showHistoryResult(index) {
+    const resultContainer = document.getElementById('history-result');
+    resultContainer.innerHTML = window.historyData[index].result;
+}
 
     // Cargar herramientas desde API
     fetch('/api/tools')

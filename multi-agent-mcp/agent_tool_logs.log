@@ -333,3 +333,35 @@
 2025-12-01 15:41:41,635 [INFO] 127.0.0.1 - - [01/Dec/2025 15:41:41] "[33mGET /search_history.json HTTP/1.1[0m" 404 -
 2025-12-01 15:41:41,637 [INFO] 127.0.0.1 - - [01/Dec/2025 15:41:41] "[36mGET /static/search_history.json HTTP/1.1[0m" 304 -
 2025-12-01 15:41:41,639 [INFO] 127.0.0.1 - - [01/Dec/2025 15:41:41] "GET /api/tools HTTP/1.1" 200 -
+2025-12-01 15:43:20,737 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.71.116.233:5000
+2025-12-01 15:43:20,737 [INFO] [33mPress CTRL+C to quit[0m
+2025-12-01 15:43:29,264 [INFO] 127.0.0.1 - - [01/Dec/2025 15:43:29] "[36mGET / HTTP/1.1[0m" 304 -
+2025-12-01 15:43:29,282 [INFO] 127.0.0.1 - - [01/Dec/2025 15:43:29] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2025-12-01 15:43:29,283 [INFO] 127.0.0.1 - - [01/Dec/2025 15:43:29] "[36mGET /static/js/scripts.js HTTP/1.1[0m" 304 -
+2025-12-01 15:43:29,307 [INFO] 127.0.0.1 - - [01/Dec/2025 15:43:29] "[33mGET /search_history.json HTTP/1.1[0m" 404 -
+2025-12-01 15:43:29,310 [INFO] 127.0.0.1 - - [01/Dec/2025 15:43:29] "[36mGET /static/search_history.json HTTP/1.1[0m" 304 -
+2025-12-01 15:43:29,310 [INFO] 127.0.0.1 - - [01/Dec/2025 15:43:29] "GET /api/tools HTTP/1.1" 200 -
+2025-12-01 15:44:00,447 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:00] "POST /api/run HTTP/1.1" 200 -
+2025-12-01 15:44:07,630 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:07] "POST /api/run HTTP/1.1" 200 -
+2025-12-01 15:44:20,426 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:20] "[36mGET / HTTP/1.1[0m" 304 -
+2025-12-01 15:44:20,450 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:20] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2025-12-01 15:44:20,452 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:20] "[36mGET /static/js/scripts.js HTTP/1.1[0m" 304 -
+2025-12-01 15:44:20,472 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:20] "[33mGET /search_history.json HTTP/1.1[0m" 404 -
+2025-12-01 15:44:20,478 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:20] "GET /api/tools HTTP/1.1" 200 -
+2025-12-01 15:44:20,479 [INFO] 127.0.0.1 - - [01/Dec/2025 15:44:20] "GET /static/search_history.json HTTP/1.1" 200 -
+2025-12-01 15:53:34,033 [INFO] 127.0.0.1 - - [01/Dec/2025 15:53:34] "POST /api/run HTTP/1.1" 200 -
+2025-12-01 15:54:53,243 [INFO] 127.0.0.1 - - [01/Dec/2025 15:54:53] "[36mGET / HTTP/1.1[0m" 304 -
+2025-12-01 15:54:53,287 [INFO] 127.0.0.1 - - [01/Dec/2025 15:54:53] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2025-12-01 15:54:53,288 [INFO] 127.0.0.1 - - [01/Dec/2025 15:54:53] "[36mGET /static/js/scripts.js HTTP/1.1[0m" 304 -
+2025-12-01 15:54:53,314 [INFO] 127.0.0.1 - - [01/Dec/2025 15:54:53] "[33mGET /search_history.json HTTP/1.1[0m" 404 -
+2025-12-01 15:54:53,316 [INFO] 127.0.0.1 - - [01/Dec/2025 15:54:53] "GET /static/search_history.json HTTP/1.1" 200 -
+2025-12-01 15:54:53,318 [INFO] 127.0.0.1 - - [01/Dec/2025 15:54:53] "GET /api/tools HTTP/1.1" 200 -
+2025-12-01 16:21:13,533 [INFO] 127.0.0.1 - - [01/Dec/2025 16:21:13] "[36mGET / HTTP/1.1[0m" 304 -
+2025-12-01 16:21:13,582 [INFO] 127.0.0.1 - - [01/Dec/2025 16:21:13] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2025-12-01 16:21:13,604 [INFO] 127.0.0.1 - - [01/Dec/2025 16:21:13] "[36mGET /static/js/scripts.js HTTP/1.1[0m" 304 -
+2025-12-01 16:21:13,676 [INFO] 127.0.0.1 - - [01/Dec/2025 16:21:13] "[33mGET /search_history.json HTTP/1.1[0m" 404 -
+2025-12-01 16:21:13,678 [INFO] 127.0.0.1 - - [01/Dec/2025 16:21:13] "[33mGET /static/search_history.json HTTP/1.1[0m" 404 -
+2025-12-01 16:21:13,682 [INFO] 127.0.0.1 - - [01/Dec/2025 16:21:13] "GET /api/tools HTTP/1.1" 200 -

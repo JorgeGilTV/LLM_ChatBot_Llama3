@@ -15,6 +15,31 @@ function showLoading() {
     }, 1000);
 }
 
+// 🔄 Cargar historial desde API
+function loadHistory() {
+    fetch('/api/history')
+        .then(res => res.json())
+        .then(data => {
+            const historyList = document.getElementById("history-list");
+            historyList.innerHTML = '';
+            data.forEach((item, index) => {
+                const li = document.createElement("li");
+                const btn = document.createElement("button");
+                btn.textContent = item.query;
+                btn.onclick = () => showHistoryResult(index);
+                li.appendChild(btn);
+                historyList.appendChild(li);
+            });
+            window.historyData = data;
+        })
+        .catch(err => console.error('Error cargando historial:', err));
+}
+
+// Mostrar resultado del historial
+function showHistoryResult(index) {
+    document.getElementById('results-box').innerHTML = window.historyData[index].result;
+}
+
 // Reiniciar el formulario y limpiar resultados
 function newChat() {
     document.querySelector('#input-text').value = '';
@@ -25,40 +50,10 @@ function newChat() {
     if (counterInterval) clearInterval(counterInterval);
 }
 
-// Mostrar resultado del historial
-function showHistoryResult(index) {
-    document.getElementById('results-box').innerHTML = historyData[index].result;
-}
-
-// Cargar historial y herramientas al iniciar
+// 🚀 Inicialización al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    // Cargar historial desde API
-    fetch('/static/search_history.json')
-        .then(res => {
-            if (!res.ok) throw new Error("No se pudo cargar el archivo JSON");
-            return res.json();
-        })
-        .then(data => {
-            window.historyData = data;
-            const historyList = document.getElementById('history-list');
-            historyList.innerHTML = '';
-
-            data.forEach((item, i) => {
-                const li = document.createElement('li');
-                const btn = document.createElement('button');
-                btn.textContent = item.query; // aquí se usa el nombre real de la consulta
-                btn.onclick = () => showHistoryResult(i);
-                li.appendChild(btn);
-                historyList.appendChild(li);
-            });
-        })
-        .catch(err => console.error('Error cargando historial:', err));
-
-// Función para mostrar el resultado de la consulta seleccionada
-function showHistoryResult(index) {
-    const resultContainer = document.getElementById('history-result');
-    resultContainer.innerHTML = window.historyData[index].result;
-}
+    // Cargar historial inicial
+    loadHistory();
 
     // Cargar herramientas desde API
     fetch('/api/tools')
@@ -99,6 +94,7 @@ function showHistoryResult(index) {
                 document.getElementById('final-counter').innerText = `⏱ Execution time: ${data.exec_time}s`;
                 clearInterval(counterInterval);
                 document.getElementById('loading-message').innerHTML = '';
+                loadHistory(); // 🔄 refresca historial automáticamente
             })
             .catch(err => {
                 document.getElementById('results-box').innerHTML = `<pre>Error: ${err}</pre>`;

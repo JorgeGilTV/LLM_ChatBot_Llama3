@@ -246,7 +246,7 @@ def _render_table(tabla):
             border-radius: 6px;
         }}
 
-        /* 🌞 Modo claro */
+        /*  Modo claro */
         @media (prefers-color-scheme: light) {{
             .response-area {{
                 background-color: #f5f5f5; /* gris claro */
@@ -258,7 +258,7 @@ def _render_table(tabla):
             }}
         }}
 
-        /* 🌙 Modo oscuro */
+        /*  Modo oscuro */
         @media (prefers-color-scheme: dark) {{
             .response-area {{
                 background-color: #2b2b2b; /* gris oscuro */
@@ -328,7 +328,7 @@ def _render_table(tabla):
 
 
 # ✅ History
-HISTORY_FILE = 'search_history.json'
+HISTORY_FILE = 'static/search_history.json'
 def add_to_history(query, result):
     try:
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
@@ -342,7 +342,9 @@ def add_to_history(query, result):
 def get_history():
     try:
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            history = json.load(f)
+            # devolver los últimos 10 en orden inverso (más reciente primero)
+            return history[::-1]
     except:
         return []
 

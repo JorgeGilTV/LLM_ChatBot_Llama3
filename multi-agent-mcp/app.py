@@ -11,6 +11,7 @@ from tools.wiki_tool import wiki_search
 from tools.tickets_tool import read_tickets
 from tools.history_tool import add_to_history, get_history
 from tools.suggestions_tool import AI_suggestions
+from tools.ask_copilot import ask_copilot
 
 # 📋 Logging
 logging.basicConfig(
@@ -28,7 +29,8 @@ TOOLS = {
     "Read_Wiki": {"description": "Read documents from AT&T Wiki", "function": wiki_search},
     "How_to_fix": {"description": "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki", "function": AI_suggestions},
     "MCP_Connect": {"description": "Check if MCP server is active", "function": lambda _: "✅ MCP server is active and functional"},
-    "Ask_Gemini": {"description": "Ask LLM Gemini about anything", "function": ask_gemini}
+    "Ask_Gemini": {"description": "Ask LLM Gemini about anything", "function": ask_gemini},
+    "Ask_Copilot": {"description": "Ask LLM Copilot about anything", "function": ask_copilot}
 }
 registered_tools = [(name, tool["description"]) for name, tool in TOOLS.items()]
 

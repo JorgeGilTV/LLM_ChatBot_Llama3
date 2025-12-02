@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from tools.tickets_tool import read_tickets
 from tools.wiki_tool import wiki_search
 from tools.gemini_tool import ask_gemini
+from tools.ask_copilot import ask_copilot
 
 def AI_suggestions(query: str) -> str:
     html_tickets = read_tickets(query)
@@ -30,7 +31,7 @@ def AI_suggestions(query: str) -> str:
     prompt = f"""
     You are a senior DevOps service engineer specializing in troubleshooting and ticket analysis.
     Your task is to generate structured recommendations to resolve each issue based on the provided tickets.
-    ⚠️ Rules:
+    Rules:
     - Only include tickets with status "In Progress", "To Do", or "Retest" for recommendations.
     - For grouped tickets include tickets in "Accepted" status , and list the last 2 comments available.
     - Always use HTML tags exactly as shown in the format below.
@@ -70,16 +71,19 @@ def AI_suggestions(query: str) -> str:
     <li>Group recommendation 2</li>
     <li>Group recommendation 3</li>
     </ul>
-    At the end, include a section for external documentation links suggested by GenAI related to the applications or technologies mentioned in the tickets.
+        At the end, include a section for external documentation links suggested by GenAI related to the applications or technologies mentioned in the tickets.
     Only use official documentation sources (Microsoft, Elastic, Kubernetes, etc.).
     Query context: {query}
     Tickets:
     {texto_tickets}
     """
     raw_response = ask_gemini(prompt, ["How_to_fix"])
+    #raw_response = ask_copilot(prompt, ["How_to_fix"])
     wiki_html = wiki_search(query[:20])
     raw_response += f"""
     <p><strong>Related Wiki Pages:</strong></p>
     {wiki_html}
     </div>
     """
+    print(raw_response)
+    return raw_response

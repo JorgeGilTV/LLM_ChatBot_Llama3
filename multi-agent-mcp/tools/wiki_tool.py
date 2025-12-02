@@ -1,4 +1,5 @@
 import os, requests, datetime, html
+from tools.gemini_tool import ask_gemini
 
 def wiki_search(query: str) -> str:
     token = os.getenv("WIKI_TOKEN")
@@ -38,7 +39,9 @@ def wiki_search(query: str) -> str:
     data = response.json()
     results = data.get("results", [])
     if not results:
-        return f"<p>No documents found related to: <strong>{html.escape(trimmed_query)}</strong></p>"
+        print(f"<p>No documents found related to: <strong>{html.escape(trimmed_query)}</strong></p>")
+        wiki=ask_gemini(query, ["Ask_Gemini"])
+        return wiki
     # 🔍 key words
     keywords = ["troubleshooting", "debug", "issue", "error", "fix", "failure", "incident", "how-to"]
     def relevance_score(item):

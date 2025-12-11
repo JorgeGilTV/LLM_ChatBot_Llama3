@@ -4,7 +4,8 @@ from flask_cors import CORS
 import time
 import sys
 import logging
-# Importar tools
+
+# Importar tools existentes
 from tools.gemini_tool import ask_gemini
 from tools.llama_tool import ask_llama
 from tools.wiki_tool import wiki_search
@@ -38,6 +39,36 @@ registered_tools = [(name, tool["description"]) for name, tool in TOOLS.items()]
 flask_app = Flask(__name__, template_folder='templates')
 CORS(flask_app)
 
+alerts_db = []  # {id, text, priority, ack, cause}
+
+def classify_alert(text):
+    text_lower = text.lower()
+    if any(k in text_lower for k in ['Sev1', 'Sev0']):
+        return 'Alta'
+    if any(k in text_lower for k in ['Sev3','Sev2']):
+        return 'Media'
+    return 'Baja'
+
+
+def identify_cause(text):
+    try:
+        # Ejecutar las funciones reales con el texto del alerta
+        wiki_info = TOOLS["Read_Wiki"]["function"](text)
+        itrack_info = TOOLS["Read_Itrack"]["function"](text)
+        suggestion = TOOLS["How_to_fix"]["function"](text)
+
+        return f""" 
+        <div>
+            <h4>Causa raíz sugerida:</h4>{suggestion}
+            <br><h4>Wiki:</h4>{wiki_info}
+            <br><h4>Itrack:</h4>{itrack_info}
+        </div>
+        """
+    except Exception as e:
+        return f"<pre>Error identificando causa: {e}</pre>"
+
+
+
 @flask_app.route('/')
 def index():
     return send_from_directory('templates', 'index.html')
@@ -54,9 +85,7 @@ def api_tools():
 def api_run():
     data = request.json
     input_text = data.get('input', '')
-    selected_tools = data.get('tools', [])
-    if not selected_tools:
-        selected_tools = ['How_to_fix']
+    selected_tools = data.get('tools', []) or ['How_to_fix']
     results = []
     start = time.time()
     for tool_name in selected_tools:
@@ -65,19 +94,37 @@ def api_run():
             results.append(f"<pre>No tool found for {tool_name}</pre>")
             continue
         try:
-            if tool_name == 'Ask_Gemini':
-                res = func(input_text, selected_tools)
-            else:
-                res = func(input_text)
-            if not res:
-                res = "<pre>No response from tool</pre>"
+            res = func(input_text) if tool_name != 'Ask_Gemini' else func(input_text, selected_tools)
             results.append(f"<div class='llama-response'><h3>{tool_name}</h3>{res}</div>")
         except Exception as e:
-            results.append(f"<pre>Error executing tool '{tool_name}': {e}</pre>")
+            results.append(f"<pre>Error ejecutando '{tool_name}': {e}</pre>")
     exec_time = round(time.time() - start, 2)
     final_result = "<br>".join(results)
     add_to_history(input_text, final_result)
     return jsonify({'result': final_result, 'exec_time': exec_time})
+
+@flask_app.route('/api/alerts', methods=['POST'])
+def api_alerts():
+    data = request.json
+    alert_text = data.get('text', '')
+    alert_id = len(alerts_db) + 1
+    priority = classify_alert(alert_text)
+    cause = identify_cause(alert_text)
+    alert = {'id': alert_id, 'text': alert_text, 'priority': priority, 'ack': False, 'cause': cause}
+    alerts_db.append(alert)
+    return jsonify({'status': 'received', 'alert': alert})
+
+@flask_app.route('/api/alerts/ack/<int:alert_id>', methods=['POST'])
+def api_ack(alert_id):
+    for alert in alerts_db:
+        if alert['id'] == alert_id:
+            alert['ack'] = True
+            return jsonify({'status': 'acknowledged', 'alert': alert})
+    return jsonify({'error': 'alert not found'}), 404
+
+@flask_app.route('/api/alerts/status')
+def api_alert_status():
+    return jsonify(alerts_db)
 
 if __name__ == '__main__':
     flask_app.run(host='0.0.0.0', port=5000)

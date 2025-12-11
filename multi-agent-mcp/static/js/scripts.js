@@ -75,10 +75,23 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const inputText = document.getElementById('input-text').value;
         const selectedTools = Array.from(document.querySelectorAll('input[name=tool]:checked')).map(el => el.value);
+        console.log(selectedTools); // mejor que print()
 
         if (selectedTools.length === 0) {
-            alert('Select at least one tool before sending.');
-            return;
+            alert('No seleccionaste ninguna herramienta. Se usará Ask_Gemini automáticamente.');
+            
+            // Buscar el checkbox de Ask_Gemini y marcarlo
+            const askGeminiCheckbox = document.querySelector('input[name=tool][value="Ask_Gemini"]');
+            if (askGeminiCheckbox) {
+                askGeminiCheckbox.checked = true;
+                alert('Ha sido seleccionado: ' + askGeminiCheckbox.value); // ✅ concatenación correcta
+                document.querySelector('input[name="Ask_Gemini"]:checked');
+            }
+            
+            // Forzar que Ask_Gemini esté en la lista
+            selectedTools = ["Ask_Gemini"];
+            console.log(selectedTools);
+            
         }
 
         showLoading();

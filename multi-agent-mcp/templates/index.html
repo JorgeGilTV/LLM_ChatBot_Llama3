@@ -33,6 +33,18 @@
         <div id="final-counter"></div>
         <div id="results-box"></div>
         <div id="history-result"></div> <!-- Aquí se mostrarán los resultados -->
+        <!-- ✅ Tabla de alertas -->
+        <section id="alerts-section" style="margin-top:2rem;">
+            <h2 style="color:#6f2da8;">📢 Active Alerts</h2>
+            <table id="alerts-table">
+                <thead>
+                    <tr>
+                        <th>ID</th><th>Texto</th><th>Prioridad</th><th>ACK</th><th>Causa raíz</th><th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
     </main>
 
     <script src="/static/js/scripts.js"></script>
@@ -83,6 +95,34 @@
             const resultContainer = document.getElementById("history-result");
             resultContainer.innerHTML = window.historyData[index].result;
         }
+    
+        function loadAlerts() {
+            fetch('/api/alerts/status')
+                .then(res => res.json())
+                .then(alerts => {
+                    const tbody = document.querySelector('#alerts-table tbody');
+                    tbody.innerHTML = '';
+                    alerts.forEach(alert => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${alert.id}</td>
+                            <td>${alert.text}</td>
+                            <td style="font-weight:bold;color:${alert.priority==='Alta'?'red':alert.priority==='Media'?'orange':'green'}">${alert.priority}</td>
+                            <td>${alert.ack?'✅':'❌'}</td>
+                            <td>${alert.cause}</td>
+                            <td>${alert.ack?'':'<button onclick="ackAlert('+alert.id+')">ACK</button>'}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+        function ackAlert(id) {
+            fetch(`/api/alerts/ack/${id}`, {method:'POST'}).then(()=>loadAlerts());
+        }
+        setInterval(loadAlerts, 60000);
+        document.addEventListener('DOMContentLoaded', loadAlerts);
+    
     </script>
 </body>
 </html>
+

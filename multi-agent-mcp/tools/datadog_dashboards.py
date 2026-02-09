@@ -25,6 +25,38 @@ def format_timerange(hours: int) -> str:
         weeks = hours // 168
         return f"last {weeks} week{'s' if weeks > 1 else ''}"
 
+def format_timestamp_range(from_timestamp: int, to_timestamp: int) -> str:
+    """Format timestamp range into readable format with date and time"""
+    from datetime import datetime
+    
+    # Convert to datetime objects
+    from_dt = datetime.fromtimestamp(from_timestamp)
+    to_dt = datetime.fromtimestamp(to_timestamp)
+    
+    # Format with date and time
+    from_str = from_dt.strftime("%Y-%m-%d %H:%M:%S")
+    to_str = to_dt.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Also include day of week for context
+    from_day = from_dt.strftime("%A")
+    to_day = to_dt.strftime("%A")
+    
+    return f"""
+    <div style='display: flex; justify-content: space-around; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 4px; margin-top: 8px;'>
+        <div style='text-align: center;'>
+            <div style='font-size: 10px; opacity: 0.8;'>From</div>
+            <div style='font-weight: bold; font-size: 11px;'>{from_str}</div>
+            <div style='font-size: 9px; opacity: 0.7;'>{from_day}</div>
+        </div>
+        <div style='display: flex; align-items: center; font-size: 16px;'>→</div>
+        <div style='text-align: center;'>
+            <div style='font-size: 10px; opacity: 0.8;'>To</div>
+            <div style='font-weight: bold; font-size: 11px;'>{to_str}</div>
+            <div style='font-size: 9px; opacity: 0.7;'>{to_day}</div>
+        </div>
+    </div>
+    """
+
 def get_metric_data(dd_api_key, dd_app_key, dd_site, query, from_time, to_time):
     """Get actual metric data from Datadog"""
     if dd_site.startswith('arlo.') or '.' in dd_site.split('.')[0]:
@@ -1166,19 +1198,27 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
         dash_title = details.get('title', 'RED - Metrics - ADT')
         dash_url = f"https://{dd_site}/dashboard/{dash_id}"
         
+        # Generate timestamp range display
+        timestamp_range_html = format_timestamp_range(from_time, current_time)
+        
         # Dashboard header
         output += f"""
         <div style='background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); 
-                    padding: 8px; 
-                    border-radius: 4px; 
-                    margin: 6px 0;
-                    color: white;'>
-            <h2 style='margin: 0 0 4px 0; color: white; font-size: 15px;'>📊 {html.escape(dash_title)}</h2>
-            <p style='margin: 0;'>
-                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 12px;'>
+                    padding: 12px; 
+                    border-radius: 6px; 
+                    margin: 8px 0;
+                    color: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 {html.escape(dash_title)}</h2>
+            <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
+                Real-time monitoring dashboard from Datadog
+            </p>
+            <p style='margin: 0 0 8px 0;'>
+                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
                     Open Interactive Dashboard →
                 </a>
             </p>
+            {timestamp_range_html}
         </div>
         """
         
@@ -1693,19 +1733,30 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
         dash_title = details.get('title', 'RED - Metrics')
         dash_url = f"https://{dd_site}/dashboard/{dash_id}"
         
+        # Calculate timestamps for display
+        import time
+        current_time = int(time.time())
+        from_time = current_time - (timerange_hours * 3600)
+        timestamp_range_html = format_timestamp_range(from_time, current_time)
+        
         # Dashboard header
         output += f"""
         <div style='background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); 
-                    padding: 8px; 
-                    border-radius: 4px; 
-                    margin: 6px 0;
-                    color: white;'>
-            <h2 style='margin: 0 0 4px 0; color: white; font-size: 15px;'>🚨 Services with Errors</h2>
-            <p style='margin: 0;'>
-                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 12px;'>
+                    padding: 12px; 
+                    border-radius: 6px; 
+                    margin: 8px 0;
+                    color: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>🚨 Services with Errors</h2>
+            <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
+                Services with active errors from RED Metrics dashboard
+            </p>
+            <p style='margin: 0 0 8px 0;'>
+                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
                     Open Interactive Dashboard →
                 </a>
             </p>
+            {timestamp_range_html}
         </div>
         """
         
@@ -2258,19 +2309,30 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
         dash_title = details.get('title', 'RED - Metrics - ADT')
         dash_url = f"https://{dd_site}/dashboard/{dash_id}"
         
+        # Calculate timestamps for display
+        import time
+        current_time = int(time.time())
+        from_time = current_time - (timerange_hours * 3600)
+        timestamp_range_html = format_timestamp_range(from_time, current_time)
+        
         # Dashboard header
         output += f"""
-        <div style='background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); 
-                    padding: 8px; 
-                    border-radius: 4px; 
-                    margin: 6px 0;
-                    color: white;'>
-            <h2 style='margin: 0 0 4px 0; color: white; font-size: 15px;'>🚨 ADT Services with Errors</h2>
-            <p style='margin: 0;'>
-                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 12px;'>
+        <div style='background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); 
+                    padding: 12px; 
+                    border-radius: 6px; 
+                    margin: 8px 0;
+                    color: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>🚨 ADT Services with Errors</h2>
+            <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
+                Services with active errors from ADT dashboard
+            </p>
+            <p style='margin: 0 0 8px 0;'>
+                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
                     Open Interactive Dashboard →
                 </a>
             </p>
+            {timestamp_range_html}
         </div>
         """
         
@@ -2747,6 +2809,12 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
     
     output = ""
     
+    # Calculate timestamps for display
+    import time
+    current_time = int(time.time())
+    from_time = current_time - (timerange_hours * 3600)
+    timestamp_range_html = format_timestamp_range(from_time, current_time)
+    
     # Add main header
     timerange_text = format_timerange(timerange_hours)
     output += f"""
@@ -2757,13 +2825,14 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
                 color: white;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
         <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>🚨 All Services with Errors</h2>
-        <p style='margin: 0; font-size: 12px; opacity: 0.95;'>
+        <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
             Showing errors from <strong>RED Metrics</strong> and <strong>RED Metrics - ADT</strong> dashboards
         </p>
-        <p style='margin: 4px 0 0 0; font-size: 11px; opacity: 0.9;'>
+        <p style='margin: 0 0 8px 0; font-size: 11px; opacity: 0.9;'>
             📊 Time range: {timerange_text}
             {f" | 🔍 Filter: {html.escape(query)}" if query else ""}
         </p>
+        {timestamp_range_html}
     </div>
     """
     

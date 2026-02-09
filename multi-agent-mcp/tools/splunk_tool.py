@@ -8,6 +8,38 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def format_timestamp_range_splunk(from_timestamp: int, to_timestamp: int) -> str:
+    """Format timestamp range into readable format with date and time"""
+    from datetime import datetime
+    
+    # Convert to datetime objects
+    from_dt = datetime.fromtimestamp(from_timestamp)
+    to_dt = datetime.fromtimestamp(to_timestamp)
+    
+    # Format with date and time
+    from_str = from_dt.strftime("%Y-%m-%d %H:%M:%S")
+    to_str = to_dt.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Also include day of week for context
+    from_day = from_dt.strftime("%A")
+    to_day = to_dt.strftime("%A")
+    
+    return f"""
+    <div style='display: flex; justify-content: space-around; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 4px; margin-top: 8px;'>
+        <div style='text-align: center;'>
+            <div style='font-size: 10px; opacity: 0.8;'>From</div>
+            <div style='font-weight: bold; font-size: 11px;'>{from_str}</div>
+            <div style='font-size: 9px; opacity: 0.7;'>{from_day}</div>
+        </div>
+        <div style='display: flex; align-items: center; font-size: 16px;'>→</div>
+        <div style='text-align: center;'>
+            <div style='font-size: 10px; opacity: 0.8;'>To</div>
+            <div style='font-weight: bold; font-size: 11px;'>{to_str}</div>
+            <div style='font-size: 9px; opacity: 0.7;'>{to_day}</div>
+        </div>
+    </div>
+    """
+
 def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
     """
     Shows the P0 Streaming dashboard from Splunk with metrics and graphs.
@@ -33,6 +65,11 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
     output = ""
     dashboard_url = "https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard"
     
+    # Calculate timestamps for display
+    current_time = int(time.time())
+    from_time = current_time - (timerange_hours * 3600)
+    timestamp_range_html = format_timestamp_range_splunk(from_time, current_time)
+    
     # Dashboard header
     output += f"""
     <div style='background: linear-gradient(135deg, #00c853 0%, #00796b 100%); 
@@ -45,11 +82,12 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
             Real-time monitoring of P0 streaming services
         </p>
-        <p style='margin: 0;'>
+        <p style='margin: 0 0 8px 0;'>
             <a href='{dashboard_url}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
                 Open Interactive Dashboard →
             </a>
         </p>
+        {timestamp_range_html}
     </div>
     """
     

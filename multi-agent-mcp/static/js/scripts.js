@@ -262,18 +262,72 @@ function showHistoryResult(index) {
     document.getElementById('loading-message').innerHTML = '';
     document.getElementById('final-counter').innerText = '';
     
-    // Mostrar resultado en results-box
-    const resultsBox = document.getElementById('results-box');
-    resultsBox.innerHTML = window.historyData[index].result || '<p>No result available</p>';
-    
-    // También en history-result si existe
+    // Clear history-result to avoid duplication
     const historyResult = document.getElementById('history-result');
     if (historyResult) {
-        historyResult.innerHTML = window.historyData[index].result || '<p>No result available</p>';
+        historyResult.innerHTML = '';
     }
+    
+    // Mostrar resultado en results-box SOLAMENTE
+    const resultsBox = document.getElementById('results-box');
+    const htmlContent = window.historyData[index].result || '<p>No result available</p>';
+    resultsBox.innerHTML = htmlContent;
+    
+    // Re-ejecutar scripts para cargar gráficos de Chart.js
+    const scripts = resultsBox.querySelectorAll('script');
+    
+    let scriptIndex = 0;
+    function executeNextScript() {
+        if (scriptIndex >= scripts.length) {
+            // Add result actions after scripts are executed
+            setTimeout(() => addResultActions(resultsBox), 100);
+            return;
+        }
+        
+        const oldScript = scripts[scriptIndex];
+        const newScript = document.createElement('script');
+        
+        // Copy attributes
+        Array.from(oldScript.attributes).forEach(attr => {
+            newScript.setAttribute(attr.name, attr.value);
+        });
+        
+        // Copy content for inline scripts
+        if (oldScript.textContent) {
+            newScript.textContent = oldScript.textContent;
+        }
+        
+        // Handle script loading
+        if (newScript.src) {
+            // External script - wait for it to load
+            newScript.onload = () => {
+                scriptIndex++;
+                executeNextScript();
+            };
+            newScript.onerror = () => {
+                console.error(`Failed to load script ${scriptIndex + 1}`);
+                scriptIndex++;
+                executeNextScript();
+            };
+        } else {
+            // Inline script - executes immediately
+            scriptIndex++;
+            setTimeout(executeNextScript, 50); // Small delay for DOM updates
+        }
+        
+        // Add to document to execute
+        document.body.appendChild(newScript);
+        
+        // Remove old script
+        oldScript.remove();
+    }
+    
+    executeNextScript();
     
     // Scroll to results
     resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    
+    console.log('✅ History result loaded with scripts re-executed');
 }
 
 // Reiniciar el formulario y limpiar resultados

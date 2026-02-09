@@ -1,6 +1,164 @@
-// Scripts.js loaded - Version 20260204-v16 (latency percentiles, error count+%)
+// Scripts.js loaded - Version 20260209-v20 (Enhanced UI with theme toggle, tooltips, search, etc.)
 let counterInterval;
 let startTime;
+
+// ============================================
+// THEME TOGGLE
+// ============================================
+function toggleTheme() {
+    const html = document.documentElement;
+    const currentTheme = html.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    html.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    console.log(`🎨 Theme switched to: ${newTheme}`);
+    showNotification(`Theme switched to ${newTheme} mode`);
+}
+
+// Load saved theme on page load
+function loadSavedTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+}
+
+// ============================================
+// HISTORY MANAGEMENT
+// ============================================
+function clearHistory() {
+    if (!confirm('Are you sure you want to clear all history?')) {
+        return;
+    }
+    
+    // Clear from UI
+    const historyList = document.getElementById('history-list');
+    if (historyList) {
+        historyList.innerHTML = '<li style="color: #666; font-size: 12px; padding: 10px;">No history yet</li>';
+    }
+    
+    window.historyData = [];
+    showNotification('History cleared successfully');
+    console.log('✅ History cleared');
+}
+
+// History search/filter functionality
+function setupHistorySearch() {
+    const searchInput = document.getElementById('history-search');
+    if (!searchInput) return;
+    
+    searchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const historyItems = document.querySelectorAll('#history-list li');
+        
+        historyItems.forEach(item => {
+            const text = item.textContent.toLowerCase();
+            if (text.includes(searchTerm)) {
+                item.style.display = '';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    });
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+function showNotification(message, duration = 3000) {
+    const notification = document.createElement('div');
+    notification.className = 'copy-notification';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, duration);
+}
+
+// ============================================
+// COPY TO CLIPBOARD
+// ============================================
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showNotification('✅ Copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showNotification('❌ Failed to copy');
+    });
+}
+
+// Add copy button to results
+function addResultActions(resultsBox) {
+    if (!resultsBox || resultsBox.innerHTML === '') return;
+    
+    // Check if actions already exist
+    if (resultsBox.querySelector('.result-actions')) return;
+    
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'result-actions';
+    actionsDiv.innerHTML = `
+        <button class="result-action-btn" onclick="copyResultsToClipboard()" title="Copy results">
+            📋 Copy
+        </button>
+        <button class="result-action-btn" onclick="expandAllSections()" title="Expand all sections">
+            📖 Expand
+        </button>
+    `;
+    
+    resultsBox.style.position = 'relative';
+    resultsBox.insertBefore(actionsDiv, resultsBox.firstChild);
+}
+
+function copyResultsToClipboard() {
+    const resultsBox = document.getElementById('results-box');
+    if (resultsBox) {
+        const text = resultsBox.innerText;
+        copyToClipboard(text);
+    }
+}
+
+function expandAllSections() {
+    // Expand any collapsible sections in results
+    const details = document.querySelectorAll('#results-box details');
+    details.forEach(detail => {
+        detail.open = true;
+    });
+    showNotification('All sections expanded');
+}
+
+// ============================================
+// ENHANCED LOADING
+// ============================================
+function showLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.display = 'flex';
+    }
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+// ============================================
+// UPDATE LAST UPDATE TIMESTAMP
+// ============================================
+function updateLastUpdateTime() {
+    const lastUpdateElement = document.getElementById('last-update');
+    if (lastUpdateElement) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        lastUpdateElement.textContent = `Last update: ${timeString}`;
+    }
+}
 
 // Function to show/hide timerange selector based on selected tools
 function setupTimeRangeSelector() {
@@ -32,6 +190,10 @@ function setupTimeRangeSelector() {
 
 // Mostrar el spinner y contador mientras se ejecuta la consulta
 function showLoading() {
+    // Show overlay
+    showLoadingOverlay();
+    
+    // Also show inline spinner for backward compatibility
     document.getElementById('loading-message').innerHTML =
         '<span class="spinner"></span><span class="counter" id="counter">0s</span>';
     document.getElementById('results-box').innerHTML = '';
@@ -222,6 +384,7 @@ function loadStatusMonitor() {
             }
             
             console.log('✅ Status monitor updated');
+            updateLastUpdateTime();
         })
         .catch(err => {
             console.error('Error loading status monitor:', err);
@@ -234,16 +397,25 @@ function loadStatusMonitor() {
 
 // 🚀 Inicialización al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Initializing Arlo_GenAI...');
+    console.log('🚀 Initializing Arlo_GenAI v2.0...');
+    
+    // Load saved theme
+    loadSavedTheme();
     
     // Cargar historial inicial
     loadHistory();
+    
+    // Setup history search
+    setTimeout(setupHistorySearch, 1000);
     
     // Load status monitor immediately
     loadStatusMonitor();
     
     // Auto-refresh status every 3 minutes (180000ms)
     setInterval(loadStatusMonitor, 180000);
+    
+    // Update timestamp initially
+    updateLastUpdateTime();
 
     // Cargar herramientas desde API
     fetch('/api/tools')
@@ -320,6 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 // Limpiar mensajes de carga
                 clearInterval(counterInterval);
+                hideLoadingOverlay();
                 document.getElementById('loading-message').innerHTML = '';
                 
                 // Mostrar resultados
@@ -328,6 +501,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Insertar HTML
                 resultsBox.innerHTML = htmlContent;
+                
+                // Add action buttons to results
+                setTimeout(() => addResultActions(resultsBox), 500);
                 
                 // Ejecutar scripts que fueron insertados via innerHTML
                 const scripts = resultsBox.querySelectorAll('script');
@@ -395,6 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => {
                 console.error('Error executing query:', err);
                 clearInterval(counterInterval);
+                hideLoadingOverlay();
                 document.getElementById('loading-message').innerHTML = '';
                 document.getElementById('results-box').innerHTML = `
                     <div style="padding: 20px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">

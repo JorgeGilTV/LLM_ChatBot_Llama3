@@ -1,23 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <title>Arlo_GenAI</title>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/styles-footer.css">
     <!-- Load Chart.js globally so it's always available -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <aside class="sidebar">
         <button class="new-chat" onclick="newChat()">➕ New Chat</button>
+        
+        <!-- History with search -->
         <div class="history">
-            <h2>History</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>History</h2>
+                <button onclick="clearHistory()" class="clear-history-btn" title="Clear all history">🗑️</button>
+            </div>
+            <input type="text" id="history-search" placeholder="🔍 Search history..." style="width: 100%; padding: 6px; margin: 8px 0; background: #333; border: 1px solid #444; border-radius: 4px; color: #f0f0f0; font-size: 12px;">
             <ul id="history-list"></ul>
         </div>
         
         <!-- Auto Status Monitor -->
         <div class="status-monitor">
-            <h2>Arlo Status <span id="status-time" style="font-size: 10px; color: #999;"></span></h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Arlo Status <span id="status-time" style="font-size: 10px; color: #999;"></span></h2>
+                <button onclick="loadStatusMonitor()" class="refresh-status-btn" title="Refresh status">🔄</button>
+            </div>
             <div id="status-summary" style="font-size: 11px; padding: 5px; background: #333; border-radius: 4px; margin-bottom: 8px;">
                 Loading...
             </div>
@@ -31,8 +41,22 @@
             </ul>
         </div>
     </aside>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>Processing your request...</p>
+            <div class="loading-bar">
+                <div class="loading-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+
     <main class="chat-area">
-        <header class="top-bar">🧠 Arlo_GenAI 🧠</header>
+        <header class="top-bar">
+            <span>🧠 Arlo_GenAI 🧠</span>
+            <button onclick="toggleTheme()" class="theme-toggle" title="Toggle light/dark theme">🌓</button>
+        </header>
         <div class="prompt">
             <strong style="font-size: 1.15rem;">How to use:</strong><br>
             <span style="color: #20d6ca;">1️⃣ Select one or more tools from the checkboxes below</span><br>
@@ -70,6 +94,16 @@
         <div id="history-result"></div> <!-- Aquí se mostrarán los resultados -->
         <!-- ✅ Tabla de alertas -->
         
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <span>Arlo GenAI v2.0.0</span>
+                <span>|</span>
+                <span id="last-update">Last update: --</span>
+                <span>|</span>
+                <a href="https://github.com/JorgeGilTV/LLM_ChatBot_Llama3" target="_blank">📖 Docs</a>
+            </div>
+        </footer>
     </main>
 
     <script src="/static/js/scripts.js?v=20260205-v9"></script>

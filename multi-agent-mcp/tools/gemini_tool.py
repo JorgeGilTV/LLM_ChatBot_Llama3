@@ -7,7 +7,7 @@ def ask_gemini(prompt: str, selected_tools: list) -> str:
             return "Error: GEMINI_API_KEY is not defined in env file."
         if "Ask_Gemini" in selected_tools:
             prompt = f"Execute the following prompt, i need legible like html formated but preserving the current style.:\n{prompt}"
-        model = "models/gemini-2.5-pro"
+        model = "models/gemini-2.5-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}

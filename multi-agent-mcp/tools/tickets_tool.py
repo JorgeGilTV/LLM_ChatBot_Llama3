@@ -2,24 +2,30 @@ import json, html, requests, os
 
 def read_tickets(query: str) -> str:
     session = requests.Session()
-    session.auth = (os.getenv("ITRACK_USER"), os.getenv("ITRACK_PASSWORD"))
+    session.auth = (os.getenv("SNOW_USER"), os.getenv("SNOW_PASSWORD"))
+    session.headers.update({"Accept": "application/json"})
+
     if "accepted_tickets" not in globals():
         globals()["accepted_tickets"] = {}
-    # ✅ Caso directo: query es un ticket ID tipo CDEX-xxxxx
-    if query.startswith("CDEX-") and query[5:].isdigit():
-        ticket_url = f"https://itrack.web.att.com/rest/api/2/issue/{query}?expand=comments"
+
+    tabla = []
+
+    # ✅ Caso directo: query es un sys_id de ServiceNow (32 caracteres hex)
+    if len(query) == 32:
+        ticket_url = f"https://arlo.service-now.com/api/now/table/incident/{query}"
         response = session.get(ticket_url)
         if response.status_code != 200:
             return f"<p>Error {response.status_code}: {response.reason}</p>"
-        issue = response.json()
-        key = issue["key"]
-        status = issue["fields"]["status"]["name"]
-        summary = issue["fields"]["summary"]
-        description = issue["fields"].get("description", "No description available")
-        comments = issue["fields"].get("comment", {}).get("comments", [])
-        last_two_comments = [c.get("body", "") for c in comments[-2:]] if comments else ["No comments available"]
-        url = f"https://itrack.web.att.com/projects/CDEX/issues/{key}"
-        if status.lower() == "accepted":
+        issue = response.json().get("result", {})
+        key = issue.get("number")
+        status = issue.get("state")
+        summary = issue.get("short_description")
+        description = issue.get("description", "No description available")
+        # ⚠️ Los comentarios en ServiceNow se obtienen de journal entries, aquí simplificado
+        comments = issue.get("comments", [])
+        last_two_comments = comments[-2:] if comments else ["No comments available"]
+        url = f"https://arlo.service-now.com/now/nav/ui/classic/params/target/incident.do?sys_id={query}"
+        if status in ["Accepted", "Closed", "Cancelled", "Resolved"]:
             globals()["accepted_tickets"][key] = {
                 "status": status,
                 "summary": summary,
@@ -27,45 +33,35 @@ def read_tickets(query: str) -> str:
                 "comments": last_two_comments,
                 "url": url
             }
-            return f"<p>Ticket {key} almacenado en Accepted (no mostrado en tabla).</p>"
-        # ✅ Mostrar solo si empieza con CDEX
-        if key.startswith("CDEX-"):
-            return _render_table([{
-                "key": key,
-                "status": status,
-                "summary": summary,
-                "description": description,
-                "last_comments": last_two_comments,
-                "url": url
-            }])
-        else:
-            return f"<p>Ticket {key} no mostrado (no es CDEX).</p>"
-    # ✅ Caso normal: búsqueda por texto en summary/description
-    jql = f'(description ~ "{query}")'
-    search_url = f'https://itrack.web.att.com/rest/api/2/search?jql={jql}&maxResults=50'
+            return f"<p>Incident {key} almacenado en Accepted (no mostrado en tabla).</p>"
+        tabla.append({
+            "key": key,
+            "status": status,
+            "summary": summary,
+            "description": description,
+            "last_comments": last_two_comments,
+            "url": url
+        })
+        return _render_table(tabla)
+
+    # ✅ Caso normal: búsqueda por texto en short_description
+    search_url = f'https://arlo.service-now.com/api/now/table/incident?sysparm_query=short_descriptionLIKE{query}&sysparm_limit=50'
     response = session.get(search_url)
     if response.status_code != 200:
         return f"<p>Error {response.status_code}: {response.reason}</p>"
-    data = response.json()
-    issues = data.get("issues", [])
+    issues = response.json().get("result", [])
     if not issues:
         return f"<p>No se encontró información para: '{html.escape(query)}'</p>"
-    tabla = []
+
     for issue in issues:
-        key = issue["key"]
-        # 🔎 Segunda llamada para traer comentarios completos
-        issue_url = f'https://itrack.web.att.com/rest/api/2/issue/{key}?expand=comments'
-        issue_resp = session.get(issue_url)
-        if issue_resp.status_code != 200:
-            continue
-        full_issue = issue_resp.json()
-        status = full_issue["fields"]["status"]["name"]
-        summary = full_issue["fields"]["summary"]
-        description = full_issue["fields"].get("description", "No description available")
-        comments = full_issue["fields"].get("comment", {}).get("comments", [])
-        last_two_comments = [c.get("body", "") for c in comments[-2:]] if comments else ["No comments available"]
-        url = f"https://itrack.web.att.com/projects/CDEX/issues/{key}"
-        if status.lower() == "accepted" or status.lower() == "closed" or status.lower() == "test complete" or status.lower() == "dev complete" or status.lower() == "cancelled":
+        key = issue.get("number")
+        status = issue.get("state")
+        summary = issue.get("short_description")
+        description = issue.get("description", "No description available")
+        comments = issue.get("comments", [])
+        last_two_comments = comments[-2:] if comments else ["No comments available"]
+        url = f"https://arlo.service-now.com/now/nav/ui/classic/params/target/incident.do?sys_id={issue.get('sys_id')}"
+        if status in ["Accepted", "Closed", "Cancelled", "Resolved"]:
             globals()["accepted_tickets"][key] = {
                 "status": status,
                 "summary": summary,
@@ -74,57 +70,23 @@ def read_tickets(query: str) -> str:
                 "url": url
             }
             continue
-        # ✅ Mostrar solo si empieza con CDEX
-        if key.startswith("CDEX-"):
-            tabla.append({
-                "key": key,
-                "status": status,
-                "summary": summary,
-                "description": description,
-                "last_comments": last_two_comments,
-                "url": url
-            })
+        tabla.append({
+            "key": key,
+            "status": status,
+            "summary": summary,
+            "description": description,
+            "last_comments": last_two_comments,
+            "url": url
+        })
+
     if not tabla:
-        return f"<p>We didnt found any ticket open for: '{html.escape(query)}'</p>"
+        return f"<p>No se encontraron incidents abiertos para: '{html.escape(query)}'</p>"
     return _render_table(tabla)
+
+
 def _render_table(tabla):
     output = f"""
         <style>
-        .response-area {{
-            padding: 10px;
-            border-radius: 6px;
-        }}
-
-        /*  Modo claro */
-        @media (prefers-color-scheme: light) {{
-            .response-area {{
-                background-color: #f5f5f5; /* gris claro */
-                color: #000000;
-            }}
-            .ticket-table {{
-                background-color: #ffffff;
-                color: #000000;
-            }}
-        }}
-
-        /*  Modo oscuro */
-        @media (prefers-color-scheme: dark) {{
-            .response-area {{
-                background-color: #2b2b2b; /* gris oscuro */
-                color: #f0f0f0;
-            }}
-            .ticket-table {{
-                background-color: #1e1e1e;
-                color: #f0f0f0;
-            }}
-            .ticket-table th {{
-                background-color: #333333;
-            }}
-            .ticket-table tr:nth-child(even) {{
-                background-color: #2a2a2a;
-            }}
-        }}
-
         .ticket-table {{
             border-collapse: collapse;
             width: 100%;
@@ -143,34 +105,28 @@ def _render_table(tabla):
         .ticket-table tr:nth-child(even) {{
             background-color: #fafafa;
         }}
-        .status-In\\ Progress {{ background-color: #fff3cd; }}
-        .status-To\\ Do {{ background-color: #e0f7fa; }}
-        .status-Open {{ background-color: #e0f7fa; }}
         </style>
         <div class="response-area">
-            <p><strong>Tickets Found:</strong> {len(tabla)}</p>
+            <p><strong>Incidents Found:</strong> {len(tabla)}</p>
             <table class="ticket-table">
                 <tr>
-                    <th>TICKET</th>
+                    <th>INCIDENT</th>
                     <th>STATUS</th>
                     <th>SUMMARY</th>
                     <th>DESCRIPTION</th>
                     <th>LAST 2 COMMENTS</th>
                     <th>LINK</th>
-                    <th>URL</th>
                 </tr>
     """
     for row in tabla:
-        status_value = row.get('status') or "Unknown"
-        status_class = f"status-{status_value.replace(' ', '\\ ')}"
-        output += f"<tr class='{status_class}'>"
+        output += f"<tr>"
         output += f"<td>{html.escape(row['key'])}</td>"
-        output += f"<td>{html.escape(status_value)}</td>"
+        output += f"<td>{html.escape(str(row['status']))}</td>"
         output += f"<td>{html.escape(row['summary'])}</td>"
         output += f"<td>{html.escape(row['description'])}</td>"
-        output += f"<td>{"<br>".join([html.escape(c) for c in row['last_comments']])}</td>"
+        comments_html = "<br>".join([html.escape(c) for c in row['last_comments']])
+        output += f"<td>{comments_html}</td>"
         output += f"<td><a href='{row['url']}' target='_blank'>Open</a></td>"
-        output += f"<td>{html.escape(row['url'])}</td>"
         output += "</tr>"
     output += "</table></div>"
     return output

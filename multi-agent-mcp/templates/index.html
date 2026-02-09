@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GenDox AI</title>
+    <title>Arlo_GenAI</title>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <!-- Load Chart.js globally so it's always available -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <aside class="sidebar">
@@ -12,18 +14,51 @@
             <h2>History</h2>
             <ul id="history-list"></ul>
         </div>
+        
+        <!-- Auto Status Monitor -->
+        <div class="status-monitor">
+            <h2>Arlo Status <span id="status-time" style="font-size: 10px; color: #999;"></span></h2>
+            <div id="status-summary" style="font-size: 11px; padding: 5px; background: #333; border-radius: 4px; margin-bottom: 8px;">
+                Loading...
+            </div>
+            <h3 style="font-size: 12px; margin: 8px 0 4px 0; color: #bbb;">Core Services</h3>
+            <ul id="status-services" style="list-style: none; padding: 0; font-size: 10px; margin-bottom: 12px;">
+                <li style="padding: 4px; color: #999;">Loading...</li>
+            </ul>
+            <h3 style="font-size: 12px; margin: 8px 0 4px 0; color: #bbb;">Past Incidents</h3>
+            <ul id="status-incidents" style="list-style: none; padding: 0; font-size: 10px;">
+                <li style="padding: 4px; color: #999;">Loading...</li>
+            </ul>
+        </div>
     </aside>
     <main class="chat-area">
-        <header class="top-bar">🧠 GenDox AI 🧠</header>
+        <header class="top-bar">🧠 Arlo_GenAI 🧠</header>
         <div class="prompt">
-            Please start typing some prompt, CDEX or Topic to search... 
-            /help❓ Help /settings⚙️ Settings /aboutℹ️ About
+            <strong style="font-size: 1.15rem;">How to use:</strong><br>
+            <span style="color: #20d6ca;">1️⃣ Select one or more tools from the checkboxes below</span><br>
+            <span style="color: #ff9500; margin-left: 20px;">⚠️ If you select DD_Red_Metrics, DD_Red_ADT, DD_Errors or P0_Streaming, choose a Time Range</span><br>
+            <span style="color: #20d6ca;">2️⃣ Type your search query (optional for some tools)</span><br>
+            <span style="color: #20d6ca;">3️⃣ Click Send button</span><br><br>
+            <span style="color: #fbbf24; font-style: italic;">💡 Example: Select "DD_Red_Metrics" + "P0_Streaming", type "streaming-service", then click Send</span>
         </div>
         
         <!-- ✅ Formulario con ID para JS -->
         <form id="search-form" class="input-form">
             <div class="tool-list" id="tool-list"></div>
-            <textarea name="input" id="input-text" placeholder="Please insert your search, select the tool in check box and press Send?"></textarea>
+            
+            <!-- Time range selector for Datadog tools -->
+            <div id="timerange-container" style="display: none; margin: 10px 0; padding: 10px; background-color: #f0f4f8; border-radius: 4px;">
+                <label for="timerange-select" style="font-weight: bold; margin-right: 10px; color: #2d3748;">Time Range:</label>
+                <select id="timerange-select" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #cbd5e0; font-size: 14px;">
+                    <option value="1">1 hour</option>
+                    <option value="2">2 hours</option>
+                    <option value="4" selected>4 hours</option>
+                    <option value="48">2 days</option>
+                    <option value="168">1 week</option>
+                </select>
+            </div>
+            
+            <textarea name="input" id="input-text" placeholder="Enter service name, ticket ID, or search query... (optional for some tools)"></textarea>
             <button type="submit">Send</button>
         </form>
 
@@ -34,73 +69,20 @@
         <div id="results-box"></div>
         <div id="history-result"></div> <!-- Aquí se mostrarán los resultados -->
         <!-- ✅ Tabla de alertas -->
-        <section id="alerts-section" style="margin-top:2rem;">
-            <h2 style="color:#6f2da8;">📢 Active Alerts</h2>
-            <table id="alerts-table">
-                <thead>
-                    <tr>
-                        <th>ID</th><th>Texto</th><th>Prioridad</th><th>ACK</th><th>Causa raíz</th><th>Acción</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </section>
+        
     </main>
 
-    <script src="/static/js/scripts.js"></script>
+    <script src="/static/js/scripts.js?v=20260205-v9"></script>
     <script>
-        // ✅ Cargar historial desde archivo JSON
-        fetch('/search_history.json')
-            .then(res => {
-                if (!res.ok) throw new Error("No se pudo cargar el archivo JSON");
-                return res.json();
-            })
-            .then(data => {
-                window.historyData = data;
-                const historyList = document.getElementById("history-list");
-                historyList.innerHTML = '';
-
-                data.forEach((item, index) => {
-                    const li = document.createElement("li");
-                    const btn = document.createElement("button");
-                    btn.textContent = item.query; // nombre real de la consulta
-                    btn.onclick = () => showHistoryResult(index);
-                    li.appendChild(btn);
-                    historyList.appendChild(li);
-                });
-            })
-            .catch(err => console.error('Error cargando historial:', err));
-
-        // ✅ Renderizar herramientas con checkbox
-        const tools = [
-            { name: "Read_Itrack", desc: "Read workarounds from AT&T itrack" },
-            { name: "Read_Wiki", desc: "Read documents from AT&T Wiki" },
-            { name: "How_to_fix", desc: "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki" },
-            { name: "MCP_Connect", desc: "Check if MCP server is active" },
-            { name: "Ask_Gemini", desc: "Ask LLM Gemini about anything" },
-            { name: "Ask_Copilot", desc: "Ask LLM Copilot about anything" }
-        ];
-
-        const toolList = document.getElementById("tool-list");
-        tools.forEach(tool => {
-            const label = document.createElement("label");
-            label.className = "tool-item";
-            label.title = tool.desc;
-            label.innerHTML = `<input type="checkbox" name="tool" value="${tool.name}"> ${tool.name}`;
-            toolList.appendChild(label);
-        });
-
-        // ✅ Mostrar resultado de historial
-        function showHistoryResult(index) {
-            const resultContainer = document.getElementById("history-result");
-            resultContainer.innerHTML = window.historyData[index].result;
-        }
+        // ℹ️ Las funciones loadHistory() y showHistoryResult() ahora están en scripts.js
+        // ℹ️ La carga de herramientas también está en scripts.js en el DOMContentLoaded
     
         function loadAlerts() {
             fetch('/api/alerts/status')
                 .then(res => res.json())
                 .then(alerts => {
                     const tbody = document.querySelector('#alerts-table tbody');
+                    if (!tbody) return; // Skip if table doesn't exist
                     tbody.innerHTML = '';
                     alerts.forEach(alert => {
                         const tr = document.createElement('tr');

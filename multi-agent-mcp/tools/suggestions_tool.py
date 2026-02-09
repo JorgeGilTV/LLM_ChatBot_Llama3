@@ -1,8 +1,8 @@
 from bs4 import BeautifulSoup
 from tools.tickets_tool import read_tickets
-from tools.wiki_tool import wiki_search
+from tools.confluence_tool import confluence_search
 from tools.gemini_tool import ask_gemini
-from tools.ask_copilot import ask_copilot
+from tools.ask_arlochat import ask_arlo
 
 def AI_suggestions(query: str) -> str:
     html_tickets = read_tickets(query)
@@ -25,7 +25,8 @@ def AI_suggestions(query: str) -> str:
             elif status.lower() == "accepted":
                 comments = row.find_all("td")[4].text.strip().split("\n")
                 last_two = comments[-2:] if len(comments) >= 2 else comments
-                resumen = f"{ticket_id}\n{status}\n{summary}\nLast 2 Comments: {'\n'.join(last_two)}"
+                comments_text = "\n".join(last_two)   # <-- aquí se arma el texto
+                resumen = f"{ticket_id}\n{status}\n{summary}\nLast 2 Comments:\n{comments_text}"
                 resumen_tickets.append(resumen)
     texto_tickets = "\n".join(resumen_tickets)
     prompt = f"""
@@ -79,7 +80,7 @@ def AI_suggestions(query: str) -> str:
     """
     raw_response = ask_gemini(prompt, ["How_to_fix"])
     #raw_response = ask_copilot(prompt, ["How_to_fix"])
-    wiki_html = wiki_search(query[:20])
+    wiki_html = confluence_search(query[:20])
     raw_response += f"""
     <p><strong>Related Wiki Pages:</strong></p>
     {wiki_html}

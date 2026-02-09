@@ -8,11 +8,18 @@ import logging
 # Importar tools existentes
 from tools.gemini_tool import ask_gemini
 from tools.llama_tool import ask_llama
-from tools.wiki_tool import wiki_search
-from tools.tickets_tool import read_tickets
+from tools.confluence_tool import confluence_search
+#from tools.tickets_tool import read_tickets
 from tools.history_tool import add_to_history, get_history
 from tools.suggestions_tool import AI_suggestions
-from tools.ask_copilot import ask_copilot
+from tools.ask_arlochat import ask_arlo
+from tools.service_owners import service_owners_search
+from tools.noc_kt import noc_kt_search
+from tools.read_arlo_status import read_arlo_status
+from tools.oncall_support import confluence_oncall_today
+from tools.read_versions import read_versions
+from tools.datadog_dashboards import read_datadog_dashboards, read_datadog_errors_only, read_datadog_adt, read_datadog_adt_errors_only, read_datadog_all_errors
+from tools.splunk_tool import read_splunk_p0_dashboard
 
 # 📋 Logging
 logging.basicConfig(
@@ -26,12 +33,18 @@ logging.basicConfig(
 
 # ✅ Tools
 TOOLS = {
-    "Read_Itrack": {"description": "Read workarounds from AT&T itrack", "function": read_tickets},
-    "Read_Wiki": {"description": "Read documents from AT&T Wiki", "function": wiki_search},
-    "How_to_fix": {"description": "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki", "function": AI_suggestions},
-    "MCP_Connect": {"description": "Check if MCP server is active", "function": lambda _: "✅ MCP server is active and functional"},
-    "Ask_Gemini": {"description": "Ask LLM Gemini about anything", "function": ask_gemini},
-    "Ask_Copilot": {"description": "Ask LLM Copilot about anything", "function": ask_copilot}
+    #"Wiki": {"description": "Read workarounds from Confluece", "function": read_tickets},
+    "Wiki": {"description": "Read documents from Arlo confluence", "function": confluence_search},
+    "Owners": {"description": "Verfiy who is owner of all services","function": service_owners_search},
+    "Arlo_Versions": {"description": "Read version information from versions.arlocloud.com", "function": read_versions},
+    "DD_Red_Metrics": {"description": "List and search Datadog dashboards", "function": read_datadog_dashboards},
+    "DD_Red_ADT": {"description": "Show RED Metrics - ADT dashboard from Datadog", "function": read_datadog_adt},
+    "DD_Errors": {"description": "Show services with errors > 0 from RED Metrics & ADT dashboards", "function": read_datadog_all_errors},
+    "P0_Streaming": {"description": "Show P0 Streaming dashboard from Splunk", "function": read_splunk_p0_dashboard},
+    "Holiday_Oncall": {"description": "Verify status in ARLO webpage", "function": confluence_oncall_today},
+    "Suggestions": {"description": "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki", "function": AI_suggestions},
+    "Ask_ARLOCHAT": {"description": "Ask ARLO CHAT about anything", "function": ask_arlo}
+    
 }
 registered_tools = [(name, tool["description"]) for name, tool in TOOLS.items()]
 
@@ -53,15 +66,14 @@ def classify_alert(text):
 def identify_cause(text):
     try:
         # Ejecutar las funciones reales con el texto del alerta
-        wiki_info = TOOLS["Read_Wiki"]["function"](text)
-        itrack_info = TOOLS["Read_Itrack"]["function"](text)
-        suggestion = TOOLS["How_to_fix"]["function"](text)
+        #wiki_info = TOOLS["Wiki"]["function"](text)
+        confluence_info = TOOLS["Wiki"]["function"](text)
+        suggestion = TOOLS["Suggestions"]["function"](text)
 
         return f""" 
         <div>
             <h4>Causa raíz sugerida:</h4>{suggestion}
-            <br><h4>Wiki:</h4>{wiki_info}
-            <br><h4>Itrack:</h4>{itrack_info}
+            <br><h4>Confluence:</h4>{confluence_info}
         </div>
         """
     except Exception as e:
@@ -85,22 +97,39 @@ def api_tools():
 def api_run():
     data = request.json
     input_text = data.get('input', '')
-    selected_tools = data.get('tools', []) or ['How_to_fix']
+    selected_tools = data.get('tools', []) or ['Suggestions']
+    timerange = data.get('timerange', 4)  # Default to 4 hours
     results = []
     start = time.time()
     for tool_name in selected_tools:
         func = TOOLS.get(tool_name, {}).get('function')
+        print(func)
         if not func:
             results.append(f"<pre>No tool found for {tool_name}</pre>")
             continue
         try:
-            res = func(input_text) if tool_name != 'Ask_Gemini' else func(input_text, selected_tools)
+            # Pass timerange to Datadog and Splunk tools
+            if tool_name in ['DD_Red_Metrics', 'DD_Errors', 'DD_Red_ADT', 'P0_Streaming']:
+                res = func(input_text, timerange)
+            else:
+                res = func(input_text)
             results.append(f"<div class='llama-response'><h3>{tool_name}</h3>{res}</div>")
         except Exception as e:
             results.append(f"<pre>Error ejecutando '{tool_name}': {e}</pre>")
     exec_time = round(time.time() - start, 2)
     final_result = "<br>".join(results)
-    add_to_history(input_text, final_result)
+    
+    # Create a descriptive query name for history
+    if input_text.strip():
+        history_query = input_text
+    else:
+        # If no input text, use the tool names
+        if len(selected_tools) == 1:
+            history_query = selected_tools[0]
+        else:
+            history_query = " + ".join(selected_tools)
+    
+    add_to_history(history_query, final_result)
     return jsonify({'result': final_result, 'exec_time': exec_time})
 
 @flask_app.route('/api/alerts', methods=['POST'])
@@ -126,5 +155,48 @@ def api_ack(alert_id):
 def api_alert_status():
     return jsonify(alerts_db)
 
+@flask_app.route('/api/status/monitor')
+def api_status_monitor():
+    """Endpoint for automatic status monitoring - returns compact status info"""
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        url = "https://status.arlo.com"
+        resp = requests.get(url, timeout=10)
+        
+        if resp.status_code != 200:
+            return jsonify({'error': f'HTTP {resp.status_code}'})
+        
+        soup = BeautifulSoup(resp.text, "html.parser")
+        text = soup.get_text("\n", strip=True)
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        
+        # Extract summary
+        summary = next((l for l in lines if "operational" in l.lower()), "Status unknown")
+        
+        # Extract core services
+        core_services = []
+        for i, l in enumerate(lines):
+            if l in ["Log In","Notifications","Library","Live Streaming","Video Recording","Arlo Store","Community"]:
+                if i+1 < len(lines):
+                    core_services.append({"service": l, "status": lines[i+1]})
+        
+        # Extract past incidents (last 7 only)
+        past_incidents = []
+        for i, l in enumerate(lines):
+            if any(day in l.lower() for day in ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]):
+                if i+1 < len(lines) and len(past_incidents) < 7:
+                    past_incidents.append({"date": l, "detail": lines[i+1]})
+        
+        return jsonify({
+            'summary': summary,
+            'services': core_services,
+            'incidents': past_incidents,
+            'timestamp': time.strftime('%H:%M:%S')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 if __name__ == '__main__':
-    flask_app.run(host='0.0.0.0', port=5000)
+    flask_app.run(host='0.0.0.0', port=5001)

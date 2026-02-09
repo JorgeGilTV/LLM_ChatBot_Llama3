@@ -482,7 +482,7 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GenDox AI</title>
+    <title>Arlo GenAI</title>
     <style>
         .llama-response {
             background-color: #fdfdfd;
@@ -556,7 +556,7 @@ HTML_TEMPLATE = """
     </div>
     </aside>
     <main class="chat-area">
-        <header class="top-bar">🧠 GenDox AI 🧠</header>
+        <header class="top-bar">🧠 Arlo GenAI 🧠</header>
         <div class="prompt">Please start typing some prompt...</div>
         <form method="post" onsubmit="return showLoading()" class="input-form">
             <div class="tool-list">

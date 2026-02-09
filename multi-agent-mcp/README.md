@@ -1,4 +1,4 @@
-# 🧠 GenDox AI - Multi-Agent Operations Dashboard
+# 🧠 Arlo GenAI - Multi-Agent Operations Dashboard
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Flask](https://img.shields.io/badge/Flask-3.1+-green.svg)](https://flask.palletsprojects.com/)
@@ -6,7 +6,7 @@
 [![Datadog](https://img.shields.io/badge/Datadog-Integration-purple.svg)](https://www.datadoghq.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
 
-GenDox AI is a comprehensive web-based platform that integrates **real-time monitoring**, **documentation search**, and **AI-powered recommendations**. Designed for DevOps, SRE, and support teams, it streamlines troubleshooting workflows by combining multiple data sources and AI tools into a single intelligent interface.
+Arlo GenAI is a comprehensive web-based platform that integrates **real-time monitoring**, **documentation search**, and **AI-powered recommendations**. Designed for DevOps, SRE, and support teams, it streamlines troubleshooting workflows by combining multiple data sources and AI tools into a single intelligent interface.
 
 **Key Highlight:** Interactive Datadog dashboard integration with real-time metrics visualization, showing Requests, Errors, and Latency for all your services in a beautiful 3-column grid layout with Chart.js powered visualizations.
 
@@ -30,7 +30,7 @@ GenDox AI is a comprehensive web-based platform that integrates **real-time moni
 
 ## 🎯 What Does This Project Do?
 
-GenDox AI serves as a **centralized operations hub** that:
+Arlo GenAI serves as a **centralized operations hub** that:
 
 1. **Real-Time Monitoring**: Connects to Datadog to display live service metrics (requests, errors, latency) with interactive charts
 2. **Intelligent Search**: Searches through Confluence documentation, service versions, and knowledge bases
@@ -202,7 +202,7 @@ User Browser → Flask Web Server → Multiple Tool Modules → External APIs
 #### Quick Start
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/gendox-ai.git
+git clone https://github.com/JorgeGilTV/LLM_ChatBot_Llama3.git
 cd multi-agent-mcp
 
 # 2. Configure environment variables
@@ -235,7 +235,7 @@ For detailed Docker instructions, see [DOCKER_README.md](DOCKER_README.md)
 ### Steps
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/gendox-ai.git
+git clone https://github.com/JorgeGilTV/LLM_ChatBot_Llama3.git
 cd multi-agent-mcp
 
 # 2. Install dependencies

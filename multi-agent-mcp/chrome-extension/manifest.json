@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "🧠 GenDox AI 🧠",
+    "name": "🧠 Arlo GenAI 🧠",
     "version": "1.0",
     "description": "Extensión to interact with MCP Server",
     "permissions": ["storage", "activeTab", "scripting"],

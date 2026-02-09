@@ -484,7 +484,7 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GenDox AI</title>
+    <title>Arlo GenAI</title>
     <style>     
         .sidebar-link {
         display:block; background:#444; color:#fff; text-decoration:none;
@@ -615,7 +615,7 @@ HTML_TEMPLATE = """
     </script>
     </aside>
     <main class="chat-area">
-        <header class="top-bar">🧠 GenDox AI 🧠</header>
+        <header class="top-bar">🧠 Arlo GenAI 🧠</header>
         <div class="prompt">Please start typing some prompt, CDEX or Topic to search...                        /help❓ Help /settings⚙️ Settings /aboutℹ️ About</div>
         <form method="post" onsubmit="return showLoading()" class="input-form">
             <div class="tool-list">

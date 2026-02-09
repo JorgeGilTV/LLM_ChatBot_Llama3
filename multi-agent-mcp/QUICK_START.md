@@ -52,9 +52,12 @@ Open your browser at: **http://localhost:5001**
 ## 🧪 Test the Application
 
 1. **Open**: http://localhost:5001
-2. **Select** a tool checkbox (e.g., "Read_Versions")
-3. **Type** a search term (e.g., "clientapi") or leave empty for all results
-4. **Click** "Send"
+2. **Check Status Monitor**: Sidebar shows real-time Arlo status (auto-refreshes every 3 minutes)
+3. **Select** a tool checkbox (e.g., "DD_Red_Metrics" or "Arlo_Versions")
+4. **Select Time Range** (if Datadog/Splunk tools selected)
+5. **Type** a search term (optional, e.g., "streaming-service")
+6. **Click** "Send"
+7. **View results**: Interactive charts and formatted data
 
 ## 🔧 Troubleshooting
 
@@ -86,21 +89,36 @@ vi .env
 
 ## 📊 Available Tools
 
-- **Read_Confluence**: Search Arlo Wiki documentation
-- **Read_Versions**: Check service versions across environments (with search!)
-- **Datadog_Dashboards**: List and search Datadog dashboards ⭐ NEW!
-- **Service_Owners**: Find service owners
-- **NOC_KT**: Check NOC knowledge transfer pages
-- **Read_Arlo_status**: Verify Arlo system status
-- **Oncall_Support**: Check who's on-call today
-- **How_to_fix**: AI-powered troubleshooting recommendations
-- **Ask_Gemini**: General AI queries
-- **Ask_ARLOCHAT**: Ask Arlo Chat
-- **MCP_Connect**: Check MCP server status
+### Monitoring & Metrics
+- **DD_Red_Metrics**: Datadog RED Metrics dashboard with charts ⭐
+- **DD_Red_ADT**: Datadog ADT dashboard
+- **DD_Errors**: Show only services with errors
+- **P0_Streaming**: Splunk P0 Streaming dashboard ⭐ NEW!
 
-### 🆕 Datadog Integration
-To use the Datadog Dashboards feature, you need to configure your Datadog credentials.
-See [DATADOG_SETUP.md](DATADOG_SETUP.md) for detailed setup instructions.
+### Documentation & Knowledge
+- **Wiki**: Search Arlo Confluence documentation
+- **Ask_ARLOCHAT**: Ask Arlo Slack bot
+
+### Service Management
+- **Arlo_Versions**: Check service versions across environments (with search!)
+- **Owners**: Find service owners
+- **Holiday_Oncall**: Check who's on-call today and holidays
+
+### AI-Powered
+- **Suggestions**: AI-powered troubleshooting recommendations
+- **Ask_Gemini**: General AI queries (if configured)
+
+### Auto-Refresh Features
+- **Status Monitor**: Always visible in sidebar
+  - Updates every 3 minutes automatically
+  - Shows system summary, core services, and last 7 incidents
+  - No tool selection needed!
+
+### 🆕 Integration Setup
+To use monitoring features, configure your credentials:
+- Datadog: See [DATADOG_SETUP.md](DATADOG_SETUP.md)
+- Splunk: Add `SPLUNK_TOKEN` to `.env`
+- Slack: Add `SLACK_BOT_TOKEN` to `.env`
 
 ## 📖 More Information
 

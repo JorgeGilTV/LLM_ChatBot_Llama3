@@ -40,8 +40,17 @@ GenDox AI serves as a **centralized operations hub** that:
 
 ## 🚀 Key Features
 
-### 📊 Datadog Integration (Featured)
-- **Datadog_Dashboards**: 
+### 📊 Monitoring & Metrics
+
+#### Automatic Status Monitor (Sidebar)
+- **Real-time monitoring**: Updates every 3 minutes automatically
+- **Arlo Status Overview**: Shows system-wide operational status
+- **Core Services**: Displays status of all main services (Log In, Notifications, Library, Live Streaming, Video Recording, Arlo Store, Community) with visual indicators (✅/⚠️)
+- **Past Incidents**: Shows last 7 incidents from status.arlo.com
+- **Always visible**: No need to select a tool, permanently displayed in sidebar
+
+#### Datadog Integration
+- **DD_Red_Metrics**: 
   - Displays RED metrics (Requests, Errors, Latency) for all services
   - Interactive bar charts with Chart.js visualization
   - Real-time data from Datadog API
@@ -51,27 +60,37 @@ GenDox AI serves as a **centralized operations hub** that:
   - 3-column grid layout for efficient space usage
   - Direct links to Datadog service pages
 
-- **Datadog_Errors**: 
+- **DD_Red_ADT**: 
+  - Shows RED Metrics from ADT dashboard
+  - Same comprehensive metrics as DD_Red_Metrics
+  - Alternative dashboard view
+
+- **DD_Errors**: 
   - Filters and displays ONLY services with active errors
   - Shows error count and percentage
-  - Same comprehensive metrics as Dashboards
+  - Combines data from both RED Metrics and ADT dashboards
   - Quick error triage and investigation
 
+#### Splunk Integration
+- **P0_Streaming**: 
+  - Shows P0 Streaming dashboard from Splunk
+  - Displays streaming services metrics and status
+  - Filter by service name
+  - Configurable time ranges
+  - Direct link to Splunk dashboard
+
 ### 🔍 Documentation & Knowledge
-- **Read_Confluence**: Search Arlo Wiki documentation with intelligent ranking
-- **NOC_KT**: Access NOC knowledge transfer documentation
-- **Ask_ARLOCHAT**: Interact with Arlo's chat system for questions
+- **Wiki**: Search Arlo Confluence documentation with intelligent ranking
+- **Ask_ARLOCHAT**: Interact with Arlo's Slack chat system for questions
 
 ### 📦 Service Management
-- **Read_Versions**: Check service versions across all environments with search capabilities
-- **Read_Arlo_Status**: Monitor Arlo system health and service status  
-- **Service_Owners**: Identify service ownership and responsibilities
-- **Oncall_Support**: Check current on-call engineers and escalation paths
+- **Arlo_Versions**: Check service versions across all environments with search capabilities
+- **Owners**: Identify service ownership and responsibilities
+- **Holiday_Oncall**: Check current on-call engineers, holidays, and escalation paths
 
 ### 🤖 AI-Powered Tools
-- **How_to_fix**: AI-powered troubleshooting recommendations using LLaMA 3
-- **Suggestions_Tool**: Contextual suggestions based on your query
-- **Tickets_Tool**: ServiceNow ticket integration and analysis
+- **Suggestions**: AI-powered troubleshooting recommendations using LLaMA 3
+- **Ask_Gemini**: Google Gemini integration for general queries
 
 ## 🔧 How It Works
 
@@ -85,24 +104,36 @@ User Browser → Flask Web Server → Multiple Tool Modules → External APIs
                                                          └─ Google Gemini
 ```
 
+### Status Monitor Flow (Auto-refresh)
+1. **Auto-load**: Loads immediately on page load
+2. **Scraping**: Fetches data from status.arlo.com
+3. **Parsing**: Extracts summary, core services status, and past incidents
+4. **Display**: Shows in sidebar with visual indicators
+5. **Auto-refresh**: Updates every 3 minutes (180 seconds) automatically
+6. **Visual Indicators**: 
+   - ✅ Green checkmark for "All Good" services
+   - ⚠️ Red warning for services with issues
+
 ### Datadog Dashboard Flow
-1. **User Input**: Select "Datadog_Dashboards" and optionally enter service name
-2. **API Query**: Fetches "RED - Metrics" dashboard from Datadog
-3. **Widget Filtering**: Filters widgets by service name (if provided)
-4. **Data Collection**: For each service, queries:
+1. **User Input**: Select "DD_Red_Metrics" or "DD_Red_ADT" and optionally enter service name
+2. **Time Range**: Select time range (auto-shown when Datadog tools selected)
+3. **API Query**: Fetches dashboard data from Datadog
+4. **Widget Filtering**: Filters widgets by service name (if provided)
+5. **Data Collection**: For each service, queries:
    - Requests: `trace.servlet.request.hits` (as count)
    - Errors: `trace.servlet.request.errors` (as count + percentage)
    - Latency: `trace.servlet.request.duration` (avg, min, max in milliseconds)
-5. **Visualization**: Generates interactive bar charts using Chart.js
-6. **Display**: Shows widgets in 3-column grid with real-time metrics
+6. **Visualization**: Generates interactive bar charts using Chart.js
+7. **Display**: Shows widgets in 3-column grid with real-time metrics
 
 ### Time Range Selection
-- Dynamically shown only when Datadog tools are selected
+- Dynamically shown only when Datadog or Splunk tools are selected
 - Options: 1 hour, 2 hours, 4 hours, 2 days, 1 week
-- Affects data queries to Datadog API
+- Affects data queries to Datadog/Splunk APIs
+- Smart UI: Only appears when needed
 
-### Error Detection (Datadog_Errors)
-1. Queries all services from RED dashboard
+### Error Detection (DD_Errors)
+1. Queries all services from both RED Metrics and ADT dashboards
 2. Filters services where `errors > 0`
 3. Calculates error percentage: `(errors / requests) × 100`
 4. Displays only services with active errors
@@ -126,8 +157,10 @@ User Browser → Flask Web Server → Multiple Tool Modules → External APIs
 - **Datadog API**: Real-time metrics and dashboard data
   - Metrics Query API for time-series data
   - Dashboard API for widget metadata
+- **Splunk API**: P0 Streaming dashboard and logs
 - **Confluence API**: Documentation search and retrieval
-- **ServiceNow API**: Ticket management integration
+- **Slack API**: Integration with ArloChat bot
+- **Arlo Status Page**: Real-time system status monitoring
 - **LLaMA 3 (via Ollama)**: Local AI model for troubleshooting
 - **Google Gemini**: Cloud AI for general queries
 
@@ -136,12 +169,23 @@ User Browser → Flask Web Server → Multiple Tool Modules → External APIs
 - **Environment Variables**: Secure credential management
 - **Git**: Version control and collaboration
 
-🖥️ Web Interface
-Dark theme with gradient header
-Sidebar with selectable tools (checkboxes)
-Input box and live execution timer
-Results displayed in styled cards per tool
-“New Chat” button resets input and selections
+### 🖥️ Web Interface
+- **Dark theme** with gradient header
+- **Sidebar** with:
+  - "New Chat" button for quick resets
+  - History of past searches (last 10 queries)
+  - **Auto-refresh Status Monitor** (updates every 3 minutes)
+    - System summary
+    - Core services status with visual indicators
+    - Last 7 past incidents
+- **Main area** with:
+  - Clear 3-step usage instructions
+  - Tool selection checkboxes with improved naming
+  - Smart time range selector (appears only when needed)
+  - Input box for queries
+  - Live execution timer
+  - Results displayed in styled cards per tool
+- **Smart history**: Shows tool names when no search query provided
 
 ## 📦 Installation
 
@@ -149,8 +193,9 @@ Results displayed in styled cards per tool
 - Docker and Docker Compose (for containerized deployment)
 - OR Python 3.12+ (for local installation)
 - Datadog API and Application keys (for monitoring features)
+- Splunk token (for P0 Streaming dashboard)
 - Confluence credentials (for documentation search)
-- ServiceNow credentials (for ticket integration)
+- Slack Bot Token (for ArloChat integration)
 
 ### Option 1: Docker (Recommended)
 
@@ -208,20 +253,35 @@ python3 app.py
 
 ### Basic Usage
 1. **Access the application**: Open http://localhost:5001 in your browser
-2. **Select tools**: Choose one or more tools from the checkbox list
-3. **Configure options**: 
-   - **Time Range** (for Datadog tools): Select from dropdown (1h, 2h, 4h, 2d, 1w)
-   - Auto-shows when Datadog_Dashboards or Datadog_Errors is selected
-4. **Enter query**: Type your search (service name, keyword, etc.)
-5. **Execute**: Click "Send" button
-6. **View results**: See formatted results with interactive charts
-7. **New search**: Click "New Chat" to reset
+2. **Monitor status**: Check the auto-refresh status monitor in the sidebar (updates every 3 minutes)
+3. **Select tools**: Choose one or more tools from the checkbox list
+4. **Configure options**: 
+   - **Time Range** (for DD_Red_Metrics, DD_Red_ADT, DD_Errors, P0_Streaming): Select from dropdown (1h, 2h, 4h, 2d, 1w)
+   - Auto-shows only when these tools are selected
+5. **Enter query** (optional): Type your search (service name, keyword, etc.)
+   - Some tools work without a query
+6. **Execute**: Click "Send" button
+7. **View results**: See formatted results with interactive charts
+8. **Check history**: Click on past queries in the sidebar to view previous results
+9. **New search**: Click "New Chat" to reset
 
-### 📊 Using Datadog Dashboards
+### Tool Names Reference
+- **Wiki**: Confluence documentation search
+- **Owners**: Service ownership information
+- **Arlo_Versions**: Service version checker
+- **DD_Red_Metrics**: Datadog RED Metrics dashboard
+- **DD_Red_ADT**: Datadog ADT dashboard
+- **DD_Errors**: Services with errors only
+- **P0_Streaming**: Splunk P0 Streaming dashboard
+- **Holiday_Oncall**: On-call and holiday information
+- **Suggestions**: AI-powered recommendations
+- **Ask_ARLOCHAT**: Slack bot integration
 
-#### View All Services
+### 📊 Using Monitoring Tools
+
+#### View All Services (Datadog)
 ```
-1. Check "Datadog_Dashboards"
+1. Check "DD_Red_Metrics"
 2. Select time range (default: 4 hours)
 3. Leave query empty
 4. Click "Send"
@@ -230,21 +290,32 @@ python3 app.py
 
 #### Filter by Service Name
 ```
-1. Check "Datadog_Dashboards"
+1. Check "DD_Red_Metrics" or "P0_Streaming"
 2. Select time range
-3. Enter service name: "oauth" or "backend-arlosafeapi"
+3. Enter service name: "oauth" or "streaming-service"
 4. Click "Send"
 → Shows only matching service widgets
 ```
 
 #### Find Services with Errors
 ```
-1. Check "Datadog_Errors"
+1. Check "DD_Errors"
 2. Select time range
 3. Leave query empty (or filter by service)
 4. Click "Send"
 → Shows only services experiencing errors
 → Displays error count and percentage
+```
+
+#### Monitor System Status (Automatic)
+```
+- Look at the sidebar Status Monitor
+- Updated automatically every 3 minutes
+- Shows:
+  - System operational status
+  - Core services with ✅/⚠️ indicators
+  - Last 7 incidents
+- No action required, always visible
 ```
 
 ### 📊 Understanding the Metrics
@@ -325,18 +396,33 @@ DATADOG_SITE=datadoghq.com  # Or your custom Datadog subdomain
 #### Confluence Configuration
 ```bash
 CONFLUENCE_URL=https://your-company.atlassian.net
-CONFLUENCE_USER=your-email@company.com
-CONFLUENCE_API_TOKEN=your_confluence_token
+ATLASSIAN_EMAIL=your-email@company.com
+CONFLUENCE_TOKEN=your_confluence_token
 ```
 
-#### ServiceNow Configuration
+#### Splunk Configuration
 ```bash
-SERVICENOW_INSTANCE=your-instance.service-now.com
-SERVICENOW_USER=your_username
-SERVICENOW_PASSWORD=your_password
+SPLUNK_HOST=arlo.splunkcloud.com
+SPLUNK_TOKEN=your_splunk_token_here
 ```
 
-#### Optional: AI Models
+**How to get Splunk token:**
+1. Log in to your Splunk instance
+2. Go to Settings → Tokens
+3. Create a new token with appropriate permissions
+
+#### Slack Configuration (for ArloChat)
+```bash
+SLACK_BOT_TOKEN=your_slack_bot_token_here
+```
+
+**How to get Slack token:**
+1. Go to https://api.slack.com/apps
+2. Select your app or create a new one
+3. Go to OAuth & Permissions
+4. Copy the Bot User OAuth Token
+
+#### AI Models Configuration
 ```bash
 OLLAMA_HOST=http://localhost:11434  # For local LLaMA 3
 GEMINI_API_KEY=your_gemini_api_key  # For Google Gemini

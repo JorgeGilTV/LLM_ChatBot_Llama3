@@ -443,16 +443,6 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         
         servers_data = all_results.get('servers') or []
         if len(servers_data) > 0:
-            servers_data = []
-            for line in response_servers.text.strip().split('\n'):
-                if line:
-                    try:
-                        result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            servers_data.append(result["result"])
-                    except json.JSONDecodeError:
-                        continue
-            
             if len(servers_data) > 0:
                 timestamps_servers = []
                 zone_servers = {"z1": [], "z2": [], "z3": [], "z4": []}
@@ -559,16 +549,6 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         
         jvm_data = all_results.get('jvm') or []
         if len(jvm_data) > 0:
-            jvm_data = []
-            for line in response_jvm.text.strip().split('\n'):
-                if line:
-                    try:
-                        result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            jvm_data.append(result["result"])
-                    except json.JSONDecodeError:
-                        continue
-            
             if len(jvm_data) > 0:
                 timestamps_jvm = []
                 zone_jvm = {"z1": [], "z2": [], "z3": [], "z4": []}
@@ -986,16 +966,6 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
         
         devices_data = all_results.get('devices') or []
         if len(devices_data) > 0:
-            devices_data = []
-            for line in response_devices.text.strip().split('\n'):
-                if line:
-                    try:
-                        result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            devices_data.append(result["result"])
-                    except json.JSONDecodeError:
-                        continue
-            
             if len(devices_data) > 0:
                 timestamps_devices = []
                 device_counts = []
@@ -1098,18 +1068,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
         
         connections_data = all_results.get('connections') or []
         if len(connections_data) > 0:
-            connections_data = []
-            for line in response_connections.text.strip().split('\n'):
-                if line:
-                    try:
-                        result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            connections_data.append(result["result"])
-                    except json.JSONDecodeError:
-                        continue
-            
             if len(connections_data) > 0:
-                timestamps_conn = []
                 connection_counts = []
                 
                 for datapoint in connections_data:
@@ -1522,16 +1481,6 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
         
         servers_data = all_results.get('servers') or []
         if len(servers_data) > 0:
-            servers_data = []
-            for line in response_servers.text.strip().split('\n'):
-                if line:
-                    try:
-                        result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            servers_data.append(result["result"])
-                    except json.JSONDecodeError:
-                        continue
-            
             if len(servers_data) > 0:
                 timestamps_servers = []
                 zone_servers = {"z1": [], "z2": [], "z3": [], "z4": []}
@@ -1644,16 +1593,6 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
         
         jvm_data = all_results.get('jvm') or []
         if len(jvm_data) > 0:
-            jvm_data = []
-            for line in response_jvm.text.strip().split('\n'):
-                if line:
-                    try:
-                        result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            jvm_data.append(result["result"])
-                    except json.JSONDecodeError:
-                        continue
-            
             if len(jvm_data) > 0:
                 timestamps_jvm = []
                 zone_jvm = {"z1": [], "z2": [], "z3": [], "z4": []}

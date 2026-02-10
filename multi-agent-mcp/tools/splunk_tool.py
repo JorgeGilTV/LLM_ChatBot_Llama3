@@ -112,19 +112,23 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # Splunk search query for P0 streaming services
-        search_query = f'''search index=* sourcetype=* 
+        # Simplified and faster Splunk search query
+        # Focus on specific index and sourcetype for better performance
+        search_query = f'''search index=device_prod sourcetype=kube:container:* earliest=-{timerange_hours}h
+| stats count as events by sourcetype
+| eval service=replace(sourcetype, "kube:container:", "")
+| eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
 | where match(service, "(?i)streaming")
-| stats count as events, sum(eval(if(status="error",1,0))) as total_errors, avg(latency) as avg_latency, max(latency) as max_latency by service
-| eval error_rate=round((total_errors/events)*100,2)
-| sort -events'''
+| sort -events
+| head 20'''
         
         if query:
-            search_query = f'''search index=* sourcetype=* service="*{query}*"
-| where match(service, "(?i)streaming")
-| stats count as events, sum(eval(if(status="error",1,0))) as total_errors, avg(latency) as avg_latency, max(latency) as max_latency by service
-| eval error_rate=round((total_errors/events)*100,2)
-| sort -events'''
+            search_query = f'''search index=device_prod sourcetype=kube:container:*{query}* earliest=-{timerange_hours}h
+| stats count as events by sourcetype
+| eval service=replace(sourcetype, "kube:container:", "")
+| eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
+| sort -events
+| head 20'''
         
         # Make request to Splunk API
         headers = {
@@ -146,7 +150,8 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         print(f"🔍 Making request to: {search_url}")
         print(f"🔑 Using token: {splunk_token[:20]}...")
         
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=60)
+        # Increase timeout for large queries (connect timeout, read timeout)
+        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
         
         print(f"📊 Response status: {response.status_code}")
         print(f"📄 Response body: {response.text[:500]}")

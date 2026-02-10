@@ -62,6 +62,13 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         <p>❌ Splunk credentials not configured. Please set <strong>SPLUNK_TOKEN</strong> in your .env file.</p>
         """
     
+    # Get public IP for whitelist verification
+    try:
+        public_ip_response = requests.get("https://api.ipify.org", timeout=5)
+        public_ip = public_ip_response.text if public_ip_response.status_code == 200 else "Unable to detect"
+    except:
+        public_ip = "Unable to detect"
+    
     output = ""
     dashboard_url = "https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard"
     
@@ -153,11 +160,12 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                 <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
                     <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
                     <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>
-                        <strong>Possible Issue:</strong> Your IP address may not be whitelisted in Splunk Cloud.<br>
-                        <strong>Your Public IP:</strong> Contact your Splunk admin to whitelist your IP address.
+                        <strong>⚠️ Possible Issue:</strong> Your IP address may not be whitelisted in Splunk Cloud.<br>
+                        <strong>🌐 Your Current Public IP:</strong> <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; color: #c00;">{public_ip}</code><br>
+                        <strong>📝 Action Required:</strong> Contact your Splunk admin to whitelist this IP or CIDR range (189.128.129.0/24)
                     </p>
                     <details style='margin-top: 8px;'>
-                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Error details</summary>
+                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Technical details</summary>
                         <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
                     </details>
                 </div>

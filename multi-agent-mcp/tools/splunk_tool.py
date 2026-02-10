@@ -112,23 +112,22 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # P0 Streaming Dashboard Query - Events by Zone
-        # Extract zone from hostname (z1, z2, z3, z4) and count all streaming events
-        search_query = f'''search index=streaming_prod earliest=-{timerange_hours}h
+        # Optimized P0 Streaming Dashboard Query - Fast zone statistics
+        # Use tstats for much faster performance on indexed fields
+        search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by host
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
-| stats count as events by zone
+| stats sum(count) as events by zone
 | eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
 | eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
 | sort zone
 | fields service events total_errors error_rate avg_latency max_latency'''
         
         if query:
-            search_query = f'''search index=streaming_prod earliest=-{timerange_hours}h
+            search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by host
 | rex field=host "-(?<zone>z[1-4])-"
-| where isnotnull(zone)
-| search host="*{query}*" OR zone="*{query}*"
-| stats count as events by zone
+| where isnotnull(zone) AND (match(host, "(?i){query}") OR match(zone, "(?i){query}"))
+| stats sum(count) as events by zone
 | eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
 | eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
 | sort zone

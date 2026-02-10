@@ -112,10 +112,11 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # P0 Streaming Dashboard Query - Recording Uploads by Zone
-        # Extract zone from hostname (z1, z2, z3, z4) and count recording uploads
-        search_query = f'''search index=streaming_prod sourcetype=hms:streaming "RecordingUpload" earliest=-{timerange_hours}h
+        # P0 Streaming Dashboard Query - Events by Zone
+        # Extract zone from hostname (z1, z2, z3, z4) and count all streaming events
+        search_query = f'''search index=streaming_prod earliest=-{timerange_hours}h
 | rex field=host "-(?<zone>z[1-4])-"
+| where isnotnull(zone)
 | stats count as events by zone
 | eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
 | eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
@@ -123,9 +124,10 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
 | fields service events total_errors error_rate avg_latency max_latency'''
         
         if query:
-            search_query = f'''search index=streaming_prod sourcetype=hms:streaming "RecordingUpload" earliest=-{timerange_hours}h
+            search_query = f'''search index=streaming_prod earliest=-{timerange_hours}h
 | rex field=host "-(?<zone>z[1-4])-"
-| search zone="*{query}*" OR host="*{query}*"
+| where isnotnull(zone)
+| search host="*{query}*" OR zone="*{query}*"
 | stats count as events by zone
 | eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
 | eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0

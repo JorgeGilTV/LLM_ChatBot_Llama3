@@ -4,8 +4,90 @@ import requests
 import json
 import time
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
+
+
+def execute_splunk_query(query_key, query_data, splunk_host, splunk_token, earliest_time, latest_time):
+    """Execute a single Splunk query - helper for parallel execution"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {splunk_token}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        
+        search_url = f"https://{splunk_host}:8089/services/search/jobs/export"
+        data = {
+            "search": query_data,
+            "earliest_time": earliest_time,
+            "latest_time": latest_time,
+            "output_mode": "json"
+        }
+        
+        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
+        
+        if response.status_code == 200:
+            # Parse JSON results from export endpoint
+            results = []
+            for line in response.text.strip().split('\n'):
+                if line:
+                    try:
+                        result = json.loads(line)
+                        if result.get("result") and result.get("preview") == False:
+                            results.append(result["result"])
+                    except json.JSONDecodeError:
+                        continue
+            return query_key, results, None
+        else:
+            return query_key, None, f"HTTP {response.status_code}: {response.text[:200]}"
+    
+    except Exception as e:
+        return query_key, None, str(e)
+
+
+def execute_splunk_queries_parallel(queries_dict, splunk_host, splunk_token, earliest_time, latest_time, max_workers=3):
+    """Execute multiple Splunk queries in parallel"""
+    results = {}
+    
+    if not queries_dict:
+        return results
+    
+    print(f"🚀 Executing {len(queries_dict)} Splunk queries in parallel...")
+    start_time = time.time()
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_key = {}
+        for query_key, query_data in queries_dict.items():
+            future = executor.submit(
+                execute_splunk_query,
+                query_key,
+                query_data,
+                splunk_host,
+                splunk_token,
+                earliest_time,
+                latest_time
+            )
+            future_to_key[future] = query_key
+        
+        for future in as_completed(future_to_key):
+            query_key = future_to_key[future]
+            try:
+                key, data, error = future.result()
+                if error:
+                    print(f"❌ Query '{key}' failed: {error}")
+                    results[key] = None
+                else:
+                    results[key] = data
+                    print(f"✅ Query '{key}' completed: {len(data) if data else 0} results")
+            except Exception as e:
+                print(f"❌ Query '{query_key}' exception: {str(e)}")
+                results[query_key] = None
+    
+    elapsed = time.time() - start_time
+    print(f"✅ All Splunk queries completed in {elapsed:.2f}s")
+    
+    return results
 
 
 def format_timestamp_range_splunk(from_timestamp: int, to_timestamp: int) -> str:
@@ -112,91 +194,45 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # Optimized P0 Streaming Dashboard Query - Time series data for charts
-        # Use tstats with timechart to get data points over time
-        search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+        # PARALLEL OPTIMIZATION: Collect all queries and execute in parallel
+        all_queries = {}
+        
+        # Query 1: Recording Uploads (main query)
+        recording_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
 | timechart span=1h sum(count) as events by zone
 | fillnull value=0'''
         
         if query:
-            search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+            recording_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone) AND (match(host, "(?i){query}") OR match(zone, "(?i){query}"))
 | timechart span=1h sum(count) as events by zone
 | fillnull value=0'''
         
-        # Make request to Splunk API
-        headers = {
-            "Authorization": f"Bearer {splunk_token}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
+        all_queries['recording'] = recording_query
         
-        # Splunk Cloud REST API endpoint (requires IP whitelisting)
-        # Port 8089 is required for Splunk Cloud REST API
-        search_url = f"https://{splunk_host}:8089/services/search/jobs/export"
-        data = {
-            "search": search_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }
+        # Query 2: Active Servers
+        all_queries['servers'] = f'''| tstats dc(host) as server_count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+| rex field=host "-(?<zone>z[1-4])-"
+| where isnotnull(zone)
+| timechart span=1h dc(host) as servers by zone
+| fillnull value=0'''
         
-        # Export endpoint returns results directly (synchronous)
-        print(f"🔍 Making request to: {search_url}")
-        print(f"🔑 Using token: {splunk_token[:20]}...")
+        # Query 3: JVM Crashes
+        all_queries['jvm'] = f'''| search index=streaming_prod earliest=-{timerange_hours}h ("JVM" OR "OutOfMemoryError" OR "crash")
+| rex field=host "-(?<zone>z[1-4])-"
+| where isnotnull(zone)
+| timechart span=1h count by zone
+| fillnull value=0'''
         
-        # Increase timeout for large queries (connect timeout, read timeout)
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
+        # Execute all queries in parallel
+        all_results = execute_splunk_queries_parallel(all_queries, splunk_host, splunk_token, earliest_time, latest_time, max_workers=3)
         
-        print(f"📊 Response status: {response.status_code}")
-        print(f"📄 Response body: {response.text[:500]}")
-        
-        if response.status_code != 200:
-            error_detail = response.text[:500] if response.text else "No error details"
-            
-            # Check if it's an IP whitelist issue
-            if response.status_code == 404 or response.status_code == 403:
-                output += f"""
-                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
-                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>
-                        <strong>⚠️ Possible Issue:</strong> Your IP address may not be whitelisted in Splunk Cloud.<br>
-                        <strong>🌐 Your Current Public IP:</strong> <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; color: #c00;">{public_ip}</code><br>
-                        <strong>📝 Action Required:</strong> Contact your Splunk admin to whitelist this IP or CIDR range (189.128.129.0/24)
-                    </p>
-                    <details style='margin-top: 8px;'>
-                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Technical details</summary>
-                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
-                    </details>
-                </div>
-                """
-            else:
-                output += f"""
-                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
-                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>Please verify your SPLUNK_TOKEN is valid.</p>
-                    <details style='margin-top: 8px;'>
-                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Error details</summary>
-                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
-                    </details>
-                </div>
-                """
-            return output
-        
-        # Parse timechart results from export endpoint
-        timeseries_data = []
-        for line in response.text.strip().split('\n'):
-            if line:
-                try:
-                    result = json.loads(line)
-                    # Only use final results (preview=false)
-                    if result.get("result") and result.get("preview") == False:
-                        timeseries_data.append(result["result"])
-                except json.JSONDecodeError:
-                    continue
-        
+        # Get recording uploads results
+        timeseries_data = all_results.get('recording') or []
+
         if len(timeseries_data) == 0:
             output += f"""
             <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
@@ -405,20 +441,8 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         # 2. Active Servers by Zone
         output += "<h3 style='margin: 20px 0 10px 0; color: #2d3748; font-size: 14px;'>📡 Active Servers</h3>"
         
-        active_servers_query = f'''| tstats dc(host) as server_count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
-| rex field=host "-(?<zone>z[1-4])-"
-| where isnotnull(zone)
-| timechart span=1h dc(host) as servers by zone
-| fillnull value=0'''
-        
-        response_servers = requests.post(search_url, headers=headers, data={
-            "search": active_servers_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }, verify=True, timeout=(10, 120))
-        
-        if response_servers.status_code == 200:
+        servers_data = all_results.get('servers') or []
+        if len(servers_data) > 0:
             servers_data = []
             for line in response_servers.text.strip().split('\n'):
                 if line:
@@ -533,20 +557,8 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         # 3. JVM Crashes
         output += "<h3 style='margin: 20px 0 10px 0; color: #2d3748; font-size: 14px;'>🔥 JVM Crash - Error Count</h3>"
         
-        jvm_query = f'''| search index=streaming_prod earliest=-{timerange_hours}h ("JVM" OR "OutOfMemoryError" OR "crash")
-| rex field=host "-(?<zone>z[1-4])-"
-| where isnotnull(zone)
-| timechart span=1h count by zone
-| fillnull value=0'''
-        
-        response_jvm = requests.post(search_url, headers=headers, data={
-            "search": jvm_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }, verify=True, timeout=(10, 120))
-        
-        if response_jvm.status_code == 200:
+        jvm_data = all_results.get('jvm') or []
+        if len(jvm_data) > 0:
             jvm_data = []
             for line in response_jvm.text.strip().split('\n'):
                 if line:
@@ -731,91 +743,41 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # CVR Streaming Dashboard Query - Time series data for charts
-        # Similar to P0 but targeting CVR specific indices/data
-        search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+        # PARALLEL OPTIMIZATION: Collect all queries and execute in parallel
+        all_queries = {}
+        
+        # Query 1: Recording Uploads (main query)
+        recording_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
 | timechart span=1h sum(count) as events by zone
 | fillnull value=0'''
         
         if query:
-            search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+            recording_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone) AND (match(host, "(?i){query}") OR match(zone, "(?i){query}"))
 | timechart span=1h sum(count) as events by zone
 | fillnull value=0'''
         
-        # Make request to Splunk API
-        headers = {
-            "Authorization": f"Bearer {splunk_token}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
+        all_queries['recording'] = recording_query
         
-        # Splunk Cloud REST API endpoint (requires IP whitelisting)
-        # Port 8089 is required for Splunk Cloud REST API
-        search_url = f"https://{splunk_host}:8089/services/search/jobs/export"
-        data = {
-            "search": search_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }
+        # Query 2: CVR Active Devices
+        all_queries['devices'] = f'''| tstats dc(device_id) as device_count where index=streaming_prod earliest=-{timerange_hours}h "CVR" by _time span=1h
+| timechart span=1h sum(device_count) as devices
+| fillnull value=0'''
         
-        # Export endpoint returns results directly (synchronous)
-        print(f"🔍 Making request to: {search_url}")
-        print(f"🔑 Using token: {splunk_token[:20]}...")
+        # Query 3: CVR Connections Count
+        all_queries['connections'] = f'''| search index=streaming_prod earliest=-{timerange_hours}h "CVR" "connection"
+| timechart span=1h count as connections
+| fillnull value=0'''
         
-        # Increase timeout for large queries (connect timeout, read timeout)
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
+        # Execute all queries in parallel
+        all_results = execute_splunk_queries_parallel(all_queries, splunk_host, splunk_token, earliest_time, latest_time, max_workers=3)
         
-        print(f"📊 Response status: {response.status_code}")
-        print(f"📄 Response body: {response.text[:500]}")
-        
-        if response.status_code != 200:
-            error_detail = response.text[:500] if response.text else "No error details"
-            
-            # Check if it's an IP whitelist issue
-            if response.status_code == 404 or response.status_code == 403:
-                output += f"""
-                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
-                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>
-                        <strong>⚠️ Possible Issue:</strong> Your IP address may not be whitelisted in Splunk Cloud.<br>
-                        <strong>🌐 Your Current Public IP:</strong> <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; color: #c00;">{public_ip}</code><br>
-                        <strong>📝 Action Required:</strong> Contact your Splunk admin to whitelist this IP or CIDR range (189.128.129.0/24)
-                    </p>
-                    <details style='margin-top: 8px;'>
-                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Technical details</summary>
-                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
-                    </details>
-                </div>
-                """
-            else:
-                output += f"""
-                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
-                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>Please verify your SPLUNK_TOKEN is valid.</p>
-                    <details style='margin-top: 8px;'>
-                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Error details</summary>
-                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
-                    </details>
-                </div>
-                """
-            return output
-        
-        # Parse timechart results from export endpoint
-        timeseries_data = []
-        for line in response.text.strip().split('\n'):
-            if line:
-                try:
-                    result = json.loads(line)
-                    # Only use final results (preview=false)
-                    if result.get("result") and result.get("preview") == False:
-                        timeseries_data.append(result["result"])
-                except json.JSONDecodeError:
-                    continue
-        
+        # Get recording uploads results
+        timeseries_data = all_results.get('recording') or []
+
         if len(timeseries_data) == 0:
             output += f"""
             <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
@@ -1022,18 +984,8 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
         # CVR Active Devices
         output += "<h3 style='margin: 20px 0 10px 0; color: #2d3748; font-size: 14px;'>📱 CVR Active Devices</h3>"
         
-        cvr_devices_query = f'''| tstats dc(device_id) as device_count where index=streaming_prod earliest=-{timerange_hours}h "CVR" by _time span=1h
-| timechart span=1h sum(device_count) as devices
-| fillnull value=0'''
-        
-        response_devices = requests.post(search_url, headers=headers, data={
-            "search": cvr_devices_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }, verify=True, timeout=(10, 120))
-        
-        if response_devices.status_code == 200:
+        devices_data = all_results.get('devices') or []
+        if len(devices_data) > 0:
             devices_data = []
             for line in response_devices.text.strip().split('\n'):
                 if line:
@@ -1144,18 +1096,8 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
         # CVR Connections Count
         output += "<h3 style='margin: 20px 0 10px 0; color: #2d3748; font-size: 14px;'>🔌 CVR Connections Count</h3>"
         
-        cvr_connections_query = f'''| search index=streaming_prod earliest=-{timerange_hours}h "CVR" "connection"
-| timechart span=1h count as connections
-| fillnull value=0'''
-        
-        response_connections = requests.post(search_url, headers=headers, data={
-            "search": cvr_connections_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }, verify=True, timeout=(10, 120))
-        
-        if response_connections.status_code == 200:
+        connections_data = all_results.get('connections') or []
+        if len(connections_data) > 0:
             connections_data = []
             for line in response_connections.text.strip().split('\n'):
                 if line:
@@ -1333,90 +1275,45 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # ADT Streaming Dashboard Query - Time series data for charts
-        search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+        # PARALLEL OPTIMIZATION: Collect all queries and execute in parallel
+        all_queries = {}
+        
+        # Query 1: Recording Uploads (main query)
+        recording_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
 | timechart span=1h sum(count) as events by zone
 | fillnull value=0'''
         
         if query:
-            search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+            recording_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone) AND (match(host, "(?i){query}") OR match(zone, "(?i){query}"))
 | timechart span=1h sum(count) as events by zone
 | fillnull value=0'''
         
-        # Make request to Splunk API
-        headers = {
-            "Authorization": f"Bearer {splunk_token}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
+        all_queries['recording'] = recording_query
         
-        # Splunk Cloud REST API endpoint (requires IP whitelisting)
-        # Port 8089 is required for Splunk Cloud REST API
-        search_url = f"https://{splunk_host}:8089/services/search/jobs/export"
-        data = {
-            "search": search_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }
+        # Query 2: Active Servers
+        all_queries['servers'] = f'''| tstats dc(host) as server_count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+| rex field=host "-(?<zone>z[1-4])-"
+| where isnotnull(zone)
+| timechart span=1h dc(host) as servers by zone
+| fillnull value=0'''
         
-        # Export endpoint returns results directly (synchronous)
-        print(f"🔍 Making request to: {search_url}")
-        print(f"🔑 Using token: {splunk_token[:20]}...")
+        # Query 3: JVM Crashes
+        all_queries['jvm'] = f'''| search index=streaming_prod earliest=-{timerange_hours}h ("JVM" OR "OutOfMemoryError" OR "crash")
+| rex field=host "-(?<zone>z[1-4])-"
+| where isnotnull(zone)
+| timechart span=1h count by zone
+| fillnull value=0'''
         
-        # Increase timeout for large queries (connect timeout, read timeout)
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
+        # Execute all queries in parallel
+        all_results = execute_splunk_queries_parallel(all_queries, splunk_host, splunk_token, earliest_time, latest_time, max_workers=3)
         
-        print(f"📊 Response status: {response.status_code}")
-        print(f"📄 Response body: {response.text[:500]}")
-        
-        if response.status_code != 200:
-            error_detail = response.text[:500] if response.text else "No error details"
-            
-            # Check if it's an IP whitelist issue
-            if response.status_code == 404 or response.status_code == 403:
-                output += f"""
-                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
-                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>
-                        <strong>⚠️ Possible Issue:</strong> Your IP address may not be whitelisted in Splunk Cloud.<br>
-                        <strong>🌐 Your Current Public IP:</strong> <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; color: #c00;">{public_ip}</code><br>
-                        <strong>📝 Action Required:</strong> Contact your Splunk admin to whitelist this IP or CIDR range (189.128.129.0/24)
-                    </p>
-                    <details style='margin-top: 8px;'>
-                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Technical details</summary>
-                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
-                    </details>
-                </div>
-                """
-            else:
-                output += f"""
-                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
-                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>Please verify your SPLUNK_TOKEN is valid.</p>
-                    <details style='margin-top: 8px;'>
-                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Error details</summary>
-                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
-                    </details>
-                </div>
-                """
-            return output
-        
-        # Parse timechart results from export endpoint
-        timeseries_data = []
-        for line in response.text.strip().split('\n'):
-            if line:
-                try:
-                    result = json.loads(line)
-                    # Only use final results (preview=false)
-                    if result.get("result") and result.get("preview") == False:
-                        timeseries_data.append(result["result"])
-                except json.JSONDecodeError:
-                    continue
-        
+        # Get recording uploads results
+        timeseries_data = all_results.get('recording') or []
+
         if len(timeseries_data) == 0:
             output += f"""
             <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
@@ -1623,20 +1520,8 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
         # Active Servers by Zone
         output += "<h3 style='margin: 20px 0 10px 0; color: #2d3748; font-size: 14px;'>📡 Active Servers</h3>"
         
-        active_servers_query = f'''| tstats dc(host) as server_count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
-| rex field=host "-(?<zone>z[1-4])-"
-| where isnotnull(zone)
-| timechart span=1h dc(host) as servers by zone
-| fillnull value=0'''
-        
-        response_servers = requests.post(search_url, headers=headers, data={
-            "search": active_servers_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }, verify=True, timeout=(10, 120))
-        
-        if response_servers.status_code == 200:
+        servers_data = all_results.get('servers') or []
+        if len(servers_data) > 0:
             servers_data = []
             for line in response_servers.text.strip().split('\n'):
                 if line:
@@ -1757,20 +1642,8 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
         # JVM Crashes
         output += "<h3 style='margin: 20px 0 10px 0; color: #2d3748; font-size: 14px;'>🔥 JVM Crash - Error Count</h3>"
         
-        jvm_query = f'''| search index=streaming_prod earliest=-{timerange_hours}h ("JVM" OR "OutOfMemoryError" OR "crash")
-| rex field=host "-(?<zone>z[1-4])-"
-| where isnotnull(zone)
-| timechart span=1h count by zone
-| fillnull value=0'''
-        
-        response_jvm = requests.post(search_url, headers=headers, data={
-            "search": jvm_query,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json"
-        }, verify=True, timeout=(10, 120))
-        
-        if response_jvm.status_code == 200:
+        jvm_data = all_results.get('jvm') or []
+        if len(jvm_data) > 0:
             jvm_data = []
             for line in response_jvm.text.strip().split('\n'):
                 if line:

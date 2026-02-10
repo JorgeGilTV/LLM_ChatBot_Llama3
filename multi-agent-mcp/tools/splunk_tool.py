@@ -285,6 +285,18 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                 "z4": "#76b7b2"
             }};
             
+            // Format timestamps to show only time (HH:MM)
+            const formattedLabels = data.timestamps.map(ts => {{
+                try {{
+                    const date = new Date(ts);
+                    const hours = date.getHours().toString().padStart(2, '0');
+                    const minutes = date.getMinutes().toString().padStart(2, '0');
+                    return `${{hours}}:${{minutes}}`;
+                }} catch (e) {{
+                    return ts;
+                }}
+            }});
+            
             Object.keys(data.zones).forEach((zone, idx) => {{
                 const zoneNum = zone.replace('z', '');
                 const chartId = `chart_${{zone}}_` + Math.floor(Date.now() / 1000);
@@ -294,7 +306,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                     new Chart(canvas, {{
                         type: 'line',
                         data: {{
-                            labels: data.timestamps,
+                            labels: formattedLabels,
                             datasets: [{{
                                 label: `Zone ${{zoneNum}}`,
                                 data: data.zones[zone],
@@ -302,7 +314,9 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                                 backgroundColor: colors[zone] + '20',
                                 fill: true,
                                 tension: 0.4,
-                                borderWidth: 2
+                                borderWidth: 2,
+                                pointRadius: 2,
+                                pointHoverRadius: 4
                             }}]
                         }},
                         options: {{
@@ -312,6 +326,9 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                                 legend: {{ display: false }},
                                 tooltip: {{
                                     callbacks: {{
+                                        title: function(context) {{
+                                            return 'Time: ' + context[0].label;
+                                        }},
                                         label: function(context) {{
                                             return context.parsed.y.toLocaleString() + ' events';
                                         }}
@@ -321,12 +338,33 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                             scales: {{
                                 x: {{
                                     display: true,
-                                    ticks: {{ maxTicksLimit: 8, font: {{ size: 9 }} }}
+                                    title: {{
+                                        display: false
+                                    }},
+                                    ticks: {{ 
+                                        maxRotation: 45,
+                                        minRotation: 45,
+                                        font: {{ size: 9 }},
+                                        maxTicksLimit: 12
+                                    }},
+                                    grid: {{
+                                        display: true,
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    }}
                                 }},
                                 y: {{
                                     display: true,
                                     beginAtZero: true,
-                                    ticks: {{ font: {{ size: 9 }} }}
+                                    ticks: {{ 
+                                        font: {{ size: 9 }},
+                                        callback: function(value) {{
+                                            return value >= 1000 ? (value/1000).toFixed(1) + 'k' : value;
+                                        }}
+                                    }},
+                                    grid: {{
+                                        display: true,
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    }}
                                 }}
                             }}
                         }}

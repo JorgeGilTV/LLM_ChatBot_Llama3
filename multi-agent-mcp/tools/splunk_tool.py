@@ -260,7 +260,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             zone_name = f"Zone {zone_num} (Recording Uploads)"
             total_events = zone_totals.get(zone_key, 0)
             zone_color = zone_colors.get(zone_key, "#4e79a7")
-            chart_id = f"chart_{zone_key}_{int(time.time())}"
+            chart_id = f"chart_p0_{zone_key}"
             
             # Calculate outliers/errors (0 for now, can be enhanced later)
             outliers = 0
@@ -324,7 +324,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             
             Object.keys(data.zones).forEach((zone, idx) => {{
                 const zoneNum = zone.replace('z', '');
-                const chartId = `chart_${{zone}}_` + Math.floor(Date.now() / 1000);
+                const chartId = `chart_p0_${{zone}}`;
                 const canvas = document.getElementById(chartId);
                 
                 if (canvas) {{
@@ -461,7 +461,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                     zone_key = f"z{zone_num}"
                     total_servers = zone_server_totals.get(zone_key, 0)
                     zone_color = zone_colors.get(zone_key, "#4e79a7")
-                    chart_id_servers = f"chart_servers_{zone_key}_{int(time.time())}"
+                    chart_id_servers = f"chart_p0_servers_{zone_key}"
                     
                     output += f"""
                     <div style='background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
@@ -496,7 +496,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                     }};
                     
                     Object.keys(data.zones).forEach((zone) => {{
-                        const chartId = `chart_servers_${{zone}}_` + Math.floor(Date.now() / 1000);
+                        const chartId = `chart_p0_servers_${{zone}}`;
                         const canvas = document.getElementById(chartId);
                         
                         if (canvas) {{
@@ -591,7 +591,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                         <span style='font-size: 20px; font-weight: bold; color: #dc2626;'>{total_jvm_errors}</span>
                     </div>
                     <div style='position: relative; height: 200px;'>
-                        <canvas id="chart_jvm_{int(time.time())}"></canvas>
+                        <canvas id="chart_p0_jvm"></canvas>
                     </div>
                 </div>
                 """
@@ -623,7 +623,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                         }});
                     }});
                     
-                    const canvas = document.getElementById('chart_jvm_{int(time.time())}');
+                    const canvas = document.getElementById('chart_p0_jvm');
                     if (canvas) {{
                         new Chart(canvas, {{
                             type: 'bar',
@@ -877,7 +877,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
             zone_name = f"Zone {zone_num} (CVR Uploads)"
             total_events = zone_totals.get(zone_key, 0)
             zone_color = zone_colors.get(zone_key, "#4e79a7")
-            chart_id = f"chart_cvr_{zone_key}_{int(time.time())}"
+            chart_id = f"chart_cvr_{zone_key}"
             
             # Calculate outliers/errors (0 for now, can be enhanced later)
             outliers = 0
@@ -941,7 +941,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
             
             Object.keys(data.zones).forEach((zone, idx) => {{
                 const zoneNum = zone.replace('z', '');
-                const chartId = `chart_cvr_${{zone}}_` + Math.floor(Date.now() / 1000);
+                const chartId = `chart_cvr_${{zone}}`;
                 const canvas = document.getElementById(chartId);
                 
                 if (canvas) {{
@@ -1077,7 +1077,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
                         <span style='font-size: 12px; color: #6b7280; margin-left: 12px;'>Avg: {avg_devices:,}</span>
                     </div>
                     <div style='position: relative; height: 200px;'>
-                        <canvas id="chart_cvr_devices_{int(time.time())}"></canvas>
+                        <canvas id="chart_cvr_devices"></canvas>
                     </div>
                 </div>
                 """
@@ -1091,7 +1091,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
                 <script>
                 (function() {{
                     const data = {devices_data_json};
-                    const canvas = document.getElementById('chart_cvr_devices_{int(time.time())}');
+                    const canvas = document.getElementById('chart_cvr_devices');
                     
                     if (canvas) {{
                         new Chart(canvas, {{
@@ -1197,7 +1197,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
                         <span style='font-size: 20px; font-weight: bold; color: #ff9800;'>{total_connections:,}</span>
                     </div>
                     <div style='position: relative; height: 180px;'>
-                        <canvas id="chart_cvr_connections_{int(time.time())}"></canvas>
+                        <canvas id="chart_cvr_connections"></canvas>
                     </div>
                 </div>
                 """
@@ -1211,7 +1211,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
                 <script>
                 (function() {{
                     const data = {connections_data_json};
-                    const canvas = document.getElementById('chart_cvr_connections_{int(time.time())}');
+                    const canvas = document.getElementById('chart_cvr_connections');
                     
                     if (canvas) {{
                         new Chart(canvas, {{
@@ -1478,7 +1478,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
             zone_name = f"Zone {zone_num} (ADT Uploads)"
             total_events = zone_totals.get(zone_key, 0)
             zone_color = zone_colors.get(zone_key, "#4e79a7")
-            chart_id = f"chart_adt_{zone_key}_{int(time.time())}"
+            chart_id = f"chart_adt_{zone_key}"
             
             # Calculate outliers/errors (0 for now, can be enhanced later)
             outliers = 0
@@ -1542,7 +1542,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
             
             Object.keys(data.zones).forEach((zone, idx) => {{
                 const zoneNum = zone.replace('z', '');
-                const chartId = `chart_adt_${{zone}}_` + Math.floor(Date.now() / 1000);
+                const chartId = `chart_adt_${{zone}}`;
                 const canvas = document.getElementById(chartId);
                 
                 if (canvas) {{
@@ -1686,7 +1686,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
                     zone_key = f"z{zone_num}"
                     total_servers = zone_server_totals.get(zone_key, 0)
                     zone_color = zone_colors.get(zone_key, "#4e79a7")
-                    chart_id_servers = f"chart_adt_servers_{zone_key}_{int(time.time())}"
+                    chart_id_servers = f"chart_adt_servers_{zone_key}"
                     
                     output += f"""
                     <div style='background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
@@ -1720,7 +1720,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
                     }};
                     
                     Object.keys(data.zones).forEach((zone) => {{
-                        const chartId = `chart_adt_servers_${{zone}}_` + Math.floor(Date.now() / 1000);
+                        const chartId = `chart_adt_servers_${{zone}}`;
                         const canvas = document.getElementById(chartId);
                         
                         if (canvas) {{
@@ -1815,7 +1815,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
                         <span style='font-size: 20px; font-weight: bold; color: #dc2626;'>{total_jvm_errors}</span>
                     </div>
                     <div style='position: relative; height: 200px;'>
-                        <canvas id="chart_adt_jvm_{int(time.time())}"></canvas>
+                        <canvas id="chart_adt_jvm"></canvas>
                     </div>
                 </div>
                 """
@@ -1847,7 +1847,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
                         }});
                     }});
                     
-                    const canvas = document.getElementById('chart_adt_jvm_{int(time.time())}');
+                    const canvas = document.getElementById('chart_adt_jvm');
                     if (canvas) {{
                         new Chart(canvas, {{
                             type: 'bar',

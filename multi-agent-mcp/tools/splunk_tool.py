@@ -211,9 +211,29 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         zone_data = {"z1": [], "z2": [], "z3": [], "z4": []}
         
         for datapoint in timeseries_data:
-            # Get timestamp
-            timestamp = datapoint.get("_time", "")
-            timestamps.append(timestamp)
+            # Get timestamp - Splunk returns epoch timestamp as string
+            timestamp_raw = datapoint.get("_time", "")
+            
+            # Convert Splunk timestamp to JavaScript-friendly format
+            try:
+                # Splunk timestamps are in epoch seconds
+                from datetime import datetime
+                if timestamp_raw:
+                    # Parse as epoch or ISO format
+                    try:
+                        ts_epoch = float(timestamp_raw)
+                        dt = datetime.fromtimestamp(ts_epoch)
+                    except:
+                        dt = datetime.fromisoformat(timestamp_raw.replace(" GMT", "").replace("Z", ""))
+                    
+                    # Format as HH:MM for display
+                    timestamp_formatted = dt.strftime("%H:%M")
+                    timestamps.append(timestamp_formatted)
+                else:
+                    timestamps.append("")
+            except Exception as e:
+                print(f"Error parsing timestamp {timestamp_raw}: {e}")
+                timestamps.append(str(timestamp_raw))
             
             # Get counts for each zone
             for zone in ["z1", "z2", "z3", "z4"]:
@@ -299,17 +319,8 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                 "z4": "#76b7b2"
             }};
             
-            // Format timestamps to show only time (HH:MM)
-            const formattedLabels = data.timestamps.map(ts => {{
-                try {{
-                    const date = new Date(ts);
-                    const hours = date.getHours().toString().padStart(2, '0');
-                    const minutes = date.getMinutes().toString().padStart(2, '0');
-                    return `${{hours}}:${{minutes}}`;
-                }} catch (e) {{
-                    return ts;
-                }}
-            }});
+            // Timestamps are already formatted as HH:MM in Python
+            const formattedLabels = data.timestamps;
             
             Object.keys(data.zones).forEach((zone, idx) => {{
                 const zoneNum = zone.replace('z', '');

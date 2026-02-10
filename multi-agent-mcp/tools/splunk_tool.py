@@ -101,24 +101,94 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         """
     
     try:
-        # Sample data (replace with actual Splunk API calls)
-        sample_services = [
-            {"service": "streaming-video-service", "events": 15420, "total_errors": 23, "error_rate": 0.15, "avg_latency": 45.2, "max_latency": 156.8},
-            {"service": "streaming-audio-service", "events": 8932, "total_errors": 5, "error_rate": 0.06, "avg_latency": 32.1, "max_latency": 98.3},
-            {"service": "streaming-metadata-service", "events": 24567, "total_errors": 0, "error_rate": 0.0, "avg_latency": 12.5, "max_latency": 45.2}
-        ]
+        # Build Splunk query
+        earliest_time = f"-{timerange_hours}h@h"
+        latest_time = "now"
+        
+        # Splunk search query for P0 streaming services
+        search_query = f'''search index=* sourcetype=* 
+| where match(service, "(?i)streaming")
+| stats count as events, sum(eval(if(status="error",1,0))) as total_errors, avg(latency) as avg_latency, max(latency) as max_latency by service
+| eval error_rate=round((total_errors/events)*100,2)
+| sort -events'''
         
         if query:
-            sample_services = [s for s in sample_services if query.lower() in s["service"].lower()]
+            search_query = f'''search index=* sourcetype=* service="*{query}*"
+| where match(service, "(?i)streaming")
+| stats count as events, sum(eval(if(status="error",1,0))) as total_errors, avg(latency) as avg_latency, max(latency) as max_latency by service
+| eval error_rate=round((total_errors/events)*100,2)
+| sort -events'''
         
-        if len(sample_services) == 0:
-            output += f"<p style='margin: 8px 0; padding: 6px; background-color: #fff3cd; border-radius: 4px; color: #856404;'>⚠️ No services found matching: {html.escape(query)}</p>"
+        # Make request to Splunk API
+        headers = {
+            "Authorization": f"Bearer {splunk_token}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        
+        search_url = f"https://{splunk_host}/services/search/jobs"
+        data = {
+            "search": search_query,
+            "earliest_time": earliest_time,
+            "latest_time": latest_time,
+            "output_mode": "json"
+        }
+        
+        # Create search job
+        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=30)
+        
+        if response.status_code != 201:
+            output += f"""
+            <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
+                <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
+                <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>Please verify your SPLUNK_TOKEN is valid.</p>
+            </div>
+            """
+            return output
+        
+        # Get search job ID
+        job_data = response.json()
+        sid = job_data.get("sid")
+        
+        # Wait for job completion
+        job_status_url = f"https://{splunk_host}/services/search/jobs/{sid}"
+        max_retries = 30
+        for i in range(max_retries):
+            time.sleep(1)
+            status_response = requests.get(f"{job_status_url}?output_mode=json", headers=headers, verify=True, timeout=10)
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                entry = status_data.get("entry", [{}])[0]
+                content = entry.get("content", {})
+                if content.get("isDone"):
+                    break
+        
+        # Get results
+        results_url = f"https://{splunk_host}/services/search/jobs/{sid}/results?output_mode=json&count=0"
+        results_response = requests.get(results_url, headers=headers, verify=True, timeout=30)
+        
+        if results_response.status_code != 200:
+            output += f"""
+            <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
+                <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error retrieving Splunk results</p>
+            </div>
+            """
+            return output
+        
+        results = results_response.json()
+        services_data = results.get("results", [])
+        
+        if len(services_data) == 0:
+            output += f"""
+            <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
+                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No streaming services found{f" matching: {html.escape(query)}" if query else ""}</p>
+            </div>
+            """
             return output
         
         output += f"""
         <div style='background-color: #ffffff; padding: 6px; border-radius: 4px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.06);'>
             <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #00796b;'>
-                <h3 style='margin: 0; color: #00796b; font-size: 14px;'>📊 Streaming Services ({len(sample_services)})</h3>
+                <h3 style='margin: 0; color: #00796b; font-size: 14px;'>📊 Streaming Services ({len(services_data)})</h3>
                 <div style='text-align: right;'>
                     <div style='font-size: 11px; color: #666;'>{time.strftime('%H:%M:%S')}</div>
                     <div style='font-size: 10px; color: #999;'>Last {timerange_hours}h</div>
@@ -127,13 +197,13 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;'>
         """
         
-        for service_data in sample_services:
-            service_name = service_data["service"]
-            events = service_data["events"]
-            total_errors = service_data["total_errors"]
-            error_rate = service_data["error_rate"]
-            avg_latency = service_data["avg_latency"]
-            max_latency = service_data["max_latency"]
+        for service_data in services_data:
+            service_name = service_data.get("service", "Unknown")
+            events = int(service_data.get("events", 0))
+            total_errors = int(service_data.get("total_errors", 0))
+            error_rate = float(service_data.get("error_rate", 0))
+            avg_latency = float(service_data.get("avg_latency", 0))
+            max_latency = float(service_data.get("max_latency", 0))
             
             status_color = "#4caf50"
             status_icon = "✅"

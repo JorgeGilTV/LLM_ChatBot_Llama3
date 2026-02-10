@@ -19,7 +19,7 @@ from tools.read_arlo_status import read_arlo_status
 from tools.oncall_support import confluence_oncall_today
 from tools.read_versions import read_versions
 from tools.datadog_dashboards import read_datadog_dashboards, read_datadog_errors_only, read_datadog_adt, read_datadog_adt_errors_only, read_datadog_all_errors
-from tools.splunk_tool import read_splunk_p0_dashboard, read_splunk_p0_cvr_dashboard
+from tools.splunk_tool import read_splunk_p0_dashboard, read_splunk_p0_cvr_dashboard, read_splunk_p0_adt_dashboard
 
 # 📋 Logging
 logging.basicConfig(
@@ -42,6 +42,7 @@ TOOLS = {
     "DD_Errors": {"description": "Show services with errors > 0 from RED Metrics & ADT dashboards", "function": read_datadog_all_errors},
     "P0_Streaming": {"description": "Show P0 Streaming dashboard from Splunk", "function": read_splunk_p0_dashboard},
     "P0_CVR_Streaming": {"description": "Show P0 CVR Streaming dashboard from Splunk", "function": read_splunk_p0_cvr_dashboard},
+    "P0_ADT_Streaming": {"description": "Show P0 ADT Streaming dashboard from Splunk", "function": read_splunk_p0_adt_dashboard},
     "Holiday_Oncall": {"description": "Verify status in ARLO webpage", "function": confluence_oncall_today},
     "Suggestions": {"description": "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki", "function": AI_suggestions},
     "Ask_ARLOCHAT": {"description": "Ask ARLO CHAT about anything", "function": ask_arlo}
@@ -110,7 +111,7 @@ def api_run():
             continue
         try:
             # Pass timerange to Datadog and Splunk tools
-            if tool_name in ['DD_Red_Metrics', 'DD_Errors', 'DD_Red_ADT', 'P0_Streaming', 'P0_CVR_Streaming']:
+            if tool_name in ['DD_Red_Metrics', 'DD_Errors', 'DD_Red_ADT', 'P0_Streaming', 'P0_CVR_Streaming', 'P0_ADT_Streaming']:
                 res = func(input_text, timerange)
             else:
                 res = func(input_text)

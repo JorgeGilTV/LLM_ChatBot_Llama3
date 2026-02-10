@@ -112,26 +112,20 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # Optimized P0 Streaming Dashboard Query - Fast zone statistics
-        # Use tstats for much faster performance on indexed fields
-        search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by host
+        # Optimized P0 Streaming Dashboard Query - Time series data for charts
+        # Use tstats with timechart to get data points over time
+        search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
-| stats sum(count) as events by zone
-| eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
-| eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
-| sort zone
-| fields service events total_errors error_rate avg_latency max_latency'''
+| timechart span=1h sum(count) as events by zone
+| fillnull value=0'''
         
         if query:
-            search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by host
+            search_query = f'''| tstats count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone) AND (match(host, "(?i){query}") OR match(zone, "(?i){query}"))
-| stats sum(count) as events by zone
-| eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
-| eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
-| sort zone
-| fields service events total_errors error_rate avg_latency max_latency'''
+| timechart span=1h sum(count) as events by zone
+| fillnull value=0'''
         
         # Make request to Splunk API
         headers = {
@@ -191,86 +185,157 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                 """
             return output
         
-        # Parse results from export endpoint (returns newline-delimited JSON)
-        # Only keep final results (not preview), and use a dict to avoid duplicates
-        services_dict = {}
+        # Parse timechart results from export endpoint
+        timeseries_data = []
         for line in response.text.strip().split('\n'):
             if line:
                 try:
                     result = json.loads(line)
-                    # Only use final results (preview=false) to avoid duplicates
+                    # Only use final results (preview=false)
                     if result.get("result") and result.get("preview") == False:
-                        result_data = result["result"]
-                        # Use service name as key to prevent duplicates
-                        service_name = result_data.get("service", "Unknown")
-                        services_dict[service_name] = result_data
+                        timeseries_data.append(result["result"])
                 except json.JSONDecodeError:
                     continue
         
-        services_data = list(services_dict.values())
-        
-        if len(services_data) == 0:
+        if len(timeseries_data) == 0:
             output += f"""
             <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
-                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No streaming services found{f" matching: {html.escape(query)}" if query else ""}</p>
+                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No streaming data found{f" matching: {html.escape(query)}" if query else ""}</p>
             </div>
             """
             return output
         
+        # Transform timeseries data into Chart.js format
+        # Timeseries data has format: [{_time: "...", z1: count, z2: count, z3: count, z4: count}, ...]
+        timestamps = []
+        zone_data = {"z1": [], "z2": [], "z3": [], "z4": []}
+        
+        for datapoint in timeseries_data:
+            # Get timestamp
+            timestamp = datapoint.get("_time", "")
+            timestamps.append(timestamp)
+            
+            # Get counts for each zone
+            for zone in ["z1", "z2", "z3", "z4"]:
+                count = int(datapoint.get(zone, 0))
+                zone_data[zone].append(count)
+        
+        # Calculate total events per zone
+        zone_totals = {zone: sum(counts) for zone, counts in zone_data.items()}
+        
+        # Generate Chart.js charts for each zone
         output += f"""
-        <div style='background-color: #ffffff; padding: 6px; border-radius: 4px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.06);'>
-            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #00796b;'>
-                <h3 style='margin: 0; color: #00796b; font-size: 14px;'>📊 Streaming Services ({len(services_data)})</h3>
-                <div style='text-align: right;'>
-                    <div style='font-size: 11px; color: #666;'>{time.strftime('%H:%M:%S')}</div>
-                    <div style='font-size: 10px; color: #999;'>Last {timerange_hours}h</div>
-                </div>
-            </div>
-            <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;'>
+        <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 12px 0;'>
         """
         
-        # Sort zones for consistent display (Zone 1, 2, 3, 4)
-        services_data_sorted = sorted(services_data, key=lambda x: x.get("service", ""))
+        zone_colors = {
+            "z1": "#4e79a7",
+            "z2": "#f28e2c",
+            "z3": "#e15759",
+            "z4": "#76b7b2"
+        }
         
-        for service_data in services_data_sorted:
-            service_name = service_data.get("service", "Unknown")
-            events = int(service_data.get("events", 0))
-            total_errors = int(service_data.get("total_errors", 0))
-            error_rate = float(service_data.get("error_rate", 0))
-            
-            # Status always green since we don't have real error data
-            status_color = "#4caf50"
-            status_icon = "✅"
+        for zone_num in ["1", "2", "3", "4"]:
+            zone_key = f"z{zone_num}"
+            zone_name = f"Zone {zone_num} (Recording Uploads)"
+            total_events = zone_totals.get(zone_key, 0)
+            zone_color = zone_colors.get(zone_key, "#4e79a7")
+            chart_id = f"chart_{zone_key}_{int(time.time())}"
             
             output += f"""
-            <div style='background-color: #f9fafb; padding: 10px; border-radius: 4px; border-left: 3px solid {status_color}; box-shadow: 0 1px 2px rgba(0,0,0,0.04);'>
+            <div style='background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
                 <div style='margin-bottom: 10px;'>
                     <div style='display: flex; justify-content: space-between; align-items: center;'>
-                        <span style='font-size: 13px; font-weight: bold; color: #2d3748;'>{html.escape(service_name)}</span>
-                        <span style='font-size: 16px;'>{status_icon}</span>
+                        <span style='font-size: 13px; font-weight: bold; color: #2d3748;'>{zone_name}</span>
+                        <span style='font-size: 14px;'>✅</span>
+                    </div>
+                    <div style='margin-top: 4px;'>
+                        <span style='font-size: 11px; color: #6b7280;'>Total: </span>
+                        <span style='font-size: 14px; font-weight: bold; color: {zone_color};'>{total_events:,}</span>
+                        <span style='font-size: 11px; color: #6b7280;'> events</span>
                     </div>
                 </div>
-                <div style='background: white; padding: 8px; border-radius: 3px; border: 1px solid #e5e7eb; text-align: center;'>
-                    <div style='font-size: 10px; color: #6b7280; margin-bottom: 4px;'>Events</div>
-                    <div style='font-size: 16px; font-weight: bold; color: #1890ff;'>{events:,}</div>
-                </div>
-                <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 6px;'>
-                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb; text-align: center;'>
-                        <div style='font-size: 8px; color: #6b7280;'>Errors</div>
-                        <div style='font-size: 11px; font-weight: bold; color: {status_color};'>{total_errors} ({error_rate}%)</div>
-                    </div>
-                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb; text-align: center;'>
-                        <div style='font-size: 8px; color: #6b7280;'>Avg Latency</div>
-                        <div style='font-size: 11px; font-weight: bold; color: #52c41a;'>0.0ms</div>
-                    </div>
-                </div>
-                <div style='text-align: center; padding-top: 8px; margin-top: 8px; border-top: 1px solid #e5e7eb;'>
-                    <a href='{dashboard_url}' target='_blank' style='display: inline-block; padding: 4px 10px; background-color: #00796b; color: white; text-decoration: none; border-radius: 3px; font-size: 10px; font-weight: 600;'>View Details →</a>
+                <div style='position: relative; height: 150px;'>
+                    <canvas id="{chart_id}"></canvas>
                 </div>
             </div>
             """
         
-        output += "</div></div>"
+        output += "</div>"
+        
+        # Generate Chart.js script
+        chart_data_json = json.dumps({
+            "timestamps": timestamps,
+            "zones": {
+                "z1": zone_data["z1"],
+                "z2": zone_data["z2"],
+                "z3": zone_data["z3"],
+                "z4": zone_data["z4"]
+            }
+        })
+        
+        output += f"""
+        <script>
+        (function() {{
+            const data = {chart_data_json};
+            const colors = {{
+                "z1": "#4e79a7",
+                "z2": "#f28e2c",
+                "z3": "#e15759",
+                "z4": "#76b7b2"
+            }};
+            
+            Object.keys(data.zones).forEach((zone, idx) => {{
+                const zoneNum = zone.replace('z', '');
+                const chartId = `chart_${{zone}}_` + Math.floor(Date.now() / 1000);
+                const canvas = document.getElementById(chartId);
+                
+                if (canvas) {{
+                    new Chart(canvas, {{
+                        type: 'line',
+                        data: {{
+                            labels: data.timestamps,
+                            datasets: [{{
+                                label: `Zone ${{zoneNum}}`,
+                                data: data.zones[zone],
+                                borderColor: colors[zone],
+                                backgroundColor: colors[zone] + '20',
+                                fill: true,
+                                tension: 0.4,
+                                borderWidth: 2
+                            }}]
+                        }},
+                        options: {{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {{
+                                legend: {{ display: false }},
+                                tooltip: {{
+                                    callbacks: {{
+                                        label: function(context) {{
+                                            return context.parsed.y.toLocaleString() + ' events';
+                                        }}
+                                    }}
+                                }}
+                            }},
+                            scales: {{
+                                x: {{
+                                    display: true,
+                                    ticks: {{ maxTicksLimit: 8, font: {{ size: 9 }} }}
+                                }},
+                                y: {{
+                                    display: true,
+                                    beginAtZero: true,
+                                    ticks: {{ font: {{ size: 9 }} }}
+                                }}
+                            }}
+                        }}
+                    }});
+                }}
+            }});
+        }})();
+        </script>
+        """
         
         return output
         

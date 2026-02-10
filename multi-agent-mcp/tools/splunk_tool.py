@@ -125,8 +125,9 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             "Content-Type": "application/x-www-form-urlencoded"
         }
         
-        # Splunk Cloud API endpoint (uses standard HTTPS port 443)
-        search_url = f"https://{splunk_host}/services/search/jobs"
+        # Splunk Cloud REST API endpoint (requires IP whitelisting)
+        # Port 8089 is required for Splunk Cloud REST API
+        search_url = f"https://{splunk_host}:8089/services/search/jobs/export"
         data = {
             "search": search_query,
             "earliest_time": earliest_time,
@@ -134,60 +135,56 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             "output_mode": "json"
         }
         
-        # Create search job
+        # Export endpoint returns results directly (synchronous)
         print(f"🔍 Making request to: {search_url}")
         print(f"🔑 Using token: {splunk_token[:20]}...")
         
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=30)
+        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=60)
         
         print(f"📊 Response status: {response.status_code}")
         print(f"📄 Response body: {response.text[:500]}")
         
-        if response.status_code != 201:
+        if response.status_code != 200:
             error_detail = response.text[:500] if response.text else "No error details"
-            output += f"""
-            <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
-                <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>Please verify your SPLUNK_TOKEN is valid.</p>
-                <details style='margin-top: 8px;'>
-                    <summary style='cursor: pointer; font-size: 10px; color: #999;'>Error details</summary>
-                    <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
-                </details>
-            </div>
-            """
+            
+            # Check if it's an IP whitelist issue
+            if response.status_code == 404 or response.status_code == 403:
+                output += f"""
+                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
+                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
+                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>
+                        <strong>Possible Issue:</strong> Your IP address may not be whitelisted in Splunk Cloud.<br>
+                        <strong>Your Public IP:</strong> Contact your Splunk admin to whitelist your IP address.
+                    </p>
+                    <details style='margin-top: 8px;'>
+                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Error details</summary>
+                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
+                    </details>
+                </div>
+                """
+            else:
+                output += f"""
+                <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
+                    <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error connecting to Splunk API (Status {response.status_code})</p>
+                    <p style='margin: 4px 0 0 0; font-size: 11px; color: #666;'>Please verify your SPLUNK_TOKEN is valid.</p>
+                    <details style='margin-top: 8px;'>
+                        <summary style='cursor: pointer; font-size: 10px; color: #999;'>Error details</summary>
+                        <pre style='font-size: 9px; color: #666; margin: 4px 0; padding: 4px; background: #f5f5f5; border-radius: 2px; overflow-x: auto;'>{html.escape(error_detail)}</pre>
+                    </details>
+                </div>
+                """
             return output
         
-        # Get search job ID
-        job_data = response.json()
-        sid = job_data.get("sid")
-        
-        # Wait for job completion
-        job_status_url = f"https://{splunk_host}/services/search/jobs/{sid}"
-        max_retries = 30
-        for i in range(max_retries):
-            time.sleep(1)
-            status_response = requests.get(f"{job_status_url}?output_mode=json", headers=headers, verify=True, timeout=10)
-            if status_response.status_code == 200:
-                status_data = status_response.json()
-                entry = status_data.get("entry", [{}])[0]
-                content = entry.get("content", {})
-                if content.get("isDone"):
-                    break
-        
-        # Get results
-        results_url = f"https://{splunk_host}/services/search/jobs/{sid}/results?output_mode=json&count=0"
-        results_response = requests.get(results_url, headers=headers, verify=True, timeout=30)
-        
-        if results_response.status_code != 200:
-            output += f"""
-            <div style='margin: 8px 0; padding: 12px; background-color: #fee; border-left: 3px solid #f00; border-radius: 4px;'>
-                <p style='margin: 0; font-size: 12px; color: #c00;'>❌ Error retrieving Splunk results</p>
-            </div>
-            """
-            return output
-        
-        results = results_response.json()
-        services_data = results.get("results", [])
+        # Parse results from export endpoint (returns newline-delimited JSON)
+        services_data = []
+        for line in response.text.strip().split('\n'):
+            if line:
+                try:
+                    result = json.loads(line)
+                    if result.get("result"):
+                        services_data.append(result["result"])
+                except json.JSONDecodeError:
+                    continue
         
         if len(services_data) == 0:
             output += f"""

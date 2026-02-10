@@ -242,17 +242,31 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             zone_color = zone_colors.get(zone_key, "#4e79a7")
             chart_id = f"chart_{zone_key}_{int(time.time())}"
             
+            # Calculate outliers/errors (0 for now, can be enhanced later)
+            outliers = 0
+            error_percentage = 0.0 if total_events == 0 else (outliers / total_events * 100)
+            
             output += f"""
             <div style='background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
                 <div style='margin-bottom: 10px;'>
                     <div style='display: flex; justify-content: space-between; align-items: center;'>
-                        <span style='font-size: 13px; font-weight: bold; color: #2d3748;'>{zone_name}</span>
-                        <span style='font-size: 14px;'>✅</span>
+                        <div>
+                            <span style='font-size: 13px; font-weight: bold; color: #2d3748;'>{zone_name}</span>
+                        </div>
+                        <div style='text-align: right;'>
+                            <div style='font-size: 20px; font-weight: bold; color: #dc2626;'>{outliers}</div>
+                            <div style='font-size: 9px; color: #6b7280;'>outliers</div>
+                        </div>
                     </div>
-                    <div style='margin-top: 4px;'>
-                        <span style='font-size: 11px; color: #6b7280;'>Total: </span>
-                        <span style='font-size: 14px; font-weight: bold; color: {zone_color};'>{total_events:,}</span>
-                        <span style='font-size: 11px; color: #6b7280;'> events</span>
+                    <div style='margin-top: 6px; display: flex; justify-content: space-between; align-items: center;'>
+                        <div>
+                            <span style='font-size: 10px; color: #6b7280;'>Events: </span>
+                            <span style='font-size: 13px; font-weight: bold; color: {zone_color};'>{total_events:,}</span>
+                        </div>
+                        <div style='text-align: right;'>
+                            <span style='font-size: 12px; font-weight: bold; color: #dc2626;'>{error_percentage:.1f}%</span>
+                            <span style='font-size: 9px; color: #6b7280;'> errors</span>
+                        </div>
                     </div>
                 </div>
                 <div style='position: relative; height: 150px;'>

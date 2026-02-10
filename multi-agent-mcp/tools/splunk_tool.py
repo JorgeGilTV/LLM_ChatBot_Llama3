@@ -177,11 +177,6 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             """
         
         output += "</div></div>"
-        output += """
-        <div style='margin: 12px 0; padding: 8px; background-color: #e3f2fd; border-left: 3px solid #2196f3; border-radius: 4px;'>
-            <p style='margin: 0; font-size: 11px; color: #1565c0;'>ℹ️ <strong>Note:</strong> This is a sample implementation. Configure SPLUNK_TOKEN in .env to fetch real data.</p>
-        </div>
-        """
         
         return output
         

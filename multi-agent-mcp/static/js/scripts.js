@@ -172,7 +172,8 @@ function setupTimeRangeSelector() {
         const showTimeRange = selectedTools.includes('DD_Red_Metrics') || 
                               selectedTools.includes('DD_Errors') ||
                               selectedTools.includes('DD_Red_ADT') ||
-                              selectedTools.includes('P0_Streaming');
+                              selectedTools.includes('P0_Streaming') ||
+                              selectedTools.includes('P0_CVR_Streaming');
         
         if (timerangeContainer) {
             timerangeContainer.style.display = showTimeRange ? 'block' : 'none';

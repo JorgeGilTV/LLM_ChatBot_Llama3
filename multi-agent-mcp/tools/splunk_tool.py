@@ -125,8 +125,8 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             "Content-Type": "application/x-www-form-urlencoded"
         }
         
-        # Splunk Cloud API endpoint uses port 8089
-        search_url = f"https://{splunk_host}:8089/services/search/jobs"
+        # Splunk Cloud API endpoint (uses standard HTTPS port 443)
+        search_url = f"https://{splunk_host}/services/search/jobs"
         data = {
             "search": search_query,
             "earliest_time": earliest_time,
@@ -162,7 +162,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         sid = job_data.get("sid")
         
         # Wait for job completion
-        job_status_url = f"https://{splunk_host}:8089/services/search/jobs/{sid}"
+        job_status_url = f"https://{splunk_host}/services/search/jobs/{sid}"
         max_retries = 30
         for i in range(max_retries):
             time.sleep(1)
@@ -175,7 +175,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
                     break
         
         # Get results
-        results_url = f"https://{splunk_host}:8089/services/search/jobs/{sid}/results?output_mode=json&count=0"
+        results_url = f"https://{splunk_host}/services/search/jobs/{sid}/results?output_mode=json&count=0"
         results_response = requests.get(results_url, headers=headers, verify=True, timeout=30)
         
         if results_response.status_code != 200:

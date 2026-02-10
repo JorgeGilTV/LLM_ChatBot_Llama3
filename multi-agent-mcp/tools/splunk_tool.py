@@ -113,12 +113,11 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         latest_time = "now"
         
         # Simplified and faster Splunk search query
-        # Focus on specific index and sourcetype for better performance
+        # Show all P0 services from device_prod index
         search_query = f'''search index=device_prod sourcetype=kube:container:* earliest=-{timerange_hours}h
 | stats count as events by sourcetype
 | eval service=replace(sourcetype, "kube:container:", "")
 | eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
-| where match(service, "(?i)streaming")
 | sort -events
 | head 20'''
         

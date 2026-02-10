@@ -112,22 +112,25 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         earliest_time = f"-{timerange_hours}h@h"
         latest_time = "now"
         
-        # Simplified and faster Splunk search query
-        # Show all P0 services from device_prod index
-        search_query = f'''search index=device_prod sourcetype=kube:container:* earliest=-{timerange_hours}h
-| stats count as events by sourcetype
-| eval service=replace(sourcetype, "kube:container:", "")
+        # P0 Streaming Dashboard Query - Recording Uploads by Zone
+        # Extract zone from hostname (z1, z2, z3, z4) and count recording uploads
+        search_query = f'''search index=streaming_prod sourcetype=hms:streaming "RecordingUpload" earliest=-{timerange_hours}h
+| rex field=host "-(?<zone>z[1-4])-"
+| stats count as events by zone
+| eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
 | eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
-| sort -events
-| head 20'''
+| sort zone
+| fields service events total_errors error_rate avg_latency max_latency'''
         
         if query:
-            search_query = f'''search index=device_prod sourcetype=kube:container:*{query}* earliest=-{timerange_hours}h
-| stats count as events by sourcetype
-| eval service=replace(sourcetype, "kube:container:", "")
+            search_query = f'''search index=streaming_prod sourcetype=hms:streaming "RecordingUpload" earliest=-{timerange_hours}h
+| rex field=host "-(?<zone>z[1-4])-"
+| search zone="*{query}*" OR host="*{query}*"
+| stats count as events by zone
+| eval service="Zone " + replace(zone, "z", "") + " (Recording Uploads)"
 | eval total_errors=0, error_rate=0.0, avg_latency=0.0, max_latency=0.0
-| sort -events
-| head 20'''
+| sort zone
+| fields service events total_errors error_rate avg_latency max_latency'''
         
         # Make request to Splunk API
         headers = {

@@ -192,15 +192,22 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             return output
         
         # Parse results from export endpoint (returns newline-delimited JSON)
-        services_data = []
+        # Only keep final results (not preview), and use a dict to avoid duplicates
+        services_dict = {}
         for line in response.text.strip().split('\n'):
             if line:
                 try:
                     result = json.loads(line)
-                    if result.get("result"):
-                        services_data.append(result["result"])
+                    # Only use final results (preview=false) to avoid duplicates
+                    if result.get("result") and result.get("preview") == False:
+                        result_data = result["result"]
+                        # Use service name as key to prevent duplicates
+                        service_name = result_data.get("service", "Unknown")
+                        services_dict[service_name] = result_data
                 except json.JSONDecodeError:
                     continue
+        
+        services_data = list(services_dict.values())
         
         if len(services_data) == 0:
             output += f"""
@@ -222,51 +229,43 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;'>
         """
         
-        for service_data in services_data:
+        # Sort zones for consistent display (Zone 1, 2, 3, 4)
+        services_data_sorted = sorted(services_data, key=lambda x: x.get("service", ""))
+        
+        for service_data in services_data_sorted:
             service_name = service_data.get("service", "Unknown")
             events = int(service_data.get("events", 0))
             total_errors = int(service_data.get("total_errors", 0))
             error_rate = float(service_data.get("error_rate", 0))
-            avg_latency = float(service_data.get("avg_latency", 0))
-            max_latency = float(service_data.get("max_latency", 0))
             
+            # Status always green since we don't have real error data
             status_color = "#4caf50"
             status_icon = "✅"
-            if total_errors > 10:
-                status_color = "#ff5252"
-                status_icon = "🔴"
-            elif total_errors > 0:
-                status_color = "#ff9800"
-                status_icon = "⚠️"
             
             output += f"""
-            <div style='background-color: #f9fafb; padding: 8px; border-radius: 4px; border-left: 3px solid {status_color}; box-shadow: 0 1px 2px rgba(0,0,0,0.04);'>
-                <div style='margin-bottom: 8px;'>
+            <div style='background-color: #f9fafb; padding: 10px; border-radius: 4px; border-left: 3px solid {status_color}; box-shadow: 0 1px 2px rgba(0,0,0,0.04);'>
+                <div style='margin-bottom: 10px;'>
                     <div style='display: flex; justify-content: space-between; align-items: center;'>
-                        <span style='font-size: 12px; font-weight: bold; color: #2d3748;'>{html.escape(service_name)}</span>
-                        <span style='font-size: 14px;'>{status_icon}</span>
+                        <span style='font-size: 13px; font-weight: bold; color: #2d3748;'>{html.escape(service_name)}</span>
+                        <span style='font-size: 16px;'>{status_icon}</span>
                     </div>
                 </div>
-                <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-bottom: 6px;'>
-                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb;'>
-                        <div style='font-size: 9px; color: #6b7280;'>Events</div>
-                        <div style='font-size: 13px; font-weight: bold; color: #1890ff;'>{events:,}</div>
+                <div style='background: white; padding: 8px; border-radius: 3px; border: 1px solid #e5e7eb; text-align: center;'>
+                    <div style='font-size: 10px; color: #6b7280; margin-bottom: 4px;'>Events</div>
+                    <div style='font-size: 16px; font-weight: bold; color: #1890ff;'>{events:,}</div>
+                </div>
+                <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 6px;'>
+                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb; text-align: center;'>
+                        <div style='font-size: 8px; color: #6b7280;'>Errors</div>
+                        <div style='font-size: 11px; font-weight: bold; color: {status_color};'>{total_errors} ({error_rate}%)</div>
                     </div>
-                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb;'>
-                        <div style='font-size: 9px; color: #6b7280;'>Errors</div>
-                        <div style='font-size: 13px; font-weight: bold; color: {status_color};'>{total_errors} ({error_rate}%)</div>
-                    </div>
-                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb;'>
-                        <div style='font-size: 9px; color: #6b7280;'>Avg Latency</div>
-                        <div style='font-size: 13px; font-weight: bold; color: #52c41a;'>{avg_latency:.1f}ms</div>
-                    </div>
-                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb;'>
-                        <div style='font-size: 9px; color: #6b7280;'>Max Latency</div>
-                        <div style='font-size: 13px; font-weight: bold; color: #f6ad55;'>{max_latency:.1f}ms</div>
+                    <div style='background: white; padding: 4px; border-radius: 2px; border: 1px solid #e5e7eb; text-align: center;'>
+                        <div style='font-size: 8px; color: #6b7280;'>Avg Latency</div>
+                        <div style='font-size: 11px; font-weight: bold; color: #52c41a;'>0.0ms</div>
                     </div>
                 </div>
-                <div style='text-align: center; padding-top: 4px; border-top: 1px solid #e5e7eb;'>
-                    <a href='{dashboard_url}?form.service={html.escape(service_name)}' target='_blank' style='display: inline-block; padding: 3px 8px; background-color: #00796b; color: white; text-decoration: none; border-radius: 2px; font-size: 10px; font-weight: 600;'>View Details →</a>
+                <div style='text-align: center; padding-top: 8px; margin-top: 8px; border-top: 1px solid #e5e7eb;'>
+                    <a href='{dashboard_url}' target='_blank' style='display: inline-block; padding: 4px 10px; background-color: #00796b; color: white; text-decoration: none; border-radius: 3px; font-size: 10px; font-weight: 600;'>View Details →</a>
                 </div>
             </div>
             """

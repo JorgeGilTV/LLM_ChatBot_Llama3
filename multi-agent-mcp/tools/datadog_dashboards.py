@@ -5,6 +5,8 @@ import time
 import json
 import re
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
 
 load_dotenv()
 
@@ -58,7 +60,7 @@ def format_timestamp_range(from_timestamp: int, to_timestamp: int) -> str:
     """
 
 def get_metric_data(dd_api_key, dd_app_key, dd_site, query, from_time, to_time):
-    """Get actual metric data from Datadog"""
+    """Get actual metric data from Datadog - with reduced timeout for faster failures"""
     if dd_site.startswith('arlo.') or '.' in dd_site.split('.')[0]:
         base_domain = '.'.join(dd_site.split('.')[-2:])
         api_url = f"https://api.{base_domain}/api/v1/query"
@@ -77,12 +79,47 @@ def get_metric_data(dd_api_key, dd_app_key, dd_site, query, from_time, to_time):
     }
     
     try:
-        response = requests.get(api_url, headers=headers, params=params, timeout=15)
+        # Reduced timeout from 15 to 10 seconds
+        response = requests.get(api_url, headers=headers, params=params, timeout=10)
         if response.status_code == 200:
             return response.json()
         return None
     except:
         return None
+
+def get_metrics_parallel(dd_api_key, dd_app_key, dd_site, queries_dict, from_time, to_time, max_workers=10):
+    """
+    Fetch multiple metrics in parallel for faster performance
+    Args:
+        queries_dict: Dictionary with {key: query_string} format
+        max_workers: Maximum number of parallel requests (default: 10)
+    Returns:
+        Dictionary with {key: metric_data} format
+    """
+    results = {}
+    
+    def fetch_single_metric(key, query):
+        try:
+            data = get_metric_data(dd_api_key, dd_app_key, dd_site, query, from_time, to_time)
+            return key, data
+        except Exception as e:
+            print(f"Error fetching metric {key}: {e}")
+            return key, None
+    
+    # Use ThreadPoolExecutor for parallel HTTP requests
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_key = {
+            executor.submit(fetch_single_metric, key, query): key 
+            for key, query in queries_dict.items()
+        }
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_key):
+            key, data = future.result()
+            results[key] = data
+    
+    return results
 
 def create_graph_snapshot(dd_api_key, dd_app_key, dd_site, metric_query, from_time, to_time, title=""):
     """Create a snapshot image of a graph using Datadog API"""
@@ -558,8 +595,64 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                     widget_count = 0
                     chart_scripts = []  # Accumulate all chart scripts
                     
-                    # Iterate through widgets and display them as graph images
+                    # OPTIMIZATION: First pass - collect all metric queries for parallel execution
+                    print(f"🚀 Phase 1: Collecting all metric queries for parallel execution...")
+                    all_queries = {}  # Dictionary to store all queries: {key: query_string}
+                    widget_metadata = []  # Store widget info for second pass
+                    
                     for widget in widgets_to_show:
+                        widget_def = widget.get('definition', {})
+                        widget_type = widget_def.get('type', 'unknown')
+                        
+                        # Skip non-trace_service widgets for now (they'll be processed normally)
+                        if widget_type != 'trace_service':
+                            widget_metadata.append({'widget': widget, 'queries_keys': None})
+                            continue
+                        
+                        # Extract service information
+                        service = widget_def.get('service', 'Unknown')
+                        env = widget_def.get('env', 'production')
+                        show_hits = widget_def.get('show_hits', True)
+                        show_errors = widget_def.get('show_errors', True)
+                        show_latency = widget_def.get('show_latency', True)
+                        
+                        # Generate unique keys for this service's metrics
+                        queries_keys = {
+                            'requests': f"{service}_{env}_requests",
+                            'errors': f"{service}_{env}_errors",
+                            'latency_avg': f"{service}_{env}_latency_avg",
+                            'latency_min': f"{service}_{env}_latency_min",
+                            'latency_max': f"{service}_{env}_latency_max"
+                        }
+                        
+                        # Add queries to the batch
+                        if show_hits:
+                            all_queries[queries_keys['requests']] = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
+                        if show_errors:
+                            all_queries[queries_keys['errors']] = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
+                        if show_latency:
+                            all_queries[queries_keys['latency_avg']] = f"avg:trace.servlet.request.duration{{service:{service},env:{env}}}"
+                            all_queries[queries_keys['latency_min']] = f"min:trace.servlet.request.duration{{service:{service},env:{env}}}"
+                            all_queries[queries_keys['latency_max']] = f"max:trace.servlet.request.duration{{service:{service},env:{env}}}"
+                        
+                        widget_metadata.append({'widget': widget, 'queries_keys': queries_keys})
+                    
+                    # OPTIMIZATION: Execute all queries in parallel
+                    print(f"🚀 Phase 2: Executing {len(all_queries)} metric queries in parallel...")
+                    parallel_start = time.time()
+                    all_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, all_queries, from_time, current_time, max_workers=15)
+                    parallel_time = time.time() - parallel_start
+                    print(f"✅ Parallel execution completed in {parallel_time:.2f}s")
+                    
+                    # OPTIMIZATION: Second pass - render widgets using pre-fetched data
+                    print(f"🚀 Phase 3: Rendering widgets with pre-fetched data...")
+                    
+                    # Iterate through widgets and display them
+                    for meta in widget_metadata:
+                        # Get widget and check if it has pre-fetched data
+                        widget = meta['widget']
+                        queries_keys = meta['queries_keys']
+                        
                         widget_def = widget.get('definition', {})
                         widget_type = widget_def.get('type', 'unknown')
                         widget_title = widget_def.get('title', 'Untitled Widget')
@@ -602,11 +695,9 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                                 'show_resource_list': widget_def.get('show_resource_list', False),
                             }
                         
-                        # Build a graph URL using Datadog's embeddable graph format
+                        # Build a graph URL
                         graph_url = None
                         if query:
-                            # Use Datadog's graph embed URL (public, no auth needed if dashboard is shared)
-                            # Format: https://site/graph/embed?...
                             import urllib.parse
                             params = {
                                 'height': '300',
@@ -617,7 +708,6 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                                 'end': str(current_time),
                                 'query': query
                             }
-                            # Create a link to the dashboard widget instead
                             graph_url = f"https://{dd_site}/dashboard/{dash_id}"
                         
                         output += f"""
@@ -625,8 +715,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                                     padding: 4px; 
                                     border-radius: 3px; 
                                     border: 1px solid #e2e8f0; 
-                                    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-                                    max-width: 450px;'>
+                                    box-shadow: 0 1px 2px rgba(0,0,0,0.04);'>
                             <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;'>
                                 <h4 style='margin: 0; color: #2d3748; font-size: 13px; font-weight: 600;'>
                                     {metric_icon} {html.escape(widget_title)}
@@ -637,21 +726,19 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                             </div>
                         """
                         
-                        if service_info:
-                            # Special display for trace_service widgets (APM)
+                        if service_info and queries_keys:
+                            # Special display for trace_service widgets using pre-fetched data
                             service = service_info['service']
                             env = service_info['env']
                             
-                            # Try to fetch real metrics data with full time series
                             import json
                             metrics_data = {}
                             chart_data = {}
-                            print(f"📊 Fetching metrics for service: {service}, env: {env}")
+                            print(f"📊 Rendering metrics for service: {service}, env: {env}")
                             
-                            # Query for requests rate
-                            if service_info['show_hits']:
-                                requests_query = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
-                                requests_data = get_metric_data(dd_api_key, dd_app_key, dd_site, requests_query, from_time, current_time)
+                            # Get requests data from pre-fetched results
+                            if service_info['show_hits'] and queries_keys['requests'] in all_results:
+                                requests_data = all_results[queries_keys['requests']]
                                 if requests_data and 'series' in requests_data and len(requests_data['series']) > 0:
                                     series = requests_data['series'][0]
                                     if 'pointlist' in series and len(series['pointlist']) > 0:
@@ -671,10 +758,9 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                                 
                                 print(f"📊 Requests chart_data labels count: {len(chart_data.get('requests', {}).get('labels', []))}")
                             
-                            # Query for error rate
-                            if service_info['show_errors']:
-                                errors_query = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
-                                errors_data = get_metric_data(dd_api_key, dd_app_key, dd_site, errors_query, from_time, current_time)
+                            # Get error data from pre-fetched results
+                            if service_info['show_errors'] and queries_keys['errors'] in all_results:
+                                errors_data = all_results[queries_keys['errors']]
                                 error_count = 0
                                 if errors_data and 'series' in errors_data and len(errors_data['series']) > 0:
                                     series = errors_data['series'][0]
@@ -707,20 +793,20 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                                 else:
                                     metrics_data['errors'] = "0 (0%)"
                             
-                            # Query for latency
+                            # Get latency data from pre-fetched results
                             if service_info['show_latency']:
-                                # Query for latency metrics (avg, min, max)
+                                # Latency metrics configuration
                                 latency_metrics = {
-                                    'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)'},
-                                    'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)'},
-                                    'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)'}
+                                    'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)', 'key': 'latency_avg'},
+                                    'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)', 'key': 'latency_min'},
+                                    'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)', 'key': 'latency_max'}
                                 }
                                 chart_data['latency'] = {'labels': [], 'datasets': []}
                                 latency_values = {}
                                 
                                 for metric, config in latency_metrics.items():
-                                    latency_query = f"{metric}:trace.servlet.request.duration{{service:{service},env:{env}}}"
-                                    latency_data = get_metric_data(dd_api_key, dd_app_key, dd_site, latency_query, from_time, current_time)
+                                    result_key = queries_keys[config['key']]
+                                    latency_data = all_results.get(result_key) if result_key in all_results else None
                                     
                                     if latency_data and 'series' in latency_data and len(latency_data['series']) > 0 and latency_data.get('status') != 'error':
                                         series = latency_data['series'][0]
@@ -1279,22 +1365,70 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
             <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;'>
         """
         
-        # Parse widgets to extract service metrics (similar to read_datadog_dashboards)
+        # OPTIMIZATION: Three-phase processing for parallel API calls
         widget_count = 0
         chart_scripts = []
+        
+        # Phase 1: Collect all queries
+        print(f"🚀 ADT Phase 1: Collecting metric queries...")
+        all_queries = {}
+        widget_metadata = []
         
         for widget in widgets_to_show:
             widget_def = widget.get('definition', {})
             widget_type = widget_def.get('type', 'unknown')
+            
+            if widget_type != 'trace_service':
+                widget_metadata.append({'widget': widget, 'queries_keys': None})
+                continue
+            
+            service = widget_def.get('service', 'Unknown')
+            env = widget_def.get('env', 'production')
+            show_hits = widget_def.get('show_hits', True)
+            show_errors = widget_def.get('show_errors', True)
+            show_latency = widget_def.get('show_latency', True)
+            
+            queries_keys = {
+                'requests': f"{service}_{env}_requests",
+                'errors': f"{service}_{env}_errors",
+                'latency_avg': f"{service}_{env}_latency_avg",
+                'latency_min': f"{service}_{env}_latency_min",
+                'latency_max': f"{service}_{env}_latency_max"
+            }
+            
+            if show_hits:
+                all_queries[queries_keys['requests']] = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
+            if show_errors:
+                all_queries[queries_keys['errors']] = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
+            if show_latency:
+                all_queries[queries_keys['latency_avg']] = f"avg:trace.servlet.request.duration{{service:{service},env:{env}}}"
+                all_queries[queries_keys['latency_min']] = f"min:trace.servlet.request.duration{{service:{service},env:{env}}}"
+                all_queries[queries_keys['latency_max']] = f"max:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            
+            widget_metadata.append({'widget': widget, 'queries_keys': queries_keys})
+        
+        # Phase 2: Execute all queries in parallel
+        print(f"🚀 ADT Phase 2: Executing {len(all_queries)} queries in parallel...")
+        parallel_start = time.time()
+        all_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, all_queries, from_time, current_time, max_workers=15)
+        print(f"✅ ADT parallel execution: {time.time() - parallel_start:.2f}s")
+        
+        # Phase 3: Render widgets with pre-fetched data
+        print(f"🚀 ADT Phase 3: Rendering widgets...")
+        
+        for meta in widget_metadata:
+            widget = meta['widget']
+            queries_keys = meta['queries_keys']
+            
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', 'unknown')
             widget_title = widget_def.get('title', 'Untitled Widget')
             
-            # Skip non-graphable widgets
             if widget_type in ['note', 'free_text', 'iframe']:
                 continue
             
             widget_count += 1
             
-            # Extract service information from widget definition
             service_info = None
             if widget_type == 'trace_service':
                 service_info = {
@@ -1309,18 +1443,16 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
                     'show_resource_list': widget_def.get('show_resource_list', False),
                 }
             
-            if service_info:
+            if service_info and queries_keys:
                 service = service_info['service']
                 env = service_info['env']
                 
-                # Query metrics for this service (same as RED Metrics)
                 metrics_data = {}
                 chart_data = {'requests': {}, 'errors': {}, 'latency': {}}
                 
-                # 1. Requests
-                if service_info['show_hits']:
-                    requests_query = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
-                    requests_data = get_metric_data(dd_api_key, dd_app_key, dd_site, requests_query, from_time, current_time)
+                # Get requests data from pre-fetched results
+                if service_info['show_hits'] and queries_keys['requests'] in all_results:
+                    requests_data = all_results[queries_keys['requests']]
                     
                     if requests_data and 'series' in requests_data and len(requests_data['series']) > 0:
                         series = requests_data['series'][0]
@@ -1334,10 +1466,9 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
                     else:
                         metrics_data['requests'] = "0 req/s"
                 
-                # 2. Errors
-                if service_info['show_errors']:
-                    errors_query = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
-                    errors_data = get_metric_data(dd_api_key, dd_app_key, dd_site, errors_query, from_time, current_time)
+                # Get errors data from pre-fetched results
+                if service_info['show_errors'] and queries_keys['errors'] in all_results:
+                    errors_data = all_results[queries_keys['errors']]
                     error_count = 0
                     
                     if errors_data and 'series' in errors_data and len(errors_data['series']) > 0:
@@ -1365,19 +1496,19 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
                     else:
                         metrics_data['errors'] = "0 (0%)"
                 
-                # 3. Latency
+                # Get latency data from pre-fetched results
                 if service_info['show_latency']:
                     latency_metrics = {
-                        'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)'},
-                        'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)'},
-                        'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)'}
+                        'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)', 'key': 'latency_avg'},
+                        'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)', 'key': 'latency_min'},
+                        'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)', 'key': 'latency_max'}
                     }
                     chart_data['latency'] = {'labels': [], 'datasets': []}
                     latency_values = {}
                     
                     for metric, config in latency_metrics.items():
-                        latency_query = f"{metric}:trace.servlet.request.duration{{service:{service},env:{env}}}"
-                        latency_data = get_metric_data(dd_api_key, dd_app_key, dd_site, latency_query, from_time, current_time)
+                        result_key = queries_keys[config['key']]
+                        latency_data = all_results.get(result_key) if result_key in all_results else None
                         
                         if latency_data and 'series' in latency_data and len(latency_data['series']) > 0 and latency_data.get('status') != 'error':
                             series = latency_data['series'][0]
@@ -1815,17 +1946,21 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
         else:
             widgets_to_check = expanded_widgets[:50]
         
-        # Now fetch metrics and filter for errors > 0
+        # OPTIMIZATION: Three-phase processing for parallel API calls
         current_time = int(time.time())
-        from_time = current_time - (timerange_hours * 3600)  # Convert hours to seconds
+        from_time = current_time - (timerange_hours * 3600)
         
         widgets_with_errors = []
         chart_scripts = []
         
+        # Phase 1: Collect all queries
+        print(f"🚀 Errors Phase 1: Collecting queries for {len(widgets_to_check)} widgets...")
+        all_queries = {}
+        widget_metadata = []
+        
         for widget in widgets_to_check:
             widget_def = widget.get('definition', {})
             widget_type = widget_def.get('type', 'unknown')
-            widget_title = widget_def.get('title', 'Untitled Widget')
             
             if widget_type != 'trace_service':
                 continue
@@ -1833,13 +1968,47 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
             service = widget_def.get('service', 'Unknown')
             env = widget_def.get('env', 'production')
             
-            # Query for all metrics
+            queries_keys = {
+                'requests': f"{service}_{env}_requests",
+                'errors': f"{service}_{env}_errors",
+                'latency_avg': f"{service}_{env}_latency_avg",
+                'latency_min': f"{service}_{env}_latency_min",
+                'latency_max': f"{service}_{env}_latency_max"
+            }
+            
+            all_queries[queries_keys['requests']] = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
+            all_queries[queries_keys['errors']] = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
+            all_queries[queries_keys['latency_avg']] = f"avg:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            all_queries[queries_keys['latency_min']] = f"min:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            all_queries[queries_keys['latency_max']] = f"max:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            
+            widget_metadata.append({'widget': widget, 'queries_keys': queries_keys})
+        
+        # Phase 2: Execute all queries in parallel
+        print(f"🚀 Errors Phase 2: Executing {len(all_queries)} queries in parallel...")
+        parallel_start = time.time()
+        all_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, all_queries, from_time, current_time, max_workers=15)
+        print(f"✅ Errors parallel execution: {time.time() - parallel_start:.2f}s")
+        
+        # Phase 3: Filter and render widgets with errors
+        print(f"🚀 Errors Phase 3: Filtering widgets with errors...")
+        
+        for meta in widget_metadata:
+            widget = meta['widget']
+            queries_keys = meta['queries_keys']
+            
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', 'unknown')
+            widget_title = widget_def.get('title', 'Untitled Widget')
+            
+            service = widget_def.get('service', 'Unknown')
+            env = widget_def.get('env', 'production')
+            
             metrics_data = {}
             chart_data = {}
             
-            # 1. Requests
-            requests_query = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
-            requests_response = get_metric_data(dd_api_key, dd_app_key, dd_site, requests_query, from_time, current_time)
+            # Get requests data from pre-fetched results
+            requests_response = all_results.get(queries_keys['requests'])
             if requests_response and 'series' in requests_response and len(requests_response['series']) > 0:
                 series = requests_response['series'][0]
                 if 'pointlist' in series and len(series['pointlist']) > 0:
@@ -1856,9 +2025,8 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
                 metrics_data['requests'] = "0.0 req/s"
                 chart_data['requests'] = {'labels': [], 'values': []}
             
-            # 2. Errors
-            errors_query = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
-            errors_response = get_metric_data(dd_api_key, dd_app_key, dd_site, errors_query, from_time, current_time)
+            # Get errors data from pre-fetched results
+            errors_response = all_results.get(queries_keys['errors'])
             
             has_errors = False
             error_count = 0
@@ -1895,18 +2063,18 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
             else:
                 metrics_data['errors'] = "0 (0%)"
             
-            # 3. Latency - Query for latency metrics (avg, min, max)
+            # Get latency data from pre-fetched results
             latency_metrics = {
-                'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)'},
-                'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)'},
-                'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)'}
+                'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)', 'key': 'latency_avg'},
+                'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)', 'key': 'latency_min'},
+                'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)', 'key': 'latency_max'}
             }
             chart_data['latency'] = {'labels': [], 'datasets': []}
             latency_values = {}
             
             for metric, config in latency_metrics.items():
-                latency_query = f"{metric}:trace.servlet.request.duration{{service:{service},env:{env}}}"
-                latency_response = get_metric_data(dd_api_key, dd_app_key, dd_site, latency_query, from_time, current_time)
+                result_key = queries_keys[config['key']]
+                latency_response = all_results.get(result_key) if result_key in all_results else None
                 
                 if latency_response and 'series' in latency_response and len(latency_response['series']) > 0 and latency_response.get('status') != 'error':
                     series = latency_response['series'][0]
@@ -1997,7 +2165,6 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
                             border-radius: 3px; 
                             border: 1px solid #e2e8f0; 
                             box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-                            max-width: 450px;
                             border-left: 3px solid #dc2626;'>
                     <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;'>
                         <h4 style='margin: 0; color: #2d3748; font-size: 13px; font-weight: 600;'>
@@ -2391,27 +2558,65 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
         else:
             widgets_to_check = expanded_widgets[:50]
         
-        # Now fetch metrics and filter for errors > 0
+        # OPTIMIZATION: Three-phase processing for parallel API calls
         current_time = int(time.time())
-        from_time = current_time - (timerange_hours * 3600)  # Convert hours to seconds
+        from_time = current_time - (timerange_hours * 3600)
         
         widgets_with_errors = []
         chart_scripts = []
+        
+        # Phase 1: Collect all queries
+        print(f"🚀 ADT Errors Phase 1: Collecting queries for {len(widgets_to_check)} widgets...")
+        all_queries = {}
+        widget_metadata = []
         
         for widget in widgets_to_check:
             widget_def = widget.get('definition', {})
             widget_type = widget_def.get('type', 'unknown')
             
-            # Only process trace_service widgets
             if widget_type != 'trace_service':
                 continue
             
             service = widget_def.get('service', 'Unknown')
             env = widget_def.get('env', 'production')
             
-            # Query for errors
-            errors_query = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
-            errors_response = get_metric_data(dd_api_key, dd_app_key, dd_site, errors_query, from_time, current_time)
+            queries_keys = {
+                'requests': f"{service}_{env}_requests",
+                'errors': f"{service}_{env}_errors",
+                'latency_avg': f"{service}_{env}_latency_avg",
+                'latency_min': f"{service}_{env}_latency_min",
+                'latency_max': f"{service}_{env}_latency_max"
+            }
+            
+            all_queries[queries_keys['requests']] = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
+            all_queries[queries_keys['errors']] = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
+            all_queries[queries_keys['latency_avg']] = f"avg:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            all_queries[queries_keys['latency_min']] = f"min:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            all_queries[queries_keys['latency_max']] = f"max:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            
+            widget_metadata.append({'widget': widget, 'queries_keys': queries_keys})
+        
+        # Phase 2: Execute all queries in parallel
+        print(f"🚀 ADT Errors Phase 2: Executing {len(all_queries)} queries in parallel...")
+        parallel_start = time.time()
+        all_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, all_queries, from_time, current_time, max_workers=15)
+        print(f"✅ ADT Errors parallel execution: {time.time() - parallel_start:.2f}s")
+        
+        # Phase 3: Filter and render widgets with errors
+        print(f"🚀 ADT Errors Phase 3: Filtering widgets with errors...")
+        
+        for meta in widget_metadata:
+            widget = meta['widget']
+            queries_keys = meta['queries_keys']
+            
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', 'unknown')
+            
+            service = widget_def.get('service', 'Unknown')
+            env = widget_def.get('env', 'production')
+            
+            # Get errors data from pre-fetched results
+            errors_response = all_results.get(queries_keys['errors'])
             
             has_errors = False
             error_count = 0
@@ -2432,9 +2637,8 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
             if not has_errors:
                 continue
             
-            # Fetch requests for percentage calculation
-            requests_query = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
-            requests_response = get_metric_data(dd_api_key, dd_app_key, dd_site, requests_query, from_time, current_time)
+            # Get requests data from pre-fetched results
+            requests_response = all_results.get(queries_keys['requests'])
             
             total_requests = 0
             requests_chart_data = {'labels': [], 'values': []}
@@ -2448,18 +2652,18 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
                         'values': [p[1] if len(p) > 1 else 0 for p in series['pointlist']]
                     }
             
-            # Fetch latency
+            # Get latency data from pre-fetched results
             latency_metrics = {
-                'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)'},
-                'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)'},
-                'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)'}
+                'avg': {'label': 'Average', 'color': '#4299e1', 'bg': 'rgba(66, 153, 225, 0.6)', 'key': 'latency_avg'},
+                'min': {'label': 'Minimum', 'color': '#48bb78', 'bg': 'rgba(72, 187, 120, 0.6)', 'key': 'latency_min'},
+                'max': {'label': 'Maximum', 'color': '#f6ad55', 'bg': 'rgba(246, 173, 85, 0.6)', 'key': 'latency_max'}
             }
             latency_chart_data = {'labels': [], 'datasets': []}
             latency_values = {}
             
             for metric, config in latency_metrics.items():
-                latency_query = f"{metric}:trace.servlet.request.duration{{service:{service},env:{env}}}"
-                latency_response = get_metric_data(dd_api_key, dd_app_key, dd_site, latency_query, from_time, current_time)
+                result_key = queries_keys[config['key']]
+                latency_response = all_results.get(result_key) if result_key in all_results else None
                 
                 if latency_response and 'series' in latency_response and len(latency_response['series']) > 0 and latency_response.get('status') != 'error':
                     series = latency_response['series'][0]

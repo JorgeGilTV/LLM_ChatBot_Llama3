@@ -45,7 +45,15 @@
     <div id="loading-overlay" class="loading-overlay" style="display: none;">
         <div class="loading-content">
             <div class="loading-spinner"></div>
-            <p>Processing your request...</p>
+            <p style="font-size: 18px; margin: 10px 0; font-weight: bold;">Processing your request...</p>
+            <div style="margin: 15px 0; padding: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 8px;">
+                <p style="font-size: 14px; margin: 5px 0; color: #60a5fa;">
+                    <strong>Tools:</strong> <span id="loading-tools-list">-</span>
+                </p>
+                <p style="font-size: 14px; margin: 5px 0; color: #fbbf24;">
+                    <strong>Time:</strong> <span id="loading-time-counter">0s</span>
+                </p>
+            </div>
             <div class="loading-bar">
                 <div class="loading-bar-fill"></div>
             </div>

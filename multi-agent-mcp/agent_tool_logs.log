@@ -29600,3 +29600,16 @@
 2026-02-10 16:28:21,600 [INFO] 127.0.0.1 - - [10/Feb/2026 16:28:21] "GET /api/history HTTP/1.1" 200 -
 2026-02-10 16:28:21,601 [INFO] 127.0.0.1 - - [10/Feb/2026 16:28:21] "GET /api/alerts/status HTTP/1.1" 200 -
 2026-02-10 16:28:21,996 [INFO] 127.0.0.1 - - [10/Feb/2026 16:28:21] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:28:51,214 [INFO] 127.0.0.1 - - [10/Feb/2026 16:28:51] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:28:51,724 [INFO] 127.0.0.1 - - [10/Feb/2026 16:28:51] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:29:21,590 [INFO] 127.0.0.1 - - [10/Feb/2026 16:29:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:29:29,788 [INFO] 127.0.0.1 - - [10/Feb/2026 16:29:29] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:29:30,297 [INFO] 127.0.0.1 - - [10/Feb/2026 16:29:30] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:30:21,593 [INFO] 127.0.0.1 - - [10/Feb/2026 16:30:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:31:08,111 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 16:31:08,111 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 16:31:21,598 [INFO] 127.0.0.1 - - [10/Feb/2026 16:31:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:31:22,037 [INFO] 127.0.0.1 - - [10/Feb/2026 16:31:22] "GET /api/status/monitor HTTP/1.1" 200 -

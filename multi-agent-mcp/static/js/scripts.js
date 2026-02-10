@@ -142,6 +142,18 @@ function hideLoadingOverlay() {
     if (overlay) {
         overlay.style.display = 'none';
     }
+    
+    // Clear the counter interval
+    if (counterInterval) {
+        clearInterval(counterInterval);
+        counterInterval = null;
+    }
+    
+    // Reset loading overlay content
+    const loadingToolsList = document.getElementById('loading-tools-list');
+    const loadingTimeCounter = document.getElementById('loading-time-counter');
+    if (loadingToolsList) loadingToolsList.textContent = '-';
+    if (loadingTimeCounter) loadingTimeCounter.textContent = '0s';
 }
 
 // ============================================
@@ -191,9 +203,15 @@ function setupTimeRangeSelector() {
 }
 
 // Mostrar el spinner y contador mientras se ejecuta la consulta
-function showLoading() {
+function showLoading(selectedTools = []) {
     // Show overlay
     showLoadingOverlay();
+    
+    // Update loading overlay with selected tools
+    const loadingToolsList = document.getElementById('loading-tools-list');
+    if (loadingToolsList && selectedTools.length > 0) {
+        loadingToolsList.textContent = selectedTools.join(', ');
+    }
     
     // Also show inline spinner for backward compatibility
     document.getElementById('loading-message').innerHTML =
@@ -204,7 +222,11 @@ function showLoading() {
     if (counterInterval) clearInterval(counterInterval);
     counterInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        document.getElementById('counter').innerText = elapsed + 's';
+        const counterEl = document.getElementById('counter');
+        const loadingTimeCounter = document.getElementById('loading-time-counter');
+        
+        if (counterEl) counterEl.innerText = elapsed + 's';
+        if (loadingTimeCounter) loadingTimeCounter.textContent = elapsed + 's';
     }, 1000);
 }
 
@@ -526,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return; // Stop execution
         }
 
-        showLoading();
+        showLoading(selectedTools);
 
         // Get timerange value if visible
         const timerangeSelect = document.getElementById('timerange-select');

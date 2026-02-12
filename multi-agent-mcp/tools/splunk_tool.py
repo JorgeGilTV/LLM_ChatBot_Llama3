@@ -25,7 +25,8 @@ def execute_splunk_query(query_key, query_data, splunk_host, splunk_token, earli
             "output_mode": "json"
         }
         
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
+        # Increased connect timeout to 30 seconds for Splunk Cloud
+        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(30, 180))
         
         if response.status_code == 200:
             # Parse JSON results from export endpoint
@@ -42,8 +43,14 @@ def execute_splunk_query(query_key, query_data, splunk_host, splunk_token, earli
         else:
             return query_key, None, f"HTTP {response.status_code}: {response.text[:200]}"
     
+    except requests.exceptions.ConnectTimeout as e:
+        return query_key, None, f"⚠️ Connection timeout - Your IP may not be whitelisted in Splunk Cloud: {str(e)}"
+    except requests.exceptions.Timeout as e:
+        return query_key, None, f"⏱️ Request timeout - Splunk query took too long: {str(e)}"
+    except requests.exceptions.ConnectionError as e:
+        return query_key, None, f"🔌 Connection error - Check if port 8089 is accessible or if VPN is required: {str(e)}"
     except Exception as e:
-        return query_key, None, str(e)
+        return query_key, None, f"❌ Unexpected error: {str(e)}"
 
 
 def execute_splunk_queries_parallel(queries_dict, splunk_host, splunk_token, earliest_time, latest_time, max_workers=3):
@@ -122,6 +129,40 @@ def format_timestamp_range_splunk(from_timestamp: int, to_timestamp: int) -> str
     </div>
     """
 
+def generate_splunk_error_help(error_message: str) -> str:
+    """Generate helpful error message with troubleshooting steps"""
+    html = f"""
+    <div style='background: #fef2f2; border-left: 4px solid #dc2626; padding: 20px; margin: 20px 0; border-radius: 6px;'>
+        <h3 style='margin: 0 0 10px 0; color: #991b1b;'>⚠️ Splunk Connection Failed</h3>
+        <p style='margin: 10px 0; color: #7f1d1d;'><strong>Error:</strong> {error_message}</p>
+        
+        <h4 style='margin: 15px 0 10px 0; color: #991b1b;'>🔍 Most Common Causes:</h4>
+        <ol style='margin: 10px 0; padding-left: 25px; color: #7f1d1d;'>
+            <li><strong>IP Not Whitelisted:</strong> Your IP address needs to be added to Splunk Cloud's IP allowlist</li>
+            <li><strong>VPN Required:</strong> You may need to connect to your corporate VPN</li>
+            <li><strong>Port 8089 Blocked:</strong> Firewall may be blocking the required port</li>
+            <li><strong>Invalid Token:</strong> SPLUNK_TOKEN may be expired or incorrect</li>
+        </ol>
+        
+        <h4 style='margin: 15px 0 10px 0; color: #991b1b;'>✅ Troubleshooting Steps:</h4>
+        <ol style='margin: 10px 0; padding-left: 25px; color: #7f1d1d;'>
+            <li><strong>Check your IP:</strong> Visit <a href='https://whatismyipaddress.com' target='_blank' style='color: #dc2626;'>whatismyipaddress.com</a></li>
+            <li><strong>Contact Splunk Admin:</strong> Request to whitelist your IP or CIDR range</li>
+            <li><strong>Connect to VPN:</strong> If required by your organization</li>
+            <li><strong>Verify Token:</strong> Check that SPLUNK_TOKEN in .env is valid</li>
+            <li><strong>Test Connectivity:</strong> Try accessing <a href='https://arlo.splunkcloud.com' target='_blank' style='color: #dc2626;'>arlo.splunkcloud.com</a></li>
+        </ol>
+        
+        <div style='background: #fef3c7; padding: 12px; margin-top: 15px; border-radius: 4px;'>
+            <p style='margin: 0; color: #78350f; font-size: 13px;'>
+                💡 <strong>Quick Fix:</strong> Most Splunk Cloud instances require IP whitelisting. 
+                Contact your Splunk administrator to add your IP address to the allowlist.
+            </p>
+        </div>
+    </div>
+    """
+    return html
+
 def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
     """
     Shows the P0 Streaming dashboard from Splunk with metrics and graphs.
@@ -164,7 +205,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
     <div style='background: linear-gradient(135deg, #00c853 0%, #00796b 100%); 
                 padding: 12px; 
                 border-radius: 6px; 
-                margin: 8px 0;
+                margin: 0 0 8px 0;
                 color: white;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
         <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 Splunk - P0 Streaming Dashboard</h2>
@@ -648,6 +689,12 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         print(f"❌ Error reading Splunk dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
+        
+        # Check if it's a connection error
+        error_str = str(e).lower()
+        if 'timeout' in error_str or 'connection' in error_str or 'max retries' in error_str:
+            return generate_splunk_error_help(str(e))
+        
         return f"<p>❌ Error reading Splunk dashboard: {html.escape(str(e))}</p>"
 
 
@@ -693,7 +740,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
     <div style='background: linear-gradient(135deg, #9c27b0 0%, #6a1b9a 100%); 
                 padding: 12px; 
                 border-radius: 6px; 
-                margin: 8px 0;
+                margin: 0 0 8px 0;
                 color: white;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
         <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 Splunk - P0 CVR Streaming Dashboard</h2>
@@ -1159,6 +1206,12 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
         print(f"❌ Error reading Splunk CVR dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
+        
+        # Check if it's a connection error
+        error_str = str(e).lower()
+        if 'timeout' in error_str or 'connection' in error_str or 'max retries' in error_str:
+            return generate_splunk_error_help(str(e))
+        
         return f"<p>❌ Error reading Splunk CVR dashboard: {html.escape(str(e))}</p>"
 
 
@@ -1204,7 +1257,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
     <div style='background: linear-gradient(135deg, #ff6f00 0%, #e65100 100%); 
                 padding: 12px; 
                 border-radius: 6px; 
-                margin: 8px 0;
+                margin: 0 0 8px 0;
                 color: white;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
         <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 Splunk - P0 ADT Streaming Dashboard</h2>
@@ -1692,4 +1745,10 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
         print(f"❌ Error reading Splunk ADT dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
+        
+        # Check if it's a connection error
+        error_str = str(e).lower()
+        if 'timeout' in error_str or 'connection' in error_str or 'max retries' in error_str:
+            return generate_splunk_error_help(str(e))
+        
         return f"<p>❌ Error reading Splunk ADT dashboard: {html.escape(str(e))}</p>"

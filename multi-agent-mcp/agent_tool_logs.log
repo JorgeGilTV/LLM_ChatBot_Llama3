@@ -29633,3 +29633,1490 @@
 2026-02-10 16:32:46,190 [INFO] [33mPress CTRL+C to quit[0m
 2026-02-10 16:33:03,804 [INFO] 127.0.0.1 - - [10/Feb/2026 16:33:03] "POST /api/run HTTP/1.1" 200 -
 2026-02-10 16:33:04,331 [INFO] 127.0.0.1 - - [10/Feb/2026 16:33:04] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:33:30,014 [INFO] 127.0.0.1 - - [10/Feb/2026 16:33:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:34:16,870 [INFO] 127.0.0.1 - - [10/Feb/2026 16:34:16] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:34:17,400 [INFO] 127.0.0.1 - - [10/Feb/2026 16:34:17] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:34:30,017 [INFO] 127.0.0.1 - - [10/Feb/2026 16:34:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:34:45,510 [INFO] 127.0.0.1 - - [10/Feb/2026 16:34:45] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:34:46,033 [INFO] 127.0.0.1 - - [10/Feb/2026 16:34:46] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:35:15,056 [INFO] 127.0.0.1 - - [10/Feb/2026 16:35:15] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:35:15,582 [INFO] 127.0.0.1 - - [10/Feb/2026 16:35:15] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:35:30,018 [INFO] 127.0.0.1 - - [10/Feb/2026 16:35:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:35:30,530 [INFO] 127.0.0.1 - - [10/Feb/2026 16:35:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:36:30,014 [INFO] 127.0.0.1 - - [10/Feb/2026 16:36:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:37:23,000 [INFO] 127.0.0.1 - - [10/Feb/2026 16:37:23] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:37:23,529 [INFO] 127.0.0.1 - - [10/Feb/2026 16:37:23] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:37:30,019 [INFO] 127.0.0.1 - - [10/Feb/2026 16:37:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:38:30,046 [INFO] 127.0.0.1 - - [10/Feb/2026 16:38:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:38:30,428 [INFO] 127.0.0.1 - - [10/Feb/2026 16:38:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:39:30,077 [INFO] 127.0.0.1 - - [10/Feb/2026 16:39:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:39:37,333 [INFO] 127.0.0.1 - - [10/Feb/2026 16:39:37] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:39:38,544 [INFO] 127.0.0.1 - - [10/Feb/2026 16:39:38] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:40:30,110 [INFO] 127.0.0.1 - - [10/Feb/2026 16:40:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:41:30,135 [INFO] 127.0.0.1 - - [10/Feb/2026 16:41:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:41:30,285 [INFO] 127.0.0.1 - - [10/Feb/2026 16:41:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:42:30,169 [INFO] 127.0.0.1 - - [10/Feb/2026 16:42:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:43:04,572 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 16:43:04,572 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 16:43:31,126 [INFO] 127.0.0.1 - - [10/Feb/2026 16:43:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:44:20,918 [INFO] 127.0.0.1 - - [10/Feb/2026 16:44:20] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:44:22,199 [INFO] 127.0.0.1 - - [10/Feb/2026 16:44:22] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:44:30,783 [INFO] 127.0.0.1 - - [10/Feb/2026 16:44:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:44:31,128 [INFO] 127.0.0.1 - - [10/Feb/2026 16:44:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:45:31,161 [INFO] 127.0.0.1 - - [10/Feb/2026 16:45:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:46:31,190 [INFO] 127.0.0.1 - - [10/Feb/2026 16:46:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:47:30,464 [INFO] 127.0.0.1 - - [10/Feb/2026 16:47:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:47:31,217 [INFO] 127.0.0.1 - - [10/Feb/2026 16:47:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:48:19,804 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 16:48:19,804 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 16:48:27,106 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "GET / HTTP/1.1" 200 -
+2026-02-10 16:48:27,400 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 16:48:27,401 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-10 16:48:27,401 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 16:48:27,415 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 16:48:27,415 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:48:27,424 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:48:27,687 [INFO] 127.0.0.1 - - [10/Feb/2026 16:48:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:49:03,248 [INFO] 127.0.0.1 - - [10/Feb/2026 16:49:03] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:49:04,723 [INFO] 127.0.0.1 - - [10/Feb/2026 16:49:04] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:49:27,417 [INFO] 127.0.0.1 - - [10/Feb/2026 16:49:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:49:49,442 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 16:49:49,442 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 16:50:27,422 [INFO] 127.0.0.1 - - [10/Feb/2026 16:50:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:51:27,419 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:51:27,715 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:51:44,265 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "GET / HTTP/1.1" 200 -
+2026-02-10 16:51:44,276 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 16:51:44,277 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-10 16:51:44,278 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 16:51:44,284 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 16:51:44,291 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:51:44,299 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:51:44,543 [INFO] 127.0.0.1 - - [10/Feb/2026 16:51:44] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:52:14,369 [INFO] 127.0.0.1 - - [10/Feb/2026 16:52:14] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:52:15,888 [INFO] 127.0.0.1 - - [10/Feb/2026 16:52:15] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:52:44,285 [INFO] 127.0.0.1 - - [10/Feb/2026 16:52:44] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:53:40,471 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 16:53:40,471 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 16:53:44,287 [INFO] 127.0.0.1 - - [10/Feb/2026 16:53:44] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:54:04,113 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "GET / HTTP/1.1" 200 -
+2026-02-10 16:54:04,402 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 16:54:04,403 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-10 16:54:04,404 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 16:54:04,411 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 16:54:04,412 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:54:04,429 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:54:04,873 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:54:30,284 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:30] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:54:31,120 [INFO] 127.0.0.1 - - [10/Feb/2026 16:54:31] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:55:04,410 [INFO] 127.0.0.1 - - [10/Feb/2026 16:55:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:55:17,006 [INFO] 127.0.0.1 - - [10/Feb/2026 16:55:17] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:55:18,260 [INFO] 127.0.0.1 - - [10/Feb/2026 16:55:18] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:55:57,102 [INFO] 127.0.0.1 - - [10/Feb/2026 16:55:57] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:56:00,393 [INFO] 127.0.0.1 - - [10/Feb/2026 16:56:00] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:56:04,412 [INFO] 127.0.0.1 - - [10/Feb/2026 16:56:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:56:40,263 [INFO] 127.0.0.1 - - [10/Feb/2026 16:56:40] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:56:42,627 [INFO] 127.0.0.1 - - [10/Feb/2026 16:56:42] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:57:04,412 [INFO] 127.0.0.1 - - [10/Feb/2026 16:57:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:57:04,659 [INFO] 127.0.0.1 - - [10/Feb/2026 16:57:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 16:58:04,413 [INFO] 127.0.0.1 - - [10/Feb/2026 16:58:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 16:58:54,470 [INFO] 127.0.0.1 - - [10/Feb/2026 16:58:54] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 16:59:01,654 [INFO] 127.0.0.1 - - [10/Feb/2026 16:59:01] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 16:59:04,412 [INFO] 127.0.0.1 - - [10/Feb/2026 16:59:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:00:04,419 [INFO] 127.0.0.1 - - [10/Feb/2026 17:00:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:00:05,020 [INFO] 127.0.0.1 - - [10/Feb/2026 17:00:05] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:01:04,428 [INFO] 127.0.0.1 - - [10/Feb/2026 17:01:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:02:04,457 [INFO] 127.0.0.1 - - [10/Feb/2026 17:02:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:02:48,009 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 17:02:48,010 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 17:03:04,485 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:03:04,922 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:03:24,501 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:24] "GET / HTTP/1.1" 200 -
+2026-02-10 17:03:25,295 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:25] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-10 17:03:25,302 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:25] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 17:03:25,303 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:25] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-10 17:03:25,335 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:25] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:03:25,336 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:25] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 17:03:25,511 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:25] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:03:25,741 [INFO] 127.0.0.1 - - [10/Feb/2026 17:03:25] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:04:25,322 [INFO] 127.0.0.1 - - [10/Feb/2026 17:04:25] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:05:03,319 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:03] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 17:05:04,783 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:04] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:05:19,866 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:19] "POST /api/download/docx HTTP/1.1" 200 -
+2026-02-10 17:05:25,324 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:25] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:05:27,407 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:27] "POST /api/download/docx HTTP/1.1" 200 -
+2026-02-10 17:05:35,984 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 17:05:35,984 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 17:05:52,212 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "GET / HTTP/1.1" 200 -
+2026-02-10 17:05:52,222 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 17:05:52,223 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 17:05:52,223 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-10 17:05:52,231 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 17:05:52,231 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:05:52,344 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:05:52,744 [INFO] 127.0.0.1 - - [10/Feb/2026 17:05:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:06:26,666 [INFO] 127.0.0.1 - - [10/Feb/2026 17:06:26] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 17:06:27,449 [INFO] 127.0.0.1 - - [10/Feb/2026 17:06:27] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:06:52,231 [INFO] 127.0.0.1 - - [10/Feb/2026 17:06:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:07:52,234 [INFO] 127.0.0.1 - - [10/Feb/2026 17:07:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:08:52,235 [INFO] 127.0.0.1 - - [10/Feb/2026 17:08:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:08:52,858 [INFO] 127.0.0.1 - - [10/Feb/2026 17:08:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:09:34,872 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 17:09:34,872 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 17:09:52,235 [INFO] 127.0.0.1 - - [10/Feb/2026 17:09:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:10:07,580 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:07] "GET / HTTP/1.1" 200 -
+2026-02-10 17:10:07,889 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:07] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 17:10:07,891 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:07] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 17:10:07,891 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:07] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-10 17:10:07,899 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:07] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 17:10:07,900 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:07] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:10:07,997 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:07] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:10:08,355 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:08] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:10:44,421 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:44] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 17:10:45,228 [INFO] 127.0.0.1 - - [10/Feb/2026 17:10:45] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:11:07,902 [INFO] 127.0.0.1 - - [10/Feb/2026 17:11:07] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:12:07,902 [INFO] 127.0.0.1 - - [10/Feb/2026 17:12:07] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:13:07,903 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:07] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:13:08,532 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:08] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:13:31,746 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 17:13:31,746 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 17:13:56,252 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "GET / HTTP/1.1" 200 -
+2026-02-10 17:13:56,262 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 17:13:56,263 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 17:13:56,263 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-10 17:13:56,271 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 17:13:56,272 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:13:56,331 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:13:56,603 [INFO] 127.0.0.1 - - [10/Feb/2026 17:13:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:14:37,366 [INFO] 127.0.0.1 - - [10/Feb/2026 17:14:37] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 17:14:38,245 [INFO] 127.0.0.1 - - [10/Feb/2026 17:14:38] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:14:56,271 [INFO] 127.0.0.1 - - [10/Feb/2026 17:14:56] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:15:52,281 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 17:15:52,281 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 17:16:51,806 [INFO] 127.0.0.1 - - [10/Feb/2026 17:16:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:16:56,568 [INFO] 127.0.0.1 - - [10/Feb/2026 17:16:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:17:51,801 [INFO] 127.0.0.1 - - [10/Feb/2026 17:17:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:18:51,802 [INFO] 127.0.0.1 - - [10/Feb/2026 17:18:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:19:51,802 [INFO] 127.0.0.1 - - [10/Feb/2026 17:19:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:19:56,700 [INFO] 127.0.0.1 - - [10/Feb/2026 17:19:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:20:51,824 [INFO] 127.0.0.1 - - [10/Feb/2026 17:20:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:21:51,854 [INFO] 127.0.0.1 - - [10/Feb/2026 17:21:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:22:51,885 [INFO] 127.0.0.1 - - [10/Feb/2026 17:22:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:22:57,021 [INFO] 127.0.0.1 - - [10/Feb/2026 17:22:57] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:23:51,914 [INFO] 127.0.0.1 - - [10/Feb/2026 17:23:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:24:51,945 [INFO] 127.0.0.1 - - [10/Feb/2026 17:24:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:25:51,975 [INFO] 127.0.0.1 - - [10/Feb/2026 17:25:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:25:56,647 [INFO] 127.0.0.1 - - [10/Feb/2026 17:25:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:26:52,005 [INFO] 127.0.0.1 - - [10/Feb/2026 17:26:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:27:52,033 [INFO] 127.0.0.1 - - [10/Feb/2026 17:27:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:28:52,065 [INFO] 127.0.0.1 - - [10/Feb/2026 17:28:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:28:56,702 [INFO] 127.0.0.1 - - [10/Feb/2026 17:28:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:29:52,093 [INFO] 127.0.0.1 - - [10/Feb/2026 17:29:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:30:52,122 [INFO] 127.0.0.1 - - [10/Feb/2026 17:30:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:31:52,153 [INFO] 127.0.0.1 - - [10/Feb/2026 17:31:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:31:56,676 [INFO] 127.0.0.1 - - [10/Feb/2026 17:31:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:32:52,182 [INFO] 127.0.0.1 - - [10/Feb/2026 17:32:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:33:52,213 [INFO] 127.0.0.1 - - [10/Feb/2026 17:33:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:34:52,241 [INFO] 127.0.0.1 - - [10/Feb/2026 17:34:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:34:56,641 [INFO] 127.0.0.1 - - [10/Feb/2026 17:34:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:35:52,272 [INFO] 127.0.0.1 - - [10/Feb/2026 17:35:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:36:52,303 [INFO] 127.0.0.1 - - [10/Feb/2026 17:36:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:37:52,334 [INFO] 127.0.0.1 - - [10/Feb/2026 17:37:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:37:56,726 [INFO] 127.0.0.1 - - [10/Feb/2026 17:37:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:38:52,363 [INFO] 127.0.0.1 - - [10/Feb/2026 17:38:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:39:52,391 [INFO] 127.0.0.1 - - [10/Feb/2026 17:39:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:40:52,421 [INFO] 127.0.0.1 - - [10/Feb/2026 17:40:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:40:56,894 [INFO] 127.0.0.1 - - [10/Feb/2026 17:40:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:41:52,451 [INFO] 127.0.0.1 - - [10/Feb/2026 17:41:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:42:52,488 [INFO] 127.0.0.1 - - [10/Feb/2026 17:42:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:43:52,510 [INFO] 127.0.0.1 - - [10/Feb/2026 17:43:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:43:56,721 [INFO] 127.0.0.1 - - [10/Feb/2026 17:43:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:44:52,541 [INFO] 127.0.0.1 - - [10/Feb/2026 17:44:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:45:52,571 [INFO] 127.0.0.1 - - [10/Feb/2026 17:45:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:46:52,604 [INFO] 127.0.0.1 - - [10/Feb/2026 17:46:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:46:56,808 [INFO] 127.0.0.1 - - [10/Feb/2026 17:46:56] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:47:42,066 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "GET / HTTP/1.1" 200 -
+2026-02-10 17:47:42,399 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 17:47:42,400 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 17:47:42,400 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-10 17:47:42,417 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 17:47:42,418 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:47:42,483 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:47:42,927 [INFO] 127.0.0.1 - - [10/Feb/2026 17:47:42] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:48:15,550 [INFO] 127.0.0.1 - - [10/Feb/2026 17:48:15] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 17:48:16,351 [INFO] 127.0.0.1 - - [10/Feb/2026 17:48:16] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 17:48:42,418 [INFO] 127.0.0.1 - - [10/Feb/2026 17:48:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:49:42,419 [INFO] 127.0.0.1 - - [10/Feb/2026 17:49:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:50:42,420 [INFO] 127.0.0.1 - - [10/Feb/2026 17:50:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:50:42,804 [INFO] 127.0.0.1 - - [10/Feb/2026 17:50:42] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:51:42,420 [INFO] 127.0.0.1 - - [10/Feb/2026 17:51:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:52:42,421 [INFO] 127.0.0.1 - - [10/Feb/2026 17:52:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:53:42,423 [INFO] 127.0.0.1 - - [10/Feb/2026 17:53:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:53:42,963 [INFO] 127.0.0.1 - - [10/Feb/2026 17:53:42] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:54:42,430 [INFO] 127.0.0.1 - - [10/Feb/2026 17:54:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:55:43,115 [INFO] 127.0.0.1 - - [10/Feb/2026 17:55:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:56:42,716 [INFO] 127.0.0.1 - - [10/Feb/2026 17:56:42] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 17:56:43,120 [INFO] 127.0.0.1 - - [10/Feb/2026 17:56:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:57:43,153 [INFO] 127.0.0.1 - - [10/Feb/2026 17:57:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 17:59:08,664 [INFO] 127.0.0.1 - - [10/Feb/2026 17:59:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:00:08,466 [INFO] 127.0.0.1 - - [10/Feb/2026 18:00:08] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:00:08,691 [INFO] 127.0.0.1 - - [10/Feb/2026 18:00:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:00:52,153 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:00:52,153 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:01:08,723 [INFO] 127.0.0.1 - - [10/Feb/2026 18:01:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:02:08,753 [INFO] 127.0.0.1 - - [10/Feb/2026 18:02:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:03:08,585 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:08] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:03:08,781 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:03:31,042 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "GET / HTTP/1.1" 200 -
+2026-02-10 18:03:31,321 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-10 18:03:31,323 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:03:31,323 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:03:31,330 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:03:31,331 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:03:31,397 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:03:31,617 [INFO] 127.0.0.1 - - [10/Feb/2026 18:03:31] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:04:11,463 [INFO] 127.0.0.1 - - [10/Feb/2026 18:04:11] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:04:12,272 [INFO] 127.0.0.1 - - [10/Feb/2026 18:04:12] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:04:31,333 [INFO] 127.0.0.1 - - [10/Feb/2026 18:04:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:05:31,333 [INFO] 127.0.0.1 - - [10/Feb/2026 18:05:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:06:31,334 [INFO] 127.0.0.1 - - [10/Feb/2026 18:06:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:06:31,665 [INFO] 127.0.0.1 - - [10/Feb/2026 18:06:31] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:07:31,334 [INFO] 127.0.0.1 - - [10/Feb/2026 18:07:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:08:06,864 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:06] "GET / HTTP/1.1" 200 -
+2026-02-10 18:08:06,871 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:06] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-10 18:08:06,872 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:06] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:08:06,873 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:06] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:08:06,884 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:06] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:08:06,885 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:08:06,940 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:06] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:08:07,416 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:07] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:08:40,866 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:40] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:08:41,650 [INFO] 127.0.0.1 - - [10/Feb/2026 18:08:41] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:09:06,985 [INFO] 127.0.0.1 - - [10/Feb/2026 18:09:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:10:07,185 [INFO] 127.0.0.1 - - [10/Feb/2026 18:10:07] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:11:23,020 [INFO] 127.0.0.1 - - [10/Feb/2026 18:11:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:11:23,135 [INFO] 127.0.0.1 - - [10/Feb/2026 18:11:23] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:11:51,572 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:11:51,572 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:12:23,024 [INFO] 127.0.0.1 - - [10/Feb/2026 18:12:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:13:23,031 [INFO] 127.0.0.1 - - [10/Feb/2026 18:13:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:19:24,649 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:19:25,075 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:25] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:19:35,053 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "GET / HTTP/1.1" 200 -
+2026-02-10 18:19:35,338 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:19:35,339 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:19:35,340 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:19:35,354 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:19:35,354 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:19:35,415 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:19:35,838 [INFO] 127.0.0.1 - - [10/Feb/2026 18:19:35] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:20:10,096 [INFO] 127.0.0.1 - - [10/Feb/2026 18:20:10] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:20:10,894 [INFO] 127.0.0.1 - - [10/Feb/2026 18:20:10] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:20:35,354 [INFO] 127.0.0.1 - - [10/Feb/2026 18:20:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:21:06,445 [INFO] 127.0.0.1 - - [10/Feb/2026 18:21:06] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:21:07,211 [INFO] 127.0.0.1 - - [10/Feb/2026 18:21:07] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:21:35,356 [INFO] 127.0.0.1 - - [10/Feb/2026 18:21:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:22:35,358 [INFO] 127.0.0.1 - - [10/Feb/2026 18:22:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:22:35,933 [INFO] 127.0.0.1 - - [10/Feb/2026 18:22:35] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:23:00,878 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:23:00,878 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:23:14,941 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:14] "GET / HTTP/1.1" 200 -
+2026-02-10 18:23:14,958 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:14] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:23:14,959 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:14] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:23:14,959 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:14] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:23:14,973 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:14] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:23:14,974 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:14] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:23:15,116 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:15] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:23:15,424 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:15] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:23:52,057 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:52] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:23:52,952 [INFO] 127.0.0.1 - - [10/Feb/2026 18:23:52] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:24:14,968 [INFO] 127.0.0.1 - - [10/Feb/2026 18:24:14] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:25:13,252 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:25:13,252 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:25:14,969 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:14] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:25:23,355 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:23] "GET / HTTP/1.1" 200 -
+2026-02-10 18:25:23,638 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:23] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:25:23,640 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:23] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:25:23,640 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:23] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:25:23,660 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:23] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:25:23,661 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:25:23,692 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:23] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:25:24,072 [INFO] 127.0.0.1 - - [10/Feb/2026 18:25:24] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:26:02,973 [INFO] 127.0.0.1 - - [10/Feb/2026 18:26:02] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:26:03,747 [INFO] 127.0.0.1 - - [10/Feb/2026 18:26:03] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:26:23,659 [INFO] 127.0.0.1 - - [10/Feb/2026 18:26:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:27:12,938 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:27:12,938 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:27:23,658 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:27:52,436 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "GET / HTTP/1.1" 200 -
+2026-02-10 18:27:52,457 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:27:52,458 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:27:52,459 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:27:52,479 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:27:52,497 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:27:52,522 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:27:52,996 [INFO] 127.0.0.1 - - [10/Feb/2026 18:27:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:28:16,320 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:28:16,320 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:28:52,478 [INFO] 127.0.0.1 - - [10/Feb/2026 18:28:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:28:57,308 [INFO] 127.0.0.1 - - [10/Feb/2026 18:28:57] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:28:58,090 [INFO] 127.0.0.1 - - [10/Feb/2026 18:28:58] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:29:10,490 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:10] "GET / HTTP/1.1" 200 -
+2026-02-10 18:29:10,503 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:10] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:29:10,503 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:10] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:29:10,504 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:10] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:29:10,515 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:10] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:29:10,525 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:29:10,535 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:10] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:29:11,249 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:11] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:29:44,112 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:44] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:29:45,147 [INFO] 127.0.0.1 - - [10/Feb/2026 18:29:45] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:30:10,516 [INFO] 127.0.0.1 - - [10/Feb/2026 18:30:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:31:10,517 [INFO] 127.0.0.1 - - [10/Feb/2026 18:31:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:32:10,520 [INFO] 127.0.0.1 - - [10/Feb/2026 18:32:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:32:10,756 [INFO] 127.0.0.1 - - [10/Feb/2026 18:32:10] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:33:10,520 [INFO] 127.0.0.1 - - [10/Feb/2026 18:33:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:33:25,148 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:33:25,149 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:34:10,517 [INFO] 127.0.0.1 - - [10/Feb/2026 18:34:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:34:25,377 [INFO] 127.0.0.1 - - [10/Feb/2026 18:34:25] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:34:26,101 [INFO] 127.0.0.1 - - [10/Feb/2026 18:34:26] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:35:10,519 [INFO] 127.0.0.1 - - [10/Feb/2026 18:35:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:35:10,967 [INFO] 127.0.0.1 - - [10/Feb/2026 18:35:10] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:36:10,551 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:10] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:36:48,419 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:48] "GET / HTTP/1.1" 200 -
+2026-02-10 18:36:48,713 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:48] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-10 18:36:48,714 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:48] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:36:48,715 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:48] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:36:48,722 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:48] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:36:48,744 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:36:48,745 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:48] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:36:49,093 [INFO] 127.0.0.1 - - [10/Feb/2026 18:36:49] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:37:21,382 [INFO] 127.0.0.1 - - [10/Feb/2026 18:37:21] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:37:22,104 [INFO] 127.0.0.1 - - [10/Feb/2026 18:37:22] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:37:48,724 [INFO] 127.0.0.1 - - [10/Feb/2026 18:37:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:38:48,725 [INFO] 127.0.0.1 - - [10/Feb/2026 18:38:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:39:48,725 [INFO] 127.0.0.1 - - [10/Feb/2026 18:39:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:39:49,052 [INFO] 127.0.0.1 - - [10/Feb/2026 18:39:49] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:40:48,727 [INFO] 127.0.0.1 - - [10/Feb/2026 18:40:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:41:48,725 [INFO] 127.0.0.1 - - [10/Feb/2026 18:41:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:42:36,410 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:42:36,411 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:42:48,734 [INFO] 127.0.0.1 - - [10/Feb/2026 18:42:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:42:49,308 [INFO] 127.0.0.1 - - [10/Feb/2026 18:42:49] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:43:23,641 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:23] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:43:24,544 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:24] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:43:44,916 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:44] "GET / HTTP/1.1" 200 -
+2026-02-10 18:43:45,207 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:45] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:43:45,208 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:45] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:43:45,208 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:45] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:43:45,227 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:45] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:43:45,228 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:45] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:43:45,238 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:45] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:43:45,660 [INFO] 127.0.0.1 - - [10/Feb/2026 18:43:45] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:44:30,143 [INFO] 127.0.0.1 - - [10/Feb/2026 18:44:30] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:44:31,011 [INFO] 127.0.0.1 - - [10/Feb/2026 18:44:31] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:44:45,216 [INFO] 127.0.0.1 - - [10/Feb/2026 18:44:45] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:45:45,320 [INFO] 127.0.0.1 - - [10/Feb/2026 18:45:45] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:46:29,423 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:46:29,423 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:46:45,415 [INFO] 127.0.0.1 - - [10/Feb/2026 18:46:45] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:46:45,734 [INFO] 127.0.0.1 - - [10/Feb/2026 18:46:45] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:47:21,323 [INFO] 127.0.0.1 - - [10/Feb/2026 18:47:21] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:47:22,153 [INFO] 127.0.0.1 - - [10/Feb/2026 18:47:22] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:47:45,413 [INFO] 127.0.0.1 - - [10/Feb/2026 18:47:45] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:48:35,617 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:35] "GET / HTTP/1.1" 200 -
+2026-02-10 18:48:35,626 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:35] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:48:35,627 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:35] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:48:35,627 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:35] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:48:35,635 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:35] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:48:35,635 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:48:35,652 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:35] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:48:36,126 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:36] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:48:46,083 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:46] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:48:46,630 [INFO] 127.0.0.1 - - [10/Feb/2026 18:48:46] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:49:20,278 [INFO] 127.0.0.1 - - [10/Feb/2026 18:49:20] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:49:21,029 [INFO] 127.0.0.1 - - [10/Feb/2026 18:49:21] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:49:35,637 [INFO] 127.0.0.1 - - [10/Feb/2026 18:49:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:50:35,641 [INFO] 127.0.0.1 - - [10/Feb/2026 18:50:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:51:35,637 [INFO] 127.0.0.1 - - [10/Feb/2026 18:51:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:51:35,934 [INFO] 127.0.0.1 - - [10/Feb/2026 18:51:35] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:52:35,639 [INFO] 127.0.0.1 - - [10/Feb/2026 18:52:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:53:35,640 [INFO] 127.0.0.1 - - [10/Feb/2026 18:53:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:54:35,640 [INFO] 127.0.0.1 - - [10/Feb/2026 18:54:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:54:36,091 [INFO] 127.0.0.1 - - [10/Feb/2026 18:54:36] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:55:05,466 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-10 18:55:05,466 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-10 18:55:35,651 [INFO] 127.0.0.1 - - [10/Feb/2026 18:55:35] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:56:00,607 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:00] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:56:01,401 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:01] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:56:30,257 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "GET / HTTP/1.1" 200 -
+2026-02-10 18:56:30,552 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-10 18:56:30,553 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-10 18:56:30,554 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-10 18:56:30,568 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "GET /api/tools HTTP/1.1" 200 -
+2026-02-10 18:56:30,578 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:56:30,588 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:56:30,807 [INFO] 127.0.0.1 - - [10/Feb/2026 18:56:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-10 18:57:04,058 [INFO] 127.0.0.1 - - [10/Feb/2026 18:57:04] "POST /api/run HTTP/1.1" 200 -
+2026-02-10 18:57:04,843 [INFO] 127.0.0.1 - - [10/Feb/2026 18:57:04] "GET /api/history HTTP/1.1" 200 -
+2026-02-10 18:57:30,569 [INFO] 127.0.0.1 - - [10/Feb/2026 18:57:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-10 18:58:30,570 [INFO] 127.0.0.1 - - [10/Feb/2026 18:58:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:52:19,000 [INFO] 127.0.0.1 - - [11/Feb/2026 09:52:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:52:19,588 [INFO] 127.0.0.1 - - [11/Feb/2026 09:52:19] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 09:53:18,991 [INFO] 127.0.0.1 - - [11/Feb/2026 09:53:18] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:54:18,984 [INFO] 127.0.0.1 - - [11/Feb/2026 09:54:18] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:55:18,985 [INFO] 127.0.0.1 - - [11/Feb/2026 09:55:18] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:55:19,304 [INFO] 127.0.0.1 - - [11/Feb/2026 09:55:19] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 09:56:19,004 [INFO] 127.0.0.1 - - [11/Feb/2026 09:56:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:57:19,032 [INFO] 127.0.0.1 - - [11/Feb/2026 09:57:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:58:19,447 [INFO] 127.0.0.1 - - [11/Feb/2026 09:58:19] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 09:58:19,498 [INFO] 127.0.0.1 - - [11/Feb/2026 09:58:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 09:59:19,513 [INFO] 127.0.0.1 - - [11/Feb/2026 09:59:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:00:19,545 [INFO] 127.0.0.1 - - [11/Feb/2026 10:00:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:01:19,460 [INFO] 127.0.0.1 - - [11/Feb/2026 10:01:19] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:01:19,568 [INFO] 127.0.0.1 - - [11/Feb/2026 10:01:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:02:19,601 [INFO] 127.0.0.1 - - [11/Feb/2026 10:02:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:03:20,643 [INFO] 127.0.0.1 - - [11/Feb/2026 10:03:20] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:04:19,521 [INFO] 127.0.0.1 - - [11/Feb/2026 10:04:19] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:04:24,107 [INFO] 127.0.0.1 - - [11/Feb/2026 10:04:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:06:24,309 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-11 10:06:24,309 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 10:06:26,415 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:26] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:06:50,074 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "GET / HTTP/1.1" 200 -
+2026-02-11 10:06:50,369 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 10:06:50,371 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 10:06:50,372 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 10:06:50,383 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:06:50,384 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 10:06:50,411 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:06:50,939 [INFO] 127.0.0.1 - - [11/Feb/2026 10:06:50] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:07:41,227 [INFO] 127.0.0.1 - - [11/Feb/2026 10:07:41] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:07:44,664 [INFO] 127.0.0.1 - - [11/Feb/2026 10:07:44] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:07:50,390 [INFO] 127.0.0.1 - - [11/Feb/2026 10:07:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:08:50,394 [INFO] 127.0.0.1 - - [11/Feb/2026 10:08:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:09:50,394 [INFO] 127.0.0.1 - - [11/Feb/2026 10:09:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:09:50,979 [INFO] 127.0.0.1 - - [11/Feb/2026 10:09:50] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:10:50,491 [INFO] 127.0.0.1 - - [11/Feb/2026 10:10:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:11:50,593 [INFO] 127.0.0.1 - - [11/Feb/2026 10:11:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:12:50,702 [INFO] 127.0.0.1 - - [11/Feb/2026 10:12:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:12:50,863 [INFO] 127.0.0.1 - - [11/Feb/2026 10:12:50] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:14:01,609 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:01] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:14:22,186 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "GET / HTTP/1.1" 200 -
+2026-02-11 10:14:22,468 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 10:14:22,469 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 10:14:22,469 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 10:14:22,483 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 10:14:22,503 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:14:22,519 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:14:22,865 [INFO] 127.0.0.1 - - [11/Feb/2026 10:14:22] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:15:22,488 [INFO] 127.0.0.1 - - [11/Feb/2026 10:15:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:16:22,486 [INFO] 127.0.0.1 - - [11/Feb/2026 10:16:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:17:22,589 [INFO] 127.0.0.1 - - [11/Feb/2026 10:17:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:17:23,152 [INFO] 127.0.0.1 - - [11/Feb/2026 10:17:23] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:18:22,586 [INFO] 127.0.0.1 - - [11/Feb/2026 10:18:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:19:14,470 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:14] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:19:15,011 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:15] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:19:22,582 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:19:28,584 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:28] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:19:29,117 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:29] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:19:45,008 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:45] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:19:45,547 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:45] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:19:56,896 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:56] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:19:57,432 [INFO] 127.0.0.1 - - [11/Feb/2026 10:19:57] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:20:22,596 [INFO] 127.0.0.1 - - [11/Feb/2026 10:20:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:20:22,911 [INFO] 127.0.0.1 - - [11/Feb/2026 10:20:22] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:20:40,098 [INFO] 127.0.0.1 - - [11/Feb/2026 10:20:40] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:20:43,726 [INFO] 127.0.0.1 - - [11/Feb/2026 10:20:43] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:21:22,627 [INFO] 127.0.0.1 - - [11/Feb/2026 10:21:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:21:39,539 [INFO] 127.0.0.1 - - [11/Feb/2026 10:21:39] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:21:40,089 [INFO] 127.0.0.1 - - [11/Feb/2026 10:21:40] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:21:49,508 [INFO] 127.0.0.1 - - [11/Feb/2026 10:21:49] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:21:50,052 [INFO] 127.0.0.1 - - [11/Feb/2026 10:21:50] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:22:01,166 [INFO] 127.0.0.1 - - [11/Feb/2026 10:22:01] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:22:01,712 [INFO] 127.0.0.1 - - [11/Feb/2026 10:22:01] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:22:22,656 [INFO] 127.0.0.1 - - [11/Feb/2026 10:22:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:22:23,945 [INFO] 127.0.0.1 - - [11/Feb/2026 10:22:23] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:22:26,499 [INFO] 127.0.0.1 - - [11/Feb/2026 10:22:26] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:23:15,860 [INFO] 127.0.0.1 - - [11/Feb/2026 10:23:15] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:23:17,072 [INFO] 127.0.0.1 - - [11/Feb/2026 10:23:17] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:23:22,716 [INFO] 127.0.0.1 - - [11/Feb/2026 10:23:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:23:22,934 [INFO] 127.0.0.1 - - [11/Feb/2026 10:23:22] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:24:22,750 [INFO] 127.0.0.1 - - [11/Feb/2026 10:24:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:25:22,778 [INFO] 127.0.0.1 - - [11/Feb/2026 10:25:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:26:23,118 [INFO] 127.0.0.1 - - [11/Feb/2026 10:26:23] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:26:23,199 [INFO] 127.0.0.1 - - [11/Feb/2026 10:26:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:27:23,227 [INFO] 127.0.0.1 - - [11/Feb/2026 10:27:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:28:23,255 [INFO] 127.0.0.1 - - [11/Feb/2026 10:28:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:29:22,990 [INFO] 127.0.0.1 - - [11/Feb/2026 10:29:22] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:29:23,283 [INFO] 127.0.0.1 - - [11/Feb/2026 10:29:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:30:23,415 [INFO] 127.0.0.1 - - [11/Feb/2026 10:30:23] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:37:53,009 [INFO] 127.0.0.1 - - [11/Feb/2026 10:37:53] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:37:53,581 [INFO] 127.0.0.1 - - [11/Feb/2026 10:37:53] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:38:52,469 [INFO] 127.0.0.1 - - [11/Feb/2026 10:38:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:39:13,012 [INFO] 127.0.0.1 - - [11/Feb/2026 10:39:13] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:39:13,554 [INFO] 127.0.0.1 - - [11/Feb/2026 10:39:13] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:39:36,202 [INFO] 127.0.0.1 - - [11/Feb/2026 10:39:36] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:39:36,749 [INFO] 127.0.0.1 - - [11/Feb/2026 10:39:36] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:39:52,503 [INFO] 127.0.0.1 - - [11/Feb/2026 10:39:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:40:17,296 [INFO] 127.0.0.1 - - [11/Feb/2026 10:40:17] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:40:18,564 [INFO] 127.0.0.1 - - [11/Feb/2026 10:40:18] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:40:52,533 [INFO] 127.0.0.1 - - [11/Feb/2026 10:40:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:40:52,881 [INFO] 127.0.0.1 - - [11/Feb/2026 10:40:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:41:30,419 [INFO] 127.0.0.1 - - [11/Feb/2026 10:41:30] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:41:36,700 [INFO] 127.0.0.1 - - [11/Feb/2026 10:41:36] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:41:52,563 [INFO] 127.0.0.1 - - [11/Feb/2026 10:41:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:42:31,139 [INFO] 127.0.0.1 - - [11/Feb/2026 10:42:31] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 10:42:31,701 [INFO] 127.0.0.1 - - [11/Feb/2026 10:42:31] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 10:42:52,593 [INFO] 127.0.0.1 - - [11/Feb/2026 10:42:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:43:25,251 [INFO] 127.0.0.1 - - [11/Feb/2026 10:43:25] "POST /api/download/docx HTTP/1.1" 200 -
+2026-02-11 10:43:52,720 [INFO] 127.0.0.1 - - [11/Feb/2026 10:43:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:43:52,975 [INFO] 127.0.0.1 - - [11/Feb/2026 10:43:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 10:58:04,370 [INFO] 127.0.0.1 - - [11/Feb/2026 10:58:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 10:58:04,998 [INFO] 127.0.0.1 - - [11/Feb/2026 10:58:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:01:32,532 [INFO] 127.0.0.1 - - [11/Feb/2026 11:01:32] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:01:32,934 [INFO] 127.0.0.1 - - [11/Feb/2026 11:01:32] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:08:52,225 [INFO] 127.0.0.1 - - [11/Feb/2026 11:08:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:08:52,919 [INFO] 127.0.0.1 - - [11/Feb/2026 11:08:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:09:00,103 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "GET / HTTP/1.1" 200 -
+2026-02-11 11:09:00,385 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 11:09:00,386 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 11:09:00,387 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 11:09:00,403 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:09:00,404 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 11:09:00,505 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:09:00,800 [INFO] 127.0.0.1 - - [11/Feb/2026 11:09:00] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:10:00,404 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:10:17,850 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:17] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:10:18,398 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:18] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:10:25,881 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:25] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:10:26,438 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:26] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:10:32,660 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:32] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:10:33,208 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:33] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:10:40,078 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:40] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:10:40,630 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:40] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:10:46,815 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:46] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:10:47,362 [INFO] 127.0.0.1 - - [11/Feb/2026 11:10:47] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:11:00,401 [INFO] 127.0.0.1 - - [11/Feb/2026 11:11:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:11:21,078 [INFO] 127.0.0.1 - - [11/Feb/2026 11:11:21] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:11:24,756 [INFO] 127.0.0.1 - - [11/Feb/2026 11:11:24] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:12:00,406 [INFO] 127.0.0.1 - - [11/Feb/2026 11:12:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:12:00,815 [INFO] 127.0.0.1 - - [11/Feb/2026 11:12:00] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:12:08,873 [INFO] 127.0.0.1 - - [11/Feb/2026 11:12:08] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:12:09,429 [INFO] 127.0.0.1 - - [11/Feb/2026 11:12:09] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:12:46,592 [INFO] 127.0.0.1 - - [11/Feb/2026 11:12:46] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:12:49,460 [INFO] 127.0.0.1 - - [11/Feb/2026 11:12:49] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:13:00,406 [INFO] 127.0.0.1 - - [11/Feb/2026 11:13:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:13:25,918 [INFO] 127.0.0.1 - - [11/Feb/2026 11:13:25] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:13:27,661 [INFO] 127.0.0.1 - - [11/Feb/2026 11:13:27] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:14:00,409 [INFO] 127.0.0.1 - - [11/Feb/2026 11:14:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:14:32,293 [INFO] 127.0.0.1 - - [11/Feb/2026 11:14:32] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:14:36,021 [INFO] 127.0.0.1 - - [11/Feb/2026 11:14:36] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:15:00,422 [INFO] 127.0.0.1 - - [11/Feb/2026 11:15:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:15:00,859 [INFO] 127.0.0.1 - - [11/Feb/2026 11:15:00] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:15:01,142 [INFO] 127.0.0.1 - - [11/Feb/2026 11:15:01] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:15:01,683 [INFO] 127.0.0.1 - - [11/Feb/2026 11:15:01] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:16:00,454 [INFO] 127.0.0.1 - - [11/Feb/2026 11:16:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:17:00,483 [INFO] 127.0.0.1 - - [11/Feb/2026 11:17:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:18:00,513 [INFO] 127.0.0.1 - - [11/Feb/2026 11:18:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:18:00,830 [INFO] 127.0.0.1 - - [11/Feb/2026 11:18:00] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:18:31,348 [INFO] 127.0.0.1 - - [11/Feb/2026 11:18:31] "POST /api/download/docx HTTP/1.1" 200 -
+2026-02-11 11:19:00,685 [INFO] 127.0.0.1 - - [11/Feb/2026 11:19:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:20:00,693 [INFO] 127.0.0.1 - - [11/Feb/2026 11:20:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:25:22,603 [INFO] 127.0.0.1 - - [11/Feb/2026 11:25:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:25:23,157 [INFO] 127.0.0.1 - - [11/Feb/2026 11:25:23] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:26:18,324 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 11:26:18,324 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 11:26:22,621 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:26:34,858 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:34] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 11:26:39,755 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:39] "GET / HTTP/1.1" 200 -
+2026-02-11 11:26:40,035 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:40] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 11:26:40,036 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:40] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 11:26:40,036 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:40] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 11:26:40,050 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:40] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 11:26:40,050 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:40] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:26:40,086 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:40] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:26:40,445 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:40] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:26:43,578 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:43] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:26:44,124 [INFO] 127.0.0.1 - - [11/Feb/2026 11:26:44] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:43:39,679 [INFO] 127.0.0.1 - - [11/Feb/2026 11:43:39] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 11:51:02,854 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:02] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:51:03,410 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:03] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:51:46,433 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 11:51:46,433 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 11:51:53,991 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:53] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:51:54,273 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:54] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:51:57,645 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:57] "GET / HTTP/1.1" 200 -
+2026-02-11 11:51:57,928 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:57] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 11:51:57,929 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:57] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 11:51:57,930 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:57] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 11:51:57,944 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:57] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 11:51:57,944 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:57] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 11:51:57,978 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:57] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:51:58,214 [INFO] 127.0.0.1 - - [11/Feb/2026 11:51:58] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 11:52:02,133 [INFO] 127.0.0.1 - - [11/Feb/2026 11:52:02] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 11:52:02,677 [INFO] 127.0.0.1 - - [11/Feb/2026 11:52:02] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 11:59:12,296 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 11:59:12,296 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:01:01,660 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:01:01,660 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:01:27,138 [INFO] 127.0.0.1 - - [11/Feb/2026 12:01:27] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:03:27,304 [INFO] 127.0.0.1 - - [11/Feb/2026 12:03:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:03:27,696 [INFO] 127.0.0.1 - - [11/Feb/2026 12:03:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:03:32,297 [INFO] 127.0.0.1 - - [11/Feb/2026 12:03:32] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:03:32,849 [INFO] 127.0.0.1 - - [11/Feb/2026 12:03:32] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:04:16,164 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "GET / HTTP/1.1" 200 -
+2026-02-11 12:04:16,454 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:04:16,455 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:04:16,455 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:04:16,468 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:04:16,469 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:04:16,508 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:04:16,986 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:16] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:04:21,211 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:21] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:04:21,756 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:21] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:04:35,081 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:35] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:04:35,740 [INFO] 127.0.0.1 - - [11/Feb/2026 12:04:35] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:05:16,472 [INFO] 127.0.0.1 - - [11/Feb/2026 12:05:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:06:16,471 [INFO] 127.0.0.1 - - [11/Feb/2026 12:06:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:07:02,902 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:07:02,902 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:07:16,471 [INFO] 127.0.0.1 - - [11/Feb/2026 12:07:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:07:17,445 [INFO] 127.0.0.1 - - [11/Feb/2026 12:07:17] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:07:59,622 [INFO] 127.0.0.1 - - [11/Feb/2026 12:07:59] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:08:16,470 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:08:42,706 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:42] "GET / HTTP/1.1" 200 -
+2026-02-11 12:08:42,716 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:42] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:08:42,716 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:42] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:08:42,716 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:42] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:08:42,725 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:42] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:08:42,725 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:08:42,748 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:42] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:08:43,083 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:08:52,093 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:52] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:08:53,032 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:53] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:08:53,580 [INFO] 127.0.0.1 - - [11/Feb/2026 12:08:53] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:09:42,727 [INFO] 127.0.0.1 - - [11/Feb/2026 12:09:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:10:42,727 [INFO] 127.0.0.1 - - [11/Feb/2026 12:10:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:11:10,601 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:11:10,601 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:11:34,857 [INFO] 127.0.0.1 - - [11/Feb/2026 12:11:34] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:11:42,727 [INFO] 127.0.0.1 - - [11/Feb/2026 12:11:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:11:43,129 [INFO] 127.0.0.1 - - [11/Feb/2026 12:11:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:12:42,727 [INFO] 127.0.0.1 - - [11/Feb/2026 12:12:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:13:42,729 [INFO] 127.0.0.1 - - [11/Feb/2026 12:13:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:14:42,727 [INFO] 127.0.0.1 - - [11/Feb/2026 12:14:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:14:43,268 [INFO] 127.0.0.1 - - [11/Feb/2026 12:14:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:15:42,742 [INFO] 127.0.0.1 - - [11/Feb/2026 12:15:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:16:42,773 [INFO] 127.0.0.1 - - [11/Feb/2026 12:16:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:17:42,801 [INFO] 127.0.0.1 - - [11/Feb/2026 12:17:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:17:43,059 [INFO] 127.0.0.1 - - [11/Feb/2026 12:17:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:18:42,834 [INFO] 127.0.0.1 - - [11/Feb/2026 12:18:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:19:43,167 [INFO] 127.0.0.1 - - [11/Feb/2026 12:19:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:20:43,072 [INFO] 127.0.0.1 - - [11/Feb/2026 12:20:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:20:43,190 [INFO] 127.0.0.1 - - [11/Feb/2026 12:20:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:21:43,224 [INFO] 127.0.0.1 - - [11/Feb/2026 12:21:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:22:39,274 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:39] "GET / HTTP/1.1" 200 -
+2026-02-11 12:22:39,579 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:39] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:22:39,580 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:39] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 12:22:39,580 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:39] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 12:22:39,620 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:39] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:22:39,620 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:39] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:22:39,621 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:22:40,112 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:40] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:22:40,623 [INFO] 127.0.0.1 - - [11/Feb/2026 12:22:40] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:23:39,594 [INFO] 127.0.0.1 - - [11/Feb/2026 12:23:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:24:39,592 [INFO] 127.0.0.1 - - [11/Feb/2026 12:24:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:25:11,538 [INFO] 127.0.0.1 - - [11/Feb/2026 12:25:11] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:25:39,001 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:25:39,001 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:25:39,595 [INFO] 127.0.0.1 - - [11/Feb/2026 12:25:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:25:39,946 [INFO] 127.0.0.1 - - [11/Feb/2026 12:25:39] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:25:40,690 [INFO] 127.0.0.1 - - [11/Feb/2026 12:25:40] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:26:39,595 [INFO] 127.0.0.1 - - [11/Feb/2026 12:26:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:27:00,066 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "GET / HTTP/1.1" 200 -
+2026-02-11 12:27:00,094 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:27:00,119 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:27:00,122 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 12:27:00,274 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:27:00,275 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:27:00,276 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:27:00,626 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:00] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:27:01,334 [INFO] 127.0.0.1 - - [11/Feb/2026 12:27:01] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:28:00,137 [INFO] 127.0.0.1 - - [11/Feb/2026 12:28:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:28:26,028 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:28:26,028 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:29:00,139 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:29:17,120 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "GET / HTTP/1.1" 200 -
+2026-02-11 12:29:17,405 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:29:17,407 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 12:29:17,407 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 12:29:17,417 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:29:17,429 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:29:17,442 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:29:17,815 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:17] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:29:18,415 [INFO] 127.0.0.1 - - [11/Feb/2026 12:29:18] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:30:17,419 [INFO] 127.0.0.1 - - [11/Feb/2026 12:30:17] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:31:33,086 [INFO] 127.0.0.1 - - [11/Feb/2026 12:31:33] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:31:50,439 [INFO] 127.0.0.1 - - [11/Feb/2026 12:31:50] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:31:50,990 [INFO] 127.0.0.1 - - [11/Feb/2026 12:31:50] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:32:17,805 [INFO] 127.0.0.1 - - [11/Feb/2026 12:32:17] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:32:18,448 [INFO] 127.0.0.1 - - [11/Feb/2026 12:32:18] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:32:33,084 [INFO] 127.0.0.1 - - [11/Feb/2026 12:32:33] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:33:33,086 [INFO] 127.0.0.1 - - [11/Feb/2026 12:33:33] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:33:54,976 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:33:54,976 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:34:33,086 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:33] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:34:41,227 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:41] "GET / HTTP/1.1" 200 -
+2026-02-11 12:34:41,582 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:41] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:34:41,582 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:41] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:34:41,585 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:41] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:34:41,604 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:41] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:34:41,605 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:34:41,624 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:41] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:34:42,045 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:42] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:34:45,303 [INFO] 127.0.0.1 - - [11/Feb/2026 12:34:45] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:35:07,607 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:35:07,607 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:35:41,217 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "GET / HTTP/1.1" 200 -
+2026-02-11 12:35:41,225 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:35:41,227 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:35:41,227 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 12:35:41,241 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:35:41,241 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:35:41,255 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:35:41,547 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:41] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:35:44,610 [INFO] 127.0.0.1 - - [11/Feb/2026 12:35:44] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:36:16,969 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:36:16,970 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:36:41,242 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:36:44,921 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:44] "GET / HTTP/1.1" 200 -
+2026-02-11 12:36:44,930 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:44] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:36:44,930 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:44] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:36:44,931 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:44] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 12:36:44,952 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:44] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:36:44,953 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:44] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:36:44,960 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:44] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:36:45,348 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:45] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:36:48,213 [INFO] 127.0.0.1 - - [11/Feb/2026 12:36:48] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:37:44,947 [INFO] 127.0.0.1 - - [11/Feb/2026 12:37:44] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:37:53,490 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:37:53,490 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:38:28,078 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "GET / HTTP/1.1" 200 -
+2026-02-11 12:38:28,088 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:38:28,089 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 12:38:28,090 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 12:38:28,108 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:38:28,108 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:38:28,117 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:38:28,523 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:28] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:38:31,484 [INFO] 127.0.0.1 - - [11/Feb/2026 12:38:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:39:28,104 [INFO] 127.0.0.1 - - [11/Feb/2026 12:39:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:40:29,714 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:40:29,714 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:40:31,487 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:31] "GET / HTTP/1.1" 200 -
+2026-02-11 12:40:31,780 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:31] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:40:31,781 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:31] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:40:31,782 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:31] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:40:31,806 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:40:31,806 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:31] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:40:31,813 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:31] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:40:32,157 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:32] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:40:36,013 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:40:36,016 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:36] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:40:55,353 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:55] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:40:55,897 [INFO] 127.0.0.1 - - [11/Feb/2026 12:40:55] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:41:31,803 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:41:46,813 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:46] "GET / HTTP/1.1" 200 -
+2026-02-11 12:41:46,824 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:46] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:41:46,824 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:46] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:41:46,825 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:46] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:41:46,833 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:46] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:41:46,842 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:46] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:41:46,852 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:46] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:41:47,179 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:47] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:41:51,049 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:41:51,051 [INFO] 127.0.0.1 - - [11/Feb/2026 12:41:51] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:42:46,835 [INFO] 127.0.0.1 - - [11/Feb/2026 12:42:46] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:43:30,449 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "GET / HTTP/1.1" 200 -
+2026-02-11 12:43:30,459 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:43:30,460 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:43:30,460 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:43:30,469 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:43:30,469 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:43:30,486 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:43:30,874 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:43:35,052 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:43:35,055 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:35] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:43:59,119 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:59] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:43:59,650 [INFO] 127.0.0.1 - - [11/Feb/2026 12:43:59] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:44:30,470 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:44:38,474 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "GET / HTTP/1.1" 200 -
+2026-02-11 12:44:38,484 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:44:38,485 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:44:38,486 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:44:38,495 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:44:38,496 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:44:38,497 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:44:38,935 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:38] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:44:42,795 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:44:42,797 [INFO] 127.0.0.1 - - [11/Feb/2026 12:44:42] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:45:38,496 [INFO] 127.0.0.1 - - [11/Feb/2026 12:45:38] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:45:54,143 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:45:54,143 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:46:26,661 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:26] "GET / HTTP/1.1" 200 -
+2026-02-11 12:46:26,974 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:26] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 12:46:26,975 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:26] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:46:26,975 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:26] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:46:26,986 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:26] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:46:26,987 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:26] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:46:26,988 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:26] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:46:27,367 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:46:31,109 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:46:31,112 [INFO] 127.0.0.1 - - [11/Feb/2026 12:46:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:47:26,988 [INFO] 127.0.0.1 - - [11/Feb/2026 12:47:26] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:47:54,029 [INFO] 127.0.0.1 - - [11/Feb/2026 12:47:54] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:47:54,525 [INFO] 127.0.0.1 - - [11/Feb/2026 12:47:54] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:48:27,090 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:48:38,869 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:38] "GET / HTTP/1.1" 200 -
+2026-02-11 12:48:38,878 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:38] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:48:38,879 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:38] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 12:48:38,879 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:38] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 12:48:38,891 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:38] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:48:38,893 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:38] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:48:38,894 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:38] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:48:39,381 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:39] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:48:42,756 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:48:42,757 [INFO] 127.0.0.1 - - [11/Feb/2026 12:48:42] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:48:46,823 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.36.50:5001
+2026-02-11 12:48:46,823 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 12:49:38,997 [INFO] 127.0.0.1 - - [11/Feb/2026 12:49:38] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:50:39,089 [INFO] 127.0.0.1 - - [11/Feb/2026 12:50:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:51:39,184 [INFO] 127.0.0.1 - - [11/Feb/2026 12:51:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:51:39,505 [INFO] 127.0.0.1 - - [11/Feb/2026 12:51:39] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:51:43,891 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:51:43,893 [INFO] 127.0.0.1 - - [11/Feb/2026 12:51:43] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:52:39,286 [INFO] 127.0.0.1 - - [11/Feb/2026 12:52:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:53:39,385 [INFO] 127.0.0.1 - - [11/Feb/2026 12:53:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:54:26,756 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:26] "GET / HTTP/1.1" 200 -
+2026-02-11 12:54:27,039 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:27] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 12:54:27,039 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:27] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 12:54:27,040 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:27] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 12:54:27,058 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:27] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 12:54:27,059 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:54:27,061 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:27] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:54:27,488 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:54:31,599 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:54:31,602 [INFO] 127.0.0.1 - - [11/Feb/2026 12:54:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:55:27,058 [INFO] 127.0.0.1 - - [11/Feb/2026 12:55:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:55:38,009 [INFO] 127.0.0.1 - - [11/Feb/2026 12:55:38] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:55:52,443 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:55:52,446 [INFO] 127.0.0.1 - - [11/Feb/2026 12:55:52] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:56:27,059 [INFO] 127.0.0.1 - - [11/Feb/2026 12:56:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:57:01,410 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:01] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:57:01,923 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:01] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:57:27,157 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:57:27,735 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 12:57:31,309 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 12:57:31,311 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 12:57:34,237 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:34] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:57:34,745 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:34] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:57:46,188 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:46] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:57:46,696 [INFO] 127.0.0.1 - - [11/Feb/2026 12:57:46] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:58:01,554 [INFO] 127.0.0.1 - - [11/Feb/2026 12:58:01] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:58:02,064 [INFO] 127.0.0.1 - - [11/Feb/2026 12:58:02] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:58:14,650 [INFO] 127.0.0.1 - - [11/Feb/2026 12:58:14] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:58:15,162 [INFO] 127.0.0.1 - - [11/Feb/2026 12:58:15] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:58:27,154 [INFO] 127.0.0.1 - - [11/Feb/2026 12:58:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 12:58:57,700 [INFO] 127.0.0.1 - - [11/Feb/2026 12:58:57] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 12:59:01,378 [INFO] 127.0.0.1 - - [11/Feb/2026 12:59:01] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 12:59:27,156 [INFO] 127.0.0.1 - - [11/Feb/2026 12:59:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:00:27,166 [INFO] 127.0.0.1 - - [11/Feb/2026 13:00:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:00:27,512 [INFO] 127.0.0.1 - - [11/Feb/2026 13:00:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:00:31,496 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:00:31,497 [INFO] 127.0.0.1 - - [11/Feb/2026 13:00:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:00:49,107 [INFO] 127.0.0.1 - - [11/Feb/2026 13:00:49] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 13:00:55,591 [INFO] 127.0.0.1 - - [11/Feb/2026 13:00:55] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:01:27,201 [INFO] 127.0.0.1 - - [11/Feb/2026 13:01:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:02:27,327 [INFO] 127.0.0.1 - - [11/Feb/2026 13:02:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:02:54,786 [INFO] 127.0.0.1 - - [11/Feb/2026 13:02:54] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:02:55,127 [INFO] 127.0.0.1 - - [11/Feb/2026 13:02:55] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:03:27,548 [INFO] 127.0.0.1 - - [11/Feb/2026 13:03:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:03:31,606 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:03:31,609 [INFO] 127.0.0.1 - - [11/Feb/2026 13:03:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:03:32,057 [INFO] 127.0.0.1 - - [11/Feb/2026 13:03:32] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:04:29,746 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:29] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:04:34,063 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "GET / HTTP/1.1" 200 -
+2026-02-11 13:04:34,343 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 13:04:34,344 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 13:04:34,345 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 13:04:34,361 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:04:34,362 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 13:04:34,401 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:04:34,953 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:34] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:04:38,694 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:04:38,696 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:38] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:04:42,001 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:42] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 13:04:42,552 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:42] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:04:52,377 [INFO] 127.0.0.1 - - [11/Feb/2026 13:04:52] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:05:19,168 [INFO] 127.0.0.1 - - [11/Feb/2026 13:05:19] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 13:05:19,748 [INFO] 127.0.0.1 - - [11/Feb/2026 13:05:19] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:05:34,361 [INFO] 127.0.0.1 - - [11/Feb/2026 13:05:34] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:06:27,701 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:06:31,642 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:06:31,645 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:06:34,361 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:34] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:06:46,307 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "GET / HTTP/1.1" 200 -
+2026-02-11 13:06:46,315 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 13:06:46,319 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 13:06:46,320 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 13:06:46,328 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 13:06:46,328 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:06:46,369 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:06:46,593 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:46] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:06:50,382 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:06:50,384 [INFO] 127.0.0.1 - - [11/Feb/2026 13:06:50] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:07:02,474 [INFO] 127.0.0.1 - - [11/Feb/2026 13:07:02] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 13:07:03,023 [INFO] 127.0.0.1 - - [11/Feb/2026 13:07:03] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:07:38,488 [INFO] 127.0.0.1 - - [11/Feb/2026 13:07:38] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:07:47,597 [INFO] 127.0.0.1 - - [11/Feb/2026 13:07:47] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:08:26,260 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:08:26,262 [INFO] 127.0.0.1 - - [11/Feb/2026 13:08:26] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:08:47,600 [INFO] 127.0.0.1 - - [11/Feb/2026 13:08:47] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:09:27,808 [INFO] 127.0.0.1 - - [11/Feb/2026 13:09:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:09:31,709 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:09:31,712 [INFO] 127.0.0.1 - - [11/Feb/2026 13:09:31] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:09:51,103 [INFO] 127.0.0.1 - - [11/Feb/2026 13:09:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:09:51,342 [INFO] 127.0.0.1 - - [11/Feb/2026 13:09:51] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:09:55,468 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:09:55,470 [INFO] 127.0.0.1 - - [11/Feb/2026 13:09:55] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:12:27,994 [INFO] 127.0.0.1 - - [11/Feb/2026 13:12:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:12:32,155 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:12:32,158 [INFO] 127.0.0.1 - - [11/Feb/2026 13:12:32] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:13:14,739 [INFO] 127.0.0.1 - - [11/Feb/2026 13:13:14] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:15:16,113 [INFO] 127.0.0.1 - - [11/Feb/2026 13:15:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:18:18,272 [INFO] 127.0.0.1 - - [11/Feb/2026 13:18:18] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:18:19,051 [INFO] 127.0.0.1 - - [11/Feb/2026 13:18:19] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:18:22,426 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:18:22,427 [INFO] 127.0.0.1 - - [11/Feb/2026 13:18:22] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:21:31,910 [INFO] 127.0.0.1 - - [11/Feb/2026 13:21:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:21:32,229 [INFO] 127.0.0.1 - - [11/Feb/2026 13:21:32] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:21:36,194 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:21:36,196 [INFO] 127.0.0.1 - - [11/Feb/2026 13:21:36] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:22:39,555 [INFO] 127.0.0.1 - - [11/Feb/2026 13:22:39] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:24:29,820 [INFO] 127.0.0.1 - - [11/Feb/2026 13:24:29] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:24:30,143 [INFO] 127.0.0.1 - - [11/Feb/2026 13:24:30] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:24:33,960 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:24:33,962 [INFO] 127.0.0.1 - - [11/Feb/2026 13:24:33] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:27:28,429 [INFO] 127.0.0.1 - - [11/Feb/2026 13:27:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:41:28,429 [INFO] 127.0.0.1 - - [11/Feb/2026 13:41:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:41:28,808 [INFO] 127.0.0.1 - - [11/Feb/2026 13:41:28] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:41:33,205 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:41:33,208 [INFO] 127.0.0.1 - - [11/Feb/2026 13:41:33] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:51:38,078 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:38] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:51:38,530 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:38] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:51:41,325 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "GET / HTTP/1.1" 200 -
+2026-02-11 13:51:41,678 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 13:51:41,680 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 13:51:41,680 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 13:51:41,698 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 13:51:41,744 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:51:41,745 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:51:41,960 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:41] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:51:42,491 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:51:42,495 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:42] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:51:45,849 [INFO] PagerDuty monitor: Fetched 112 total incidents
+2026-02-11 13:51:45,852 [INFO] 127.0.0.1 - - [11/Feb/2026 13:51:45] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:52:41,702 [INFO] 127.0.0.1 - - [11/Feb/2026 13:52:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:53:41,699 [INFO] 127.0.0.1 - - [11/Feb/2026 13:53:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:54:41,701 [INFO] 127.0.0.1 - - [11/Feb/2026 13:54:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:54:42,012 [INFO] 127.0.0.1 - - [11/Feb/2026 13:54:42] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:54:46,003 [INFO] PagerDuty monitor: Fetched 111 total incidents
+2026-02-11 13:54:46,004 [INFO] 127.0.0.1 - - [11/Feb/2026 13:54:46] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:55:28,422 [INFO] 127.0.0.1 - - [11/Feb/2026 13:55:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:55:28,680 [INFO] 127.0.0.1 - - [11/Feb/2026 13:55:28] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:55:32,722 [INFO] PagerDuty monitor: Fetched 111 total incidents
+2026-02-11 13:55:32,724 [INFO] 127.0.0.1 - - [11/Feb/2026 13:55:32] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 13:55:41,719 [INFO] 127.0.0.1 - - [11/Feb/2026 13:55:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:56:08,127 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "GET / HTTP/1.1" 200 -
+2026-02-11 13:56:08,139 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 13:56:08,139 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 13:56:08,141 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 13:56:08,151 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 13:56:08,151 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:56:08,188 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:56:08,536 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:08] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:56:17,375 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "GET / HTTP/1.1" 200 -
+2026-02-11 13:56:17,383 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 13:56:17,384 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 13:56:17,384 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 13:56:17,392 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 13:56:17,394 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:56:17,436 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:56:17,830 [INFO] 127.0.0.1 - - [11/Feb/2026 13:56:17] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:57:17,395 [INFO] 127.0.0.1 - - [11/Feb/2026 13:57:17] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:58:17,395 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:17] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:58:26,468 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:26] "GET / HTTP/1.1" 200 -
+2026-02-11 13:58:26,757 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:26] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 13:58:26,758 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:26] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 13:58:26,759 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:26] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 13:58:26,771 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:26] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:58:26,772 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:26] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 13:58:26,815 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:26] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:58:27,225 [INFO] 127.0.0.1 - - [11/Feb/2026 13:58:27] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 13:59:03,167 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-11 13:59:03,167 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 13:59:08,660 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:08] "GET / HTTP/1.1" 200 -
+2026-02-11 13:59:08,669 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:08] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 13:59:08,670 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:08] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 13:59:08,670 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:08] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 13:59:08,679 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:08] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 13:59:08,680 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 13:59:08,717 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:08] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 13:59:09,061 [INFO] 127.0.0.1 - - [11/Feb/2026 13:59:09] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:00:08,682 [INFO] 127.0.0.1 - - [11/Feb/2026 14:00:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:01:08,682 [INFO] 127.0.0.1 - - [11/Feb/2026 14:01:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:09:28,421 [INFO] 127.0.0.1 - - [11/Feb/2026 14:09:28] "[33mGET /api/pagerduty/monitor HTTP/1.1[0m" 404 -
+2026-02-11 14:09:28,422 [INFO] 127.0.0.1 - - [11/Feb/2026 14:09:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:09:28,882 [INFO] 127.0.0.1 - - [11/Feb/2026 14:09:28] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:18:58,247 [INFO] 127.0.0.1 - - [11/Feb/2026 14:18:58] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:18:58,248 [INFO] 127.0.0.1 - - [11/Feb/2026 14:18:58] "[33mGET /api/pagerduty/monitor HTTP/1.1[0m" 404 -
+2026-02-11 14:18:58,619 [INFO] 127.0.0.1 - - [11/Feb/2026 14:18:58] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:19:03,293 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "GET / HTTP/1.1" 200 -
+2026-02-11 14:19:03,573 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 14:19:03,574 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 14:19:03,574 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 14:19:03,590 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 14:19:03,591 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:19:03,627 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 14:19:03,885 [INFO] 127.0.0.1 - - [11/Feb/2026 14:19:03] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:20:03,593 [INFO] 127.0.0.1 - - [11/Feb/2026 14:20:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:21:03,594 [INFO] 127.0.0.1 - - [11/Feb/2026 14:21:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:22:03,593 [INFO] 127.0.0.1 - - [11/Feb/2026 14:22:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:22:03,961 [INFO] 127.0.0.1 - - [11/Feb/2026 14:22:03] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:23:03,596 [INFO] 127.0.0.1 - - [11/Feb/2026 14:23:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:24:03,592 [INFO] 127.0.0.1 - - [11/Feb/2026 14:24:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:25:03,591 [INFO] 127.0.0.1 - - [11/Feb/2026 14:25:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:25:03,905 [INFO] 127.0.0.1 - - [11/Feb/2026 14:25:03] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:26:03,608 [INFO] 127.0.0.1 - - [11/Feb/2026 14:26:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:27:03,639 [INFO] 127.0.0.1 - - [11/Feb/2026 14:27:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:27:36,070 [INFO] 127.0.0.1 - - [11/Feb/2026 14:27:36] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:27:36,542 [INFO] 127.0.0.1 - - [11/Feb/2026 14:27:36] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:28:03,692 [INFO] 127.0.0.1 - - [11/Feb/2026 14:28:03] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:28:03,929 [INFO] 127.0.0.1 - - [11/Feb/2026 14:28:03] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:29:14,992 [INFO] 127.0.0.1 - - [11/Feb/2026 14:29:14] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:30:37,165 [INFO] 127.0.0.1 - - [11/Feb/2026 14:30:37] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:31:04,063 [INFO] 127.0.0.1 - - [11/Feb/2026 14:31:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:32:15,940 [INFO] 127.0.0.1 - - [11/Feb/2026 14:32:15] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:34:04,410 [INFO] 127.0.0.1 - - [11/Feb/2026 14:34:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:35:32,756 [INFO] 127.0.0.1 - - [11/Feb/2026 14:35:32] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:37:04,345 [INFO] 127.0.0.1 - - [11/Feb/2026 14:37:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:39:27,094 [INFO] 127.0.0.1 - - [11/Feb/2026 14:39:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:40:04,382 [INFO] 127.0.0.1 - - [11/Feb/2026 14:40:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:40:27,126 [INFO] 127.0.0.1 - - [11/Feb/2026 14:40:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:41:00,867 [INFO] 127.0.0.1 - - [11/Feb/2026 14:41:00] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:41:01,186 [INFO] 127.0.0.1 - - [11/Feb/2026 14:41:01] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:41:27,160 [INFO] 127.0.0.1 - - [11/Feb/2026 14:41:27] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:42:36,109 [INFO] 127.0.0.1 - - [11/Feb/2026 14:42:36] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:43:04,498 [INFO] 127.0.0.1 - - [11/Feb/2026 14:43:04] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:43:48,243 [INFO] 127.0.0.1 - - [11/Feb/2026 14:43:48] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:46:08,222 [INFO] 127.0.0.1 - - [11/Feb/2026 14:46:08] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:46:41,665 [INFO] 127.0.0.1 - - [11/Feb/2026 14:46:41] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:50:51,532 [INFO] 127.0.0.1 - - [11/Feb/2026 14:50:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:50:52,045 [INFO] 127.0.0.1 - - [11/Feb/2026 14:50:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:55:06,351 [INFO] 127.0.0.1 - - [11/Feb/2026 14:55:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:55:06,826 [INFO] 127.0.0.1 - - [11/Feb/2026 14:55:06] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:56:06,371 [INFO] 127.0.0.1 - - [11/Feb/2026 14:56:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:57:06,396 [INFO] 127.0.0.1 - - [11/Feb/2026 14:57:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:58:06,422 [INFO] 127.0.0.1 - - [11/Feb/2026 14:58:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 14:58:06,929 [INFO] 127.0.0.1 - - [11/Feb/2026 14:58:06] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 14:59:06,456 [INFO] 127.0.0.1 - - [11/Feb/2026 14:59:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:00:06,485 [INFO] 127.0.0.1 - - [11/Feb/2026 15:00:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:01:06,512 [INFO] 127.0.0.1 - - [11/Feb/2026 15:01:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:01:06,789 [INFO] 127.0.0.1 - - [11/Feb/2026 15:01:06] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:02:06,546 [INFO] 127.0.0.1 - - [11/Feb/2026 15:02:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:03:06,576 [INFO] 127.0.0.1 - - [11/Feb/2026 15:03:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:03:08,191 [INFO] 127.0.0.1 - - [11/Feb/2026 15:03:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:03:28,406 [INFO] 127.0.0.1 - - [11/Feb/2026 15:03:28] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:04:06,524 [INFO] 127.0.0.1 - - [11/Feb/2026 15:04:06] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:04:06,700 [INFO] 127.0.0.1 - - [11/Feb/2026 15:04:06] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:05:29,513 [INFO] 127.0.0.1 - - [11/Feb/2026 15:05:29] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:09:57,413 [INFO] 127.0.0.1 - - [11/Feb/2026 15:09:57] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:09:57,466 [INFO] 127.0.0.1 - - [11/Feb/2026 15:09:57] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:10:40,890 [INFO] 127.0.0.1 - - [11/Feb/2026 15:10:40] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:11:43,494 [INFO] 127.0.0.1 - - [11/Feb/2026 15:11:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:12:43,589 [INFO] 127.0.0.1 - - [11/Feb/2026 15:12:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:14:04,155 [INFO] 127.0.0.1 - - [11/Feb/2026 15:14:04] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:14:18,523 [INFO] 127.0.0.1 - - [11/Feb/2026 15:14:18] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:16:01,812 [INFO] 127.0.0.1 - - [11/Feb/2026 15:16:01] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:18:50,060 [INFO] 127.0.0.1 - - [11/Feb/2026 15:18:50] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:18:50,418 [INFO] 127.0.0.1 - - [11/Feb/2026 15:18:50] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:21:49,661 [INFO] 127.0.0.1 - - [11/Feb/2026 15:21:49] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:26:18,915 [INFO] 127.0.0.1 - - [11/Feb/2026 15:26:18] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:30:51,915 [INFO] 127.0.0.1 - - [11/Feb/2026 15:30:51] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:30:52,585 [INFO] 127.0.0.1 - - [11/Feb/2026 15:30:52] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:37:14,345 [INFO] 127.0.0.1 - - [11/Feb/2026 15:37:14] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:37:14,989 [INFO] 127.0.0.1 - - [11/Feb/2026 15:37:14] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:49:42,714 [INFO] 127.0.0.1 - - [11/Feb/2026 15:49:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:49:43,177 [INFO] 127.0.0.1 - - [11/Feb/2026 15:49:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:50:22,234 [INFO] 127.0.0.1 - - [11/Feb/2026 15:50:22] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 15:50:23,907 [INFO] 127.0.0.1 - - [11/Feb/2026 15:50:23] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 15:50:42,709 [INFO] 127.0.0.1 - - [11/Feb/2026 15:50:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:51:42,737 [INFO] 127.0.0.1 - - [11/Feb/2026 15:51:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:52:00,091 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:00] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 15:52:07,375 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:07] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 15:52:42,767 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:52:43,082 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:52:44,487 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:44] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 15:52:45,060 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:45] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 15:52:54,182 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:54] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 15:52:54,759 [INFO] 127.0.0.1 - - [11/Feb/2026 15:52:54] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 15:53:04,482 [INFO] 127.0.0.1 - - [11/Feb/2026 15:53:04] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 15:53:05,057 [INFO] 127.0.0.1 - - [11/Feb/2026 15:53:05] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 15:53:27,223 [INFO] 127.0.0.1 - - [11/Feb/2026 15:53:27] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 15:53:27,809 [INFO] 127.0.0.1 - - [11/Feb/2026 15:53:27] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 15:53:40,387 [INFO] 127.0.0.1 - - [11/Feb/2026 15:53:40] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:53:42,796 [INFO] 127.0.0.1 - - [11/Feb/2026 15:53:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:54:42,828 [INFO] 127.0.0.1 - - [11/Feb/2026 15:54:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:55:42,857 [INFO] 127.0.0.1 - - [11/Feb/2026 15:55:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:55:43,055 [INFO] 127.0.0.1 - - [11/Feb/2026 15:55:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:56:42,983 [INFO] 127.0.0.1 - - [11/Feb/2026 15:56:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:56:53,342 [INFO] 127.0.0.1 - - [11/Feb/2026 15:56:53] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:56:54,004 [INFO] 127.0.0.1 - - [11/Feb/2026 15:56:54] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:57:43,108 [INFO] 127.0.0.1 - - [11/Feb/2026 15:57:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:57:53,465 [INFO] 127.0.0.1 - - [11/Feb/2026 15:57:53] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 15:58:43,199 [INFO] 127.0.0.1 - - [11/Feb/2026 15:58:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 15:58:55,391 [INFO] 127.0.0.1 - - [11/Feb/2026 15:58:55] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:00:05,191 [INFO] 127.0.0.1 - - [11/Feb/2026 16:00:05] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:01:28,738 [INFO] 127.0.0.1 - - [11/Feb/2026 16:01:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:02:19,892 [INFO] 127.0.0.1 - - [11/Feb/2026 16:02:19] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:03:43,117 [INFO] 127.0.0.1 - - [11/Feb/2026 16:03:43] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:07:15,121 [INFO] 127.0.0.1 - - [11/Feb/2026 16:07:15] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:07:15,685 [INFO] 127.0.0.1 - - [11/Feb/2026 16:07:15] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:16:31,944 [INFO] 127.0.0.1 - - [11/Feb/2026 16:16:31] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:16:32,428 [INFO] 127.0.0.1 - - [11/Feb/2026 16:16:32] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:20:14,441 [INFO] 127.0.0.1 - - [11/Feb/2026 16:20:14] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:20:14,801 [INFO] 127.0.0.1 - - [11/Feb/2026 16:20:14] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:31:17,979 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:17] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:31:18,491 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:18] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:31:21,389 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "GET / HTTP/1.1" 200 -
+2026-02-11 16:31:21,668 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 16:31:21,669 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 16:31:21,670 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 16:31:21,678 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 16:31:21,682 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:31:21,739 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:31:21,989 [INFO] 127.0.0.1 - - [11/Feb/2026 16:31:21] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:32:21,681 [INFO] 127.0.0.1 - - [11/Feb/2026 16:32:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:33:21,680 [INFO] 127.0.0.1 - - [11/Feb/2026 16:33:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:34:21,682 [INFO] 127.0.0.1 - - [11/Feb/2026 16:34:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:34:22,045 [INFO] 127.0.0.1 - - [11/Feb/2026 16:34:22] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:34:34,334 [INFO] 127.0.0.1 - - [11/Feb/2026 16:34:34] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:34:34,856 [INFO] 127.0.0.1 - - [11/Feb/2026 16:34:34] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:35:21,681 [INFO] 127.0.0.1 - - [11/Feb/2026 16:35:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:36:21,680 [INFO] 127.0.0.1 - - [11/Feb/2026 16:36:21] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:37:04,807 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:04] "GET / HTTP/1.1" 200 -
+2026-02-11 16:37:05,083 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 16:37:05,085 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 16:37:05,085 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 16:37:05,094 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "[33mGET /api/pagerduty/monitor HTTP/1.1[0m" 404 -
+2026-02-11 16:37:05,094 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 16:37:05,096 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:37:05,171 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:37:05,483 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:05] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:37:12,162 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-11 16:37:12,162 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 16:37:16,329 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "GET / HTTP/1.1" 200 -
+2026-02-11 16:37:16,335 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 16:37:16,336 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 16:37:16,336 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 16:37:16,371 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 16:37:16,371 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:37:16,399 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:37:16,658 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:16] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:37:20,678 [INFO] PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:37:20,681 [INFO] 127.0.0.1 - - [11/Feb/2026 16:37:20] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:38:16,346 [INFO] 127.0.0.1 - - [11/Feb/2026 16:38:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:39:16,248 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-11 16:39:16,248 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 16:39:16,347 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:16] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:39:19,901 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:19] "GET / HTTP/1.1" 200 -
+2026-02-11 16:39:19,908 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:19] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 16:39:19,909 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:19] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 16:39:19,909 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:19] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 16:39:19,917 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:19] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 16:39:19,917 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:39:19,983 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:19] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:39:20,535 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:20] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:39:24,481 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:39:24,483 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:24] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:39:53,687 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:53] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 16:39:54,261 [INFO] 127.0.0.1 - - [11/Feb/2026 16:39:54] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:40:19,920 [INFO] 127.0.0.1 - - [11/Feb/2026 16:40:19] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:41:20,120 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:20] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:41:24,387 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "GET / HTTP/1.1" 200 -
+2026-02-11 16:41:24,396 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 16:41:24,397 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 16:41:24,397 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 16:41:24,423 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 16:41:24,436 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:41:24,436 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:41:24,949 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:24] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:41:28,444 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:41:28,447 [INFO] 127.0.0.1 - - [11/Feb/2026 16:41:28] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:42:24,408 [INFO] 127.0.0.1 - - [11/Feb/2026 16:42:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:43:24,411 [INFO] 127.0.0.1 - - [11/Feb/2026 16:43:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:44:24,412 [INFO] 127.0.0.1 - - [11/Feb/2026 16:44:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:44:24,750 [INFO] 127.0.0.1 - - [11/Feb/2026 16:44:24] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:44:28,709 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:44:28,712 [INFO] 127.0.0.1 - - [11/Feb/2026 16:44:28] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:45:24,407 [INFO] 127.0.0.1 - - [11/Feb/2026 16:45:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:46:24,408 [INFO] 127.0.0.1 - - [11/Feb/2026 16:46:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:46:52,831 [INFO] 127.0.0.1 - - [11/Feb/2026 16:46:52] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 16:46:53,371 [INFO] 127.0.0.1 - - [11/Feb/2026 16:46:53] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:47:06,809 [INFO] 127.0.0.1 - - [11/Feb/2026 16:47:06] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 16:47:07,342 [INFO] 127.0.0.1 - - [11/Feb/2026 16:47:07] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:47:16,208 [INFO] 127.0.0.1 - - [11/Feb/2026 16:47:16] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 16:47:16,747 [INFO] 127.0.0.1 - - [11/Feb/2026 16:47:16] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:47:24,409 [INFO] 127.0.0.1 - - [11/Feb/2026 16:47:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:47:25,007 [INFO] 127.0.0.1 - - [11/Feb/2026 16:47:25] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:47:29,094 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:47:29,097 [INFO] 127.0.0.1 - - [11/Feb/2026 16:47:29] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:48:12,352 [INFO] 127.0.0.1 - - [11/Feb/2026 16:48:12] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 16:48:12,945 [INFO] 127.0.0.1 - - [11/Feb/2026 16:48:12] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:48:24,442 [INFO] 127.0.0.1 - - [11/Feb/2026 16:48:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:48:54,334 [INFO] 127.0.0.1 - - [11/Feb/2026 16:48:54] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:48:54,707 [INFO] 127.0.0.1 - - [11/Feb/2026 16:48:54] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:49:13,799 [INFO] 127.0.0.1 - - [11/Feb/2026 16:49:13] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 16:49:20,803 [INFO] 127.0.0.1 - - [11/Feb/2026 16:49:20] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:49:24,473 [INFO] 127.0.0.1 - - [11/Feb/2026 16:49:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:50:24,503 [INFO] 127.0.0.1 - - [11/Feb/2026 16:50:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:50:24,703 [INFO] 127.0.0.1 - - [11/Feb/2026 16:50:24] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:50:28,646 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:50:28,648 [INFO] 127.0.0.1 - - [11/Feb/2026 16:50:28] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:50:48,048 [INFO] 127.0.0.1 - - [11/Feb/2026 16:50:48] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 16:50:48,679 [INFO] 127.0.0.1 - - [11/Feb/2026 16:50:48] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 16:51:24,534 [INFO] 127.0.0.1 - - [11/Feb/2026 16:51:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:52:24,568 [INFO] 127.0.0.1 - - [11/Feb/2026 16:52:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:53:24,593 [INFO] 127.0.0.1 - - [11/Feb/2026 16:53:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:53:24,909 [INFO] 127.0.0.1 - - [11/Feb/2026 16:53:24] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:53:28,648 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:53:28,650 [INFO] 127.0.0.1 - - [11/Feb/2026 16:53:28] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:54:24,624 [INFO] 127.0.0.1 - - [11/Feb/2026 16:54:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:55:24,656 [INFO] 127.0.0.1 - - [11/Feb/2026 16:55:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:56:24,683 [INFO] 127.0.0.1 - - [11/Feb/2026 16:56:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:56:25,094 [INFO] 127.0.0.1 - - [11/Feb/2026 16:56:25] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:56:28,404 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:56:28,408 [INFO] 127.0.0.1 - - [11/Feb/2026 16:56:28] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 16:57:24,716 [INFO] 127.0.0.1 - - [11/Feb/2026 16:57:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:58:24,745 [INFO] 127.0.0.1 - - [11/Feb/2026 16:58:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:59:24,724 [INFO] 127.0.0.1 - - [11/Feb/2026 16:59:24] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 16:59:24,770 [INFO] 127.0.0.1 - - [11/Feb/2026 16:59:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 16:59:28,256 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 16:59:28,259 [INFO] 127.0.0.1 - - [11/Feb/2026 16:59:28] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 17:00:24,808 [INFO] 127.0.0.1 - - [11/Feb/2026 17:00:24] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:00:25,553 [INFO] 127.0.0.1 - - [11/Feb/2026 17:00:25] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:00:25,829 [INFO] 127.0.0.1 - - [11/Feb/2026 17:00:25] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:01:25,676 [INFO] 127.0.0.1 - - [11/Feb/2026 17:01:25] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:02:49,106 [INFO] 127.0.0.1 - - [11/Feb/2026 17:02:49] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:03:26,338 [INFO] 127.0.0.1 - - [11/Feb/2026 17:03:26] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:05:26,689 [INFO] 127.0.0.1 - - [11/Feb/2026 17:05:26] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:06:55,585 [INFO] 127.0.0.1 - - [11/Feb/2026 17:06:55] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:07:40,753 [INFO] 127.0.0.1 - - [11/Feb/2026 17:07:40] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:11:22,790 [INFO] 127.0.0.1 - - [11/Feb/2026 17:11:22] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:11:23,245 [INFO] 127.0.0.1 - - [11/Feb/2026 17:11:23] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:18:28,483 [INFO] 127.0.0.1 - - [11/Feb/2026 17:18:28] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:18:29,062 [INFO] 127.0.0.1 - - [11/Feb/2026 17:18:29] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:18:33,034 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 17:18:33,036 [INFO] 127.0.0.1 - - [11/Feb/2026 17:18:33] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 17:20:42,965 [INFO] 127.0.0.1 - - [11/Feb/2026 17:20:42] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:20:43,387 [INFO] 127.0.0.1 - - [11/Feb/2026 17:20:43] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:25:26,435 [INFO] 127.0.0.1 - - [11/Feb/2026 17:25:26] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:25:26,931 [INFO] 127.0.0.1 - - [11/Feb/2026 17:25:26] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:26:07,528 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-11 17:26:07,529 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 17:29:08,937 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:08] "[36mGET / HTTP/1.1[0m" 304 -
+2026-02-11 17:29:08,944 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:08] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 17:29:08,945 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:08] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 17:29:08,945 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:08] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 17:29:09,007 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:09] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 17:29:09,011 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:09] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 17:29:09,017 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:09] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:29:09,409 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:09] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:29:13,260 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 17:29:13,263 [INFO] 127.0.0.1 - - [11/Feb/2026 17:29:13] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 17:30:08,971 [INFO] 127.0.0.1 - - [11/Feb/2026 17:30:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:31:08,974 [INFO] 127.0.0.1 - - [11/Feb/2026 17:31:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:32:08,975 [INFO] 127.0.0.1 - - [11/Feb/2026 17:32:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:32:09,494 [INFO] 127.0.0.1 - - [11/Feb/2026 17:32:09] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:32:13,656 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 17:32:13,659 [INFO] 127.0.0.1 - - [11/Feb/2026 17:32:13] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 17:32:38,907 [INFO] 127.0.0.1 - - [11/Feb/2026 17:32:38] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 17:32:44,832 [INFO] 127.0.0.1 - - [11/Feb/2026 17:32:44] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 17:33:08,983 [INFO] 127.0.0.1 - - [11/Feb/2026 17:33:08] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:34:09,021 [INFO] 127.0.0.1 - - [11/Feb/2026 17:34:09] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:35:09,059 [INFO] 127.0.0.1 - - [11/Feb/2026 17:35:09] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:35:09,436 [INFO] 127.0.0.1 - - [11/Feb/2026 17:35:09] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:35:13,390 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 17:35:13,392 [INFO] 127.0.0.1 - - [11/Feb/2026 17:35:13] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 17:36:09,030 [INFO] 127.0.0.1 - - [11/Feb/2026 17:36:09] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:36:18,944 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.38.4.152:5001
+2026-02-11 17:36:18,944 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 17:37:09,064 [INFO] 127.0.0.1 - - [11/Feb/2026 17:37:09] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:38:09,201 [INFO] 127.0.0.1 - - [11/Feb/2026 17:38:09] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 17:38:09,465 [INFO] 127.0.0.1 - - [11/Feb/2026 17:38:09] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 17:38:12,832 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 17:38:12,835 [INFO] 127.0.0.1 - - [11/Feb/2026 17:38:12] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 18:06:17,969 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://10.38.4.152:8080
+2026-02-11 18:06:17,969 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-11 18:06:36,724 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:36] "GET / HTTP/1.1" 200 -
+2026-02-11 18:06:37,053 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "GET /static/css/styles.css HTTP/1.1" 200 -
+2026-02-11 18:06:37,053 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "GET /static/css/styles-footer.css HTTP/1.1" 200 -
+2026-02-11 18:06:37,053 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "GET /static/js/scripts.js?v=20260205-v9 HTTP/1.1" 200 -
+2026-02-11 18:06:37,074 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 18:06:37,105 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 18:06:37,140 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 18:06:37,145 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-02-11 18:06:37,701 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:37] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 18:06:41,549 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 18:06:41,552 [INFO] 127.0.0.1 - - [11/Feb/2026 18:06:41] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 18:07:37,072 [INFO] 127.0.0.1 - - [11/Feb/2026 18:07:37] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 18:08:30,953 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:30] "GET / HTTP/1.1" 200 -
+2026-02-11 18:08:30,967 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:30] "[36mGET /static/css/styles-footer.css HTTP/1.1[0m" 304 -
+2026-02-11 18:08:30,968 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:30] "[36mGET /static/css/styles.css HTTP/1.1[0m" 304 -
+2026-02-11 18:08:30,968 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:30] "[36mGET /static/js/scripts.js?v=20260205-v9 HTTP/1.1[0m" 304 -
+2026-02-11 18:08:30,982 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:30] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 18:08:30,983 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:30] "GET /api/tools HTTP/1.1" 200 -
+2026-02-11 18:08:31,151 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:31] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 18:08:31,530 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:31] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 18:08:35,799 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 18:08:35,801 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:35] "GET /api/pagerduty/monitor HTTP/1.1" 200 -
+2026-02-11 18:08:37,729 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:37] "POST /api/run HTTP/1.1" 200 -
+2026-02-11 18:08:38,293 [INFO] 127.0.0.1 - - [11/Feb/2026 18:08:38] "GET /api/history HTTP/1.1" 200 -
+2026-02-11 18:13:17,995 [INFO] 127.0.0.1 - - [11/Feb/2026 18:13:17] "GET /api/alerts/status HTTP/1.1" 200 -
+2026-02-11 18:13:18,484 [INFO] 127.0.0.1 - - [11/Feb/2026 18:13:18] "GET /api/status/monitor HTTP/1.1" 200 -
+2026-02-11 18:13:22,185 [INFO] ✅ PagerDuty monitor: Fetched 110 total incidents
+2026-02-11 18:13:22,186 [INFO] 127.0.0.1 - - [11/Feb/2026 18:13:22] "GET /api/pagerduty/monitor HTTP/1.1" 200 -

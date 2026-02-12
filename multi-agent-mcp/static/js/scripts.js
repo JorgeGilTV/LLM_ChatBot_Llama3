@@ -38,6 +38,7 @@ function clearHistory() {
     }
     
     window.historyData = [];
+    historyExpanded = false; // Reset expanded state
     showNotification('History cleared successfully');
     console.log('✅ History cleared');
 }
@@ -48,17 +49,45 @@ function setupHistorySearch() {
     if (!searchInput) return;
     
     searchInput.addEventListener('input', (e) => {
-        const searchTerm = e.target.value.toLowerCase();
-        const historyItems = document.querySelectorAll('#history-list li');
+        const searchTerm = e.target.value.toLowerCase().trim();
         
-        historyItems.forEach(item => {
-            const text = item.textContent.toLowerCase();
-            if (text.includes(searchTerm)) {
-                item.style.display = '';
-            } else {
-                item.style.display = 'none';
+        if (searchTerm === '') {
+            // If search is empty, restore to collapsed view
+            renderHistory(historyExpanded);
+            return;
+        }
+        
+        // When searching, show all matching results
+        const data = window.historyData || [];
+        const historyList = document.getElementById("history-list");
+        historyList.innerHTML = '';
+        
+        let matchCount = 0;
+        
+        data.forEach((item, index) => {
+            const queryText = (item.query && item.query.trim()) ? item.query : 'Query ' + (index + 1);
+            
+            if (queryText.toLowerCase().includes(searchTerm)) {
+                matchCount++;
+                const li = document.createElement("li");
+                const btn = document.createElement("button");
+                
+                const maxLength = 30;
+                const displayText = queryText.length > maxLength 
+                    ? queryText.substring(0, maxLength) + '...' 
+                    : queryText;
+                
+                btn.textContent = displayText;
+                btn.onclick = () => showHistoryResult(index);
+                btn.title = queryText;
+                li.appendChild(btn);
+                historyList.appendChild(li);
             }
         });
+        
+        if (matchCount === 0) {
+            historyList.innerHTML = '<li style="color: #999; font-size: 12px; padding: 10px;">No matches found</li>';
+        }
     });
 }
 
@@ -102,7 +131,10 @@ function addResultActions(resultsBox) {
             📋 Copy
         </button>
         <button class="result-action-btn" onclick="expandAllSections()" title="Expand all sections">
-            📖 Expand
+            📖 Expand All
+        </button>
+        <button class="result-action-btn" onclick="collapseAllSections()" title="Collapse all sections">
+            📕 Collapse All
         </button>
     `;
     
@@ -119,13 +151,123 @@ function copyResultsToClipboard() {
 }
 
 function expandAllSections() {
-    // Expand any collapsible sections in results
-    const details = document.querySelectorAll('#results-box details');
-    details.forEach(detail => {
-        detail.open = true;
+    // Expand all subsections in the active tab
+    const activeTab = document.querySelector('.tab-content[style*="display: block"]');
+    if (!activeTab) return;
+    
+    const subsections = activeTab.querySelectorAll('.subsection-collapsible');
+    subsections.forEach(section => {
+        const content = section.querySelector('.subsection-content');
+        const btn = section.querySelector('.subsection-toggle-btn');
+        if (content && btn) {
+            content.style.display = 'block';
+            btn.textContent = '▼';
+        }
     });
-    showNotification('All sections expanded');
+    
+    if (subsections.length > 0) {
+        showNotification(`Expanded ${subsections.length} subsection(s)`);
+    } else {
+        showNotification('No collapsible sections in current tab');
+    }
 }
+
+function collapseAllSections() {
+    // Collapse all subsections in the active tab
+    const activeTab = document.querySelector('.tab-content[style*="display: block"]');
+    if (!activeTab) return;
+    
+    const subsections = activeTab.querySelectorAll('.subsection-collapsible');
+    subsections.forEach(section => {
+        const content = section.querySelector('.subsection-content');
+        const btn = section.querySelector('.subsection-toggle-btn');
+        if (content && btn) {
+            content.style.display = 'none';
+            btn.textContent = '▶';
+        }
+    });
+    
+    if (subsections.length > 0) {
+        showNotification(`Collapsed ${subsections.length} subsection(s)`);
+    } else {
+        showNotification('No collapsible sections in current tab');
+    }
+}
+
+function toggleToolSection(toolId) {
+    const section = document.getElementById(toolId);
+    if (!section) return;
+    
+    const content = section.querySelector('.tool-content');
+    const btn = section.querySelector('.tool-toggle-btn');
+    
+    if (!content || !btn) return;
+    
+    const isExpanded = content.style.display !== 'none';
+    
+    if (isExpanded) {
+        content.style.display = 'none';
+        btn.textContent = '▶';
+    } else {
+        content.style.display = 'block';
+        btn.textContent = '▼';
+    }
+}
+
+// Make toggleToolSection available globally
+window.toggleToolSection = toggleToolSection;
+
+function toggleSubsection(subsectionId) {
+    const section = document.getElementById(subsectionId);
+    if (!section) return;
+    
+    const content = section.querySelector('.subsection-content');
+    const btn = section.querySelector('.subsection-toggle-btn');
+    
+    if (!content || !btn) return;
+    
+    const isExpanded = content.style.display !== 'none';
+    
+    if (isExpanded) {
+        content.style.display = 'none';
+        btn.textContent = '▶';
+    } else {
+        content.style.display = 'block';
+        btn.textContent = '▼';
+    }
+}
+
+// Make toggleSubsection available globally
+window.toggleSubsection = toggleSubsection;
+
+// Tab switching function
+function switchTab(contentId, btnElement) {
+    // Hide all tab contents
+    const allContents = document.querySelectorAll('.tab-content');
+    allContents.forEach(content => {
+        content.style.display = 'none';
+    });
+    
+    // Remove active class from all buttons
+    const allButtons = document.querySelectorAll('.tab-btn');
+    allButtons.forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected content
+    const selectedContent = document.getElementById(contentId);
+    if (selectedContent) {
+        selectedContent.style.display = 'block';
+    }
+    
+    // Add active class to clicked button
+    if (btnElement) {
+        btnElement.classList.add('active');
+    }
+}
+
+// Make switchTab available globally
+window.switchTab = switchTab;
 
 // ============================================
 // ENHANCED LOADING
@@ -231,6 +373,10 @@ function showLoading(selectedTools = []) {
 }
 
 // 🔄 Cargar historial desde API
+// State to track if history is expanded
+let historyExpanded = false;
+const HISTORY_PREVIEW_COUNT = 3;
+
 function loadHistory() {
     fetch('/api/history')
         .then(res => {
@@ -238,41 +384,70 @@ function loadHistory() {
             return res.json();
         })
         .then(data => {
-            const historyList = document.getElementById("history-list");
-            historyList.innerHTML = '';
-            
-            if (data.length === 0) {
-                historyList.innerHTML = '<li style="color: #666; font-size: 12px; padding: 10px;">No history yet</li>';
-                window.historyData = [];
-                return;
-            }
-            
-            data.forEach((item, index) => {
-                const li = document.createElement("li");
-                const btn = document.createElement("button");
-                
-                // Use query text, or fallback to generic name
-                const queryText = (item.query && item.query.trim()) ? item.query : 'Query ' + (index + 1);
-                
-                // Truncate long queries for display
-                const maxLength = 30;
-                const displayText = queryText.length > maxLength 
-                    ? queryText.substring(0, maxLength) + '...' 
-                    : queryText;
-                
-                btn.textContent = displayText;
-                btn.onclick = () => showHistoryResult(index);
-                btn.title = queryText; // Tooltip with full query
-                li.appendChild(btn);
-                historyList.appendChild(li);
-            });
             window.historyData = data;
+            renderHistory(historyExpanded);
         })
         .catch(err => {
             console.error('Error cargando historial:', err);
             const historyList = document.getElementById("history-list");
             historyList.innerHTML = '<li style="color: #f56565; font-size: 12px; padding: 10px;">⚠️ Error loading history</li>';
         });
+}
+
+function renderHistory(showAll = false) {
+    const historyList = document.getElementById("history-list");
+    const data = window.historyData || [];
+    
+    historyList.innerHTML = '';
+    
+    if (data.length === 0) {
+        historyList.innerHTML = '<li style="color: #666; font-size: 12px; padding: 10px;">No history yet</li>';
+        return;
+    }
+    
+    // Determine how many items to show
+    const itemsToShow = showAll ? data.length : Math.min(HISTORY_PREVIEW_COUNT, data.length);
+    
+    // Render history items
+    for (let index = 0; index < itemsToShow; index++) {
+        const item = data[index];
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        
+        // Use query text, or fallback to generic name
+        const queryText = (item.query && item.query.trim()) ? item.query : 'Query ' + (index + 1);
+        
+        // Truncate long queries for display
+        const maxLength = 30;
+        const displayText = queryText.length > maxLength 
+            ? queryText.substring(0, maxLength) + '...' 
+            : queryText;
+        
+        btn.textContent = displayText;
+        btn.onclick = () => showHistoryResult(index);
+        btn.title = queryText; // Tooltip with full query
+        li.appendChild(btn);
+        historyList.appendChild(li);
+    }
+    
+    // Add "Show more" / "Show less" button if needed
+    if (data.length > HISTORY_PREVIEW_COUNT) {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: bold; border: none; margin-top: 8px;';
+        btn.textContent = showAll ? '▲ Show less' : `▼ Show ${data.length - HISTORY_PREVIEW_COUNT} more`;
+        btn.onclick = () => {
+            historyExpanded = !historyExpanded;
+            renderHistory(historyExpanded);
+        };
+        li.appendChild(btn);
+        historyList.appendChild(li);
+    }
+}
+
+function toggleHistoryExpanded() {
+    historyExpanded = !historyExpanded;
+    renderHistory(historyExpanded);
 }
 
 // Mostrar resultado del historial
@@ -396,6 +571,104 @@ function newChat() {
 }
 
 // 🔄 Auto-refresh Status Monitor
+// Load PagerDuty Monitor
+function loadPagerDutyMonitor() {
+    fetch('/api/pagerduty/monitor')
+        .then(res => {
+            if (!res.ok) throw new Error('Error loading PagerDuty data');
+            return res.json();
+        })
+        .then(data => {
+            // Update timestamp
+            const timeElement = document.getElementById('pd-time');
+            if (timeElement) {
+                const now = new Date();
+                timeElement.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+            }
+            
+            // Update summary
+            const summaryElement = document.getElementById('pd-summary');
+            if (summaryElement) {
+                if (data.error) {
+                    summaryElement.innerHTML = `<span style="color: #fee;">⚠️ ${data.error}</span>`;
+                } else {
+                    const triggered = data.triggered || 0;
+                    const acknowledged = data.acknowledged || 0;
+                    const resolved = data.resolved || 0;
+                    summaryElement.innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 11px;">
+                            <div style="text-align: center;">
+                                <div style="font-weight: bold; font-size: 18px;">${triggered}</div>
+                                <div style="font-size: 10px; opacity: 0.9;">🔴 Triggered</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-weight: bold; font-size: 18px;">${acknowledged}</div>
+                                <div style="font-size: 10px; opacity: 0.9;">🟡 Acknowledged</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-weight: bold; font-size: 18px;">${resolved}</div>
+                                <div style="font-size: 10px; opacity: 0.9;">🟢 Resolved</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Update active incidents
+            const activeElement = document.getElementById('pd-active');
+            if (activeElement) {
+                if (data.error) {
+                    activeElement.innerHTML = '<li style="color: #f56565; border-left-color: #f56565;">⚠️ Unable to load</li>';
+                } else if (!data.active || data.active.length === 0) {
+                    activeElement.innerHTML = '<li style="color: #48bb78; border-left-color: #48bb78;">✅ No active incidents</li>';
+                } else {
+                    activeElement.innerHTML = data.active.map(inc => {
+                        const statusClass = inc.status.toLowerCase();
+                        const icon = inc.status === 'triggered' ? '🔴' : '🟡';
+                        const url = inc.url || '#';
+                        return `
+                            <li class="${statusClass}" title="${inc.title}" onclick="window.open('${url}', '_blank')" style="cursor: pointer;">
+                                <strong>${icon} #${inc.number}</strong>
+                                <div style="color: var(--text-secondary); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+                                    ${inc.service}
+                                </div>
+                            </li>
+                        `;
+                    }).join('');
+                }
+            }
+            
+            // Update resolved incidents
+            const resolvedElement = document.getElementById('pd-resolved');
+            if (resolvedElement) {
+                if (data.error) {
+                    resolvedElement.innerHTML = '<li style="color: #f56565; border-left-color: #f56565;">⚠️ Unable to load</li>';
+                } else if (!data.recently_resolved || data.recently_resolved.length === 0) {
+                    resolvedElement.innerHTML = '<li style="color: #999;">No recent resolutions</li>';
+                } else {
+                    resolvedElement.innerHTML = data.recently_resolved.map(inc => {
+                        const url = inc.url || '#';
+                        return `
+                            <li class="resolved" title="${inc.title}" onclick="window.open('${url}', '_blank')" style="cursor: pointer;">
+                                <strong>🟢 #${inc.number}</strong>
+                                <div style="color: var(--text-secondary); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+                                    ${inc.service}
+                                </div>
+                            </li>
+                        `;
+                    }).join('');
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error loading PagerDuty monitor:', err);
+            const summaryElement = document.getElementById('pd-summary');
+            if (summaryElement) {
+                summaryElement.innerHTML = '<span style="color: #fee;">⚠️ Connection error</span>';
+            }
+        });
+}
+
 function loadStatusMonitor() {
     fetch('/api/status/monitor')
         .then(res => {
@@ -475,7 +748,7 @@ function loadStatusMonitor() {
 
 // 🚀 Inicialización al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Initializing Arlo_GenAI v2.0...');
+    console.log('🚀 Initializing GOC_AgenticAI v2.0...');
     
     // Load saved theme
     loadSavedTheme();
@@ -488,9 +761,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load status monitor immediately
     loadStatusMonitor();
+    loadPagerDutyMonitor();
     
     // Auto-refresh status every 3 minutes (180000ms)
     setInterval(loadStatusMonitor, 180000);
+    setInterval(loadPagerDutyMonitor, 180000);
     
     // Update timestamp initially
     updateLastUpdateTime();
@@ -581,7 +856,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultsBox.innerHTML = htmlContent;
                 
                 // Add action buttons to results
-                setTimeout(() => addResultActions(resultsBox), 500);
+                setTimeout(() => {
+                    addResultActions(resultsBox);
+                }, 500);
                 
                 // Ejecutar scripts que fueron insertados via innerHTML
                 const scripts = resultsBox.querySelectorAll('script');
@@ -643,6 +920,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log('✅ Query completed, history refreshed');
                 }, 500);
                 
+                // Show download button
+                const downloadContainer = document.getElementById('download-container');
+                if (downloadContainer) {
+                    downloadContainer.style.display = 'block';
+                }
+                
                 // Scroll to results
                 resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             })
@@ -663,3 +946,58 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('✅ Event listeners attached');
 });
+
+// Download results as Word document
+function downloadResults() {
+    const resultsBox = document.getElementById('results-box');
+    if (!resultsBox || resultsBox.innerHTML === '') {
+        showNotification('No results to download');
+        return;
+    }
+    
+    // Get the HTML content
+    const htmlContent = resultsBox.innerHTML;
+    
+    // Show loading notification
+    showNotification('Generating document...');
+    
+    // Send to backend for document generation
+    fetch('/api/download/docx', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            html_content: htmlContent
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to generate document');
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        a.download = `arlo_agenticai_results_${timestamp}.docx`;
+        
+        document.body.appendChild(a);
+        a.click();
+        
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showNotification('✅ Document downloaded successfully!');
+    })
+    .catch(err => {
+        console.error('Error downloading document:', err);
+        showNotification('❌ Error downloading document: ' + err.message);
+    });
+}

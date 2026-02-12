@@ -413,7 +413,7 @@ def AI_suggestions(query: str) -> str:
         <li>Group recommendation 2</li>
         <li>Group recommendation 3</li>
     </ul>
-    At the end, include a section for external documentation links suggested by GenAI related to the applications or technologies mentioned in the tickets. 
+    At the end, include a section for external documentation links suggested by AgenticAI related to the applications or technologies mentioned in the tickets. 
     Only use official documentation sources (Microsoft, Elastic, Kubernetes, etc.).
     Query context: {query}
     Tickets:
@@ -484,7 +484,7 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Arlo GenAI</title>
+    <title>GOC AgenticAI</title>
     <style>     
         .sidebar-link {
         display:block; background:#444; color:#fff; text-decoration:none;
@@ -615,7 +615,7 @@ HTML_TEMPLATE = """
     </script>
     </aside>
     <main class="chat-area">
-        <header class="top-bar">🧠 Arlo GenAI 🧠</header>
+        <header class="top-bar">🧠 GOC AgenticAI 🧠</header>
         <div class="prompt">Please start typing some prompt, CDEX or Topic to search...                        /help❓ Help /settings⚙️ Settings /aboutℹ️ About</div>
         <form method="post" onsubmit="return showLoading()" class="input-form">
             <div class="tool-list">

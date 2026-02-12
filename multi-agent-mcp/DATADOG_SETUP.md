@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Datadog Dashboards tool allows you to list, search, and access your Datadog dashboards directly from the Arlo GenAI interface.
+The Datadog Dashboards tool allows you to list, search, and access your Datadog dashboards directly from the GOC AgenticAI interface.
 
 ## 🔑 Getting Your Datadog Credentials
 
@@ -19,7 +19,7 @@ The Datadog Dashboards tool allows you to list, search, and access your Datadog 
 1. In the same **Organization Settings** page, go to **Application Keys**
    - Or direct link: https://arlo.datadoghq.com/organization-settings/application-keys
 2. Click **"New Key"**
-3. Give it a name (e.g., "Arlo GenAI Integration")
+3. Give it a name (e.g., "GOC AgenticAI Integration")
 4. Copy the Application Key value
 
 ### Step 3: Identify Your Datadog Site
@@ -67,7 +67,7 @@ docker-compose up -d
 ## 🚀 Using the Datadog Dashboards Tool
 
 ### 1. Access the Application
-Open: http://localhost:5001
+Open: http://localhost:8080
 
 ### 2. Select the Tool
 Check the box for **"Datadog_Dashboards"**

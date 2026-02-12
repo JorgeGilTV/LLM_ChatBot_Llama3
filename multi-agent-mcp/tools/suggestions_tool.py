@@ -72,7 +72,7 @@ def AI_suggestions(query: str) -> str:
     <li>Group recommendation 2</li>
     <li>Group recommendation 3</li>
     </ul>
-        At the end, include a section for external documentation links suggested by GenAI related to the applications or technologies mentioned in the tickets.
+        At the end, include a section for external documentation links suggested by AgenticAI related to the applications or technologies mentioned in the tickets.
     Only use official documentation sources (Microsoft, Elastic, Kubernetes, etc.).
     Query context: {query}
     Tickets:

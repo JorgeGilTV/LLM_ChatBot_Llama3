@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Script to easily manage Arlo GenAI Docker container
+# Script to easily manage GOC AgenticAI Docker container
 # Usage: ./docker-run.sh [start|stop|restart|logs|build|clean]
 
 set -e
 
-PROJECT_NAME="arlo-genai"
+PROJECT_NAME="arlo-agenticai"
 COMPOSE_FILE="docker-compose.yml"
 
 # Colors for output
@@ -46,7 +46,7 @@ function start() {
     check_env_file
     docker-compose up -d
     print_info "Container started successfully!"
-    print_info "Access the application at: http://localhost:5001"
+    print_info "Access the application at: http://localhost:8080"
     print_info "To view logs, run: ./docker-run.sh logs"
 }
 
@@ -81,7 +81,7 @@ function rebuild() {
     docker-compose build --no-cache
     docker-compose up -d
     print_info "Rebuild and restart completed!"
-    print_info "Access the application at: http://localhost:5001"
+    print_info "Access the application at: http://localhost:8080"
 }
 
 function clean() {
@@ -107,7 +107,7 @@ function status() {
 
 function shell() {
     print_info "Opening shell in $PROJECT_NAME container..."
-    docker-compose exec arlo-genai bash
+    docker-compose exec arlo-agenticai bash
 }
 
 # Main script

@@ -1292,7 +1292,7 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
         <div style='background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); 
                     padding: 12px; 
                     border-radius: 6px; 
-                    margin: 8px 0;
+                    margin: 0 0 8px 0;
                     color: white;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
             <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 {html.escape(dash_title)}</h2>
@@ -2487,7 +2487,7 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
         <div style='background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); 
                     padding: 12px; 
                     border-radius: 6px; 
-                    margin: 8px 0;
+                    margin: 0 0 8px 0;
                     color: white;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
             <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>🚨 ADT Services with Errors</h2>
@@ -3011,7 +3011,8 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
     print(f"📝 Query received: '{query}'")
     print(f"📝 Time range: {timerange_hours} hours")
     
-    output = ""
+    # Start with wrapper div to contain everything
+    output = "<div class='dd-errors-wrapper' style='position: relative;'>"
     
     # Calculate timestamps for display
     import time
@@ -3019,13 +3020,16 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
     from_time = current_time - (timerange_hours * 3600)
     timestamp_range_html = format_timestamp_range(from_time, current_time)
     
+    # Generate unique IDs for subsections to avoid conflicts when multiple tabs exist
+    unique_id = str(current_time)
+    
     # Add main header
     timerange_text = format_timerange(timerange_hours)
     output += f"""
     <div style='background: linear-gradient(135deg, #dc2626 0%, #7c3aed 100%); 
                 padding: 12px; 
                 border-radius: 6px; 
-                margin: 8px 0;
+                margin: 0 0 8px 0;
                 color: white;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
         <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>🚨 All Services with Errors</h2>
@@ -3049,19 +3053,33 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
         red_errors = read_datadog_errors_only(query, timerange_hours)
         
         # Remove the header sections from red_errors (keep only widget content)
-        # Remove everything up to and including the "Error Widgets" info box
-        red_errors_clean = re.sub(r'<div style=\'background: linear-gradient.*?</div>\s*', '', red_errors, flags=re.DOTALL, count=1)
-        red_errors_clean = re.sub(r'<div style=\'margin: 8px 0; padding: 6px; background-color: #fff3cd.*?</div>\s*', '', red_errors_clean, flags=re.DOTALL)
-        red_errors_clean = re.sub(r'<div style=\'margin: 8px 0; padding: 6px; background-color: #fee2e2.*?</div>\s*', '', red_errors_clean, flags=re.DOTALL)
+        # Find the start of the "Services with Errors" section which contains the grid
+        # This section starts with a specific div that has the count
+        red_errors_clean = red_errors
         
-        output += """
-        <div style='margin: 12px 0; padding: 8px; background-color: #fff5f5; border-left: 4px solid #dc2626; border-radius: 4px;'>
-            <h3 style='margin: 0 0 6px 0; color: #dc2626; font-size: 15px; font-weight: bold;'>
-                📊 RED Metrics - Errors
-            </h3>
-        </div>
+        # Remove only the top-level gradient header (title, description, dates)
+        # Keep everything from "Services with Errors (count)" onwards
+        match = re.search(r'(<div[^>]*>\s*<div style=\'display: flex[^>]*>\s*<h3[^>]*>🚨 Services with Errors)', red_errors_clean, re.DOTALL)
+        if match:
+            # Keep from this point forward
+            red_errors_clean = red_errors_clean[match.start():]
+        
+        red_subsection_id = f'dd-red-errors-subsection-{unique_id}'
+        output += f"""
+        <div class='subsection-collapsible' id='{red_subsection_id}' style='margin: 12px 0; border: 1px solid #fecaca; border-radius: 6px; overflow: hidden;'>
+            <div class='subsection-header' style='background-color: #fff5f5; border-left: 4px solid #dc2626; padding: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;' onclick='toggleSubsection("{red_subsection_id}")'>
+                <h3 style='margin: 0; color: #dc2626; font-size: 15px; font-weight: bold;'>
+                    📊 RED Metrics - Errors
+                </h3>
+                <button class='subsection-toggle-btn' style='background: rgba(220, 38, 38, 0.1); border: none; color: #dc2626; cursor: pointer; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;'>▼</button>
+            </div>
+            <div class='subsection-content' style='display: block; padding: 10px; background: white;'>
         """
         output += red_errors_clean
+        output += """
+            </div>
+        </div>
+        """
         
         # Section 2: ADT Errors
         print("\n" + "=" * 80)
@@ -3071,19 +3089,36 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
         adt_errors = read_datadog_adt_errors_only(query, timerange_hours)
         
         # Remove the header sections from adt_errors (keep only widget content)
-        adt_errors_clean = re.sub(r'<div style=\'background: linear-gradient.*?</div>\s*', '', adt_errors, flags=re.DOTALL, count=1)
-        adt_errors_clean = re.sub(r'<div style=\'margin: 8px 0; padding: 6px; background-color: #fff3cd.*?</div>\s*', '', adt_errors_clean, flags=re.DOTALL)
-        adt_errors_clean = re.sub(r'<div style=\'margin: 8px 0; padding: 6px; background-color: #fee2e2.*?</div>\s*', '', adt_errors_clean, flags=re.DOTALL)
-        adt_errors_clean = re.sub(r'<div style=\'margin: 8px 0; padding: 6px; background-color: #faf5ff.*?</div>\s*', '', adt_errors_clean, flags=re.DOTALL)
+        # Find the start of the "ADT Services with Errors" section which contains the grid
+        # This section starts with a specific div that has the count
+        adt_errors_clean = adt_errors
         
-        output += """
-        <div style='margin: 20px 0 12px 0; padding: 8px; background-color: #faf5ff; border-left: 4px solid #7c3aed; border-radius: 4px;'>
-            <h3 style='margin: 0 0 6px 0; color: #7c3aed; font-size: 15px; font-weight: bold;'>
-                🔮 RED Metrics - ADT - Errors
-            </h3>
-        </div>
+        # Remove only the top-level gradient header (title, description, dates)
+        # Keep everything from "ADT Services with Errors (count)" onwards
+        match = re.search(r'(<div[^>]*>\s*<div style=\'display: flex[^>]*>\s*<h3[^>]*>🚨 ADT Services with Errors)', adt_errors_clean, re.DOTALL)
+        if match:
+            # Keep from this point forward
+            adt_errors_clean = adt_errors_clean[match.start():]
+        
+        adt_subsection_id = f'dd-adt-errors-subsection-{unique_id}'
+        output += f"""
+        <div class='subsection-collapsible' id='{adt_subsection_id}' style='margin: 20px 0 12px 0; border: 1px solid #e9d5ff; border-radius: 6px; overflow: hidden;'>
+            <div class='subsection-header' style='background-color: #faf5ff; border-left: 4px solid #7c3aed; padding: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;' onclick='toggleSubsection("{adt_subsection_id}")'>
+                <h3 style='margin: 0; color: #7c3aed; font-size: 15px; font-weight: bold;'>
+                    🔮 RED Metrics - ADT - Errors
+                </h3>
+                <button class='subsection-toggle-btn' style='background: rgba(124, 58, 237, 0.1); border: none; color: #7c3aed; cursor: pointer; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;'>▼</button>
+            </div>
+            <div class='subsection-content' style='display: block; padding: 10px; background: white;'>
         """
         output += adt_errors_clean
+        output += """
+            </div>
+        </div>
+        """
+        
+        # Close wrapper div
+        output += "</div>"
         
         return output
         

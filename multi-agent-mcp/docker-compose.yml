@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  arlo-genai:
+  arlo-agenticai:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: arlo-genai-app
+    container_name: arlo-agenticai-app
     ports:
-      - "5001:5001"
+      - "8080:8080"
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
@@ -23,7 +23,7 @@ services:
       # - ./static:/app/static
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/api/tools', timeout=5)"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/api/tools', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3

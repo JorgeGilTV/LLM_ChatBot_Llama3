@@ -1,4 +1,4 @@
-# 🧠 Arlo GenAI - Multi-Agent Operations Dashboard
+# 🧠 GOC AgenticAI - Multi-Agent Operations Dashboard
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Flask](https://img.shields.io/badge/Flask-3.1+-green.svg)](https://flask.palletsprojects.com/)
@@ -6,13 +6,40 @@
 [![Datadog](https://img.shields.io/badge/Datadog-Integration-purple.svg)](https://www.datadoghq.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
 
-Arlo GenAI is a comprehensive web-based platform that integrates **real-time monitoring**, **documentation search**, and **AI-powered recommendations**. Designed for DevOps, SRE, and support teams, it streamlines troubleshooting workflows by combining multiple data sources and AI tools into a single intelligent interface.
+GOC AgenticAI is a comprehensive web-based platform that integrates **real-time monitoring**, **documentation search**, and **AI-powered recommendations**. Designed for DevOps, SRE, and support teams, it streamlines troubleshooting workflows by combining multiple data sources and AI tools into a single intelligent interface.
 
-**Key Highlight:** Interactive Datadog dashboard integration with real-time metrics visualization, showing Requests, Errors, and Latency for all your services in a beautiful 3-column grid layout with Chart.js powered visualizations.
+**Key Highlights:** 
+- 🚨 **PagerDuty Integration**: Full incident management with 3 specialized tools (incidents list, analytics dashboard, insights & trends)
+- 📊 **Interactive Datadog**: Real-time metrics visualization with Chart.js powered charts
+- 🔄 **Auto-Refresh Monitors**: Both Arlo Status and PagerDuty Status update every 3 minutes
+- 🎯 **Smart Layout**: Two-column main area with centered branding and prominent status cards
+
+## 🆕 What's New in v2.0
+
+### PagerDuty Integration Suite
+- ✅ **3 PagerDuty Tools**: Incidents list, Analytics dashboard, Insights & trends
+- ✅ **Real-Time Status Card**: Auto-refresh monitor in main area (next to "How to use")
+- ✅ **Full Pagination**: Fetches ALL incidents (up to 1000) for accurate counts
+- ✅ **Clickable Incidents**: Direct links to PagerDuty from status card
+- ✅ **Visual Traffic Light**: Labeled status indicators (Triggered, Acknowledged, Resolved)
+
+### UI/UX Improvements
+- ✅ **Centered Branding**: "GOC_AgenticAI" prominently centered in header
+- ✅ **Compact History**: Shows last 3 searches with expandable "Show more" button
+- ✅ **Optimized Sidebar**: Arlo Status back to single-column with all services visible
+- ✅ **Two-Column Main Area**: Better space utilization with side-by-side layout
+- ✅ **Unified Colors**: Consistent teal/green theme across all section titles
+
+### Performance & Features
+- ✅ **API Pagination**: PagerDuty monitor fetches complete data sets
+- ✅ **Custom Scrollbars**: Purple-themed for PagerDuty, consistent styling
+- ✅ **Hover Effects**: Visual feedback on all interactive elements
+- ✅ **Smart Search**: History search shows all matches, not limited to 3
 
 ---
 
 ## 📋 Table of Contents
+- [What's New in v2.0](#-whats-new-in-v20)
 - [What Does This Project Do?](#-what-does-this-project-do)
 - [Key Features](#-key-features)
 - [How It Works](#-how-it-works)
@@ -22,15 +49,17 @@ Arlo GenAI is a comprehensive web-based platform that integrates **real-time mon
 - [How to Use](#-how-to-use)
 - [Project Structure](#-project-structure)
 - [UI/UX Features](#-uiux-features)
+- [Interface Layout](#-interface-layout)
 - [Troubleshooting](#-troubleshooting)
 - [Performance](#-performance)
 - [Security](#-security)
+- [Additional Documentation](#-additional-documentation)
 
 ---
 
 ## 🎯 What Does This Project Do?
 
-Arlo GenAI serves as a **centralized operations hub** that:
+GOC AgenticAI serves as a **centralized operations hub** that:
 
 1. **Real-Time Monitoring**: Connects to Datadog to display live service metrics (requests, errors, latency) with interactive charts
 2. **Intelligent Search**: Searches through Confluence documentation, service versions, and knowledge bases
@@ -42,12 +71,29 @@ Arlo GenAI serves as a **centralized operations hub** that:
 
 ### 📊 Monitoring & Metrics
 
-#### Automatic Status Monitor (Sidebar)
+#### Automatic Status Monitors
+
+##### Arlo Status (Sidebar)
 - **Real-time monitoring**: Updates every 3 minutes automatically
 - **Arlo Status Overview**: Shows system-wide operational status
-- **Core Services**: Displays status of all main services (Log In, Notifications, Library, Live Streaming, Video Recording, Arlo Store, Community) with visual indicators (✅/⚠️)
-- **Past Incidents**: Shows last 7 incidents from status.arlo.com
-- **Always visible**: No need to select a tool, permanently displayed in sidebar
+- **Core Services**: Displays ALL main services (Log In, Notifications, Library, Live Streaming, Video Recording, Arlo Store, Community) with visual indicators (✅/⚠️) - no scrolling required
+- **Past Incidents**: Shows last 7 incidents from status.arlo.com (scrollable)
+- **Single column layout**: Easy to read vertical list
+- **Always visible**: Permanently displayed in sidebar
+
+##### PagerDuty Status (Main Area)
+- **Real-time monitoring**: Updates every 3 minutes automatically
+- **Smart positioning**: Located next to "How to use" section in main area
+- **Status summary card**: Visual traffic light display with counts
+  - 🔴 Triggered incidents (real count via pagination)
+  - 🟡 Acknowledged incidents (real count)
+  - 🟢 Resolved incidents (real count - last 7 days)
+- **Active incidents**: Top 5 most recent triggered/acknowledged
+- **Recently resolved**: Last 5 resolved incidents
+- **Clickable incidents**: Click any incident to open in PagerDuty
+- **Two-column layout**: Active | Resolved for easy comparison
+- **Full pagination**: Fetches ALL incidents (up to 1000) for accurate counts
+- **Custom scrollbar**: Purple-themed for better aesthetics
 
 #### Datadog Integration
 - **DD_Red_Metrics**: 
@@ -79,6 +125,52 @@ Arlo GenAI serves as a **centralized operations hub** that:
   - Configurable time ranges
   - Direct link to Splunk dashboard
 
+#### PagerDuty Integration (3 Tools Available)
+
+##### 1. PagerDuty (Incidents List)
+- **Comprehensive incident table**: Full list with pagination
+- **All statuses**: Triggered, acknowledged, and resolved incidents
+- **Smart filtering**: By service name or incident number
+- **Time range**: Last 7 days of incidents
+- **Direct links**: Clickable incident numbers open in PagerDuty
+- **Color-coded rows**: Visual hierarchy by status
+  - 🔴 Red background for triggered
+  - 🟡 Yellow background for acknowledged
+  - 🟢 Green background for resolved
+- **Detailed columns**: Status, #, Title, Service, Urgency, Created, Assigned To
+- **Summary statistics**: Shows count by status at top
+
+##### 2. PagerDuty_Dashboards (Analytics View)
+- **Analytics dashboard** with interactive Chart.js visualizations
+- **Overview metrics card**: Total, triggered, acknowledged, resolved (gradient design)
+- **Three interactive charts**:
+  - Incidents by Status (Donut Chart with percentages)
+  - Incidents by Urgency (Donut Chart with percentages)
+  - Top 10 Services by Incident Count (Horizontal Bar Chart)
+- **Time range**: Last 30 days of data
+- **Real-time rendering**: Dynamic chart generation
+- **Responsive design**: Grid layout adapts to screen size
+
+##### 3. PagerDuty_Insights (Advanced Analytics)
+- **Key insights card**: Total incidents, avg resolution time, busiest day/hour (purple/pink gradient)
+- **Pattern analysis charts**:
+  - Incidents by Day of Week (Bar Chart)
+  - Incidents by Hour of Day (Line Chart with area fill)
+- **Top 5 users ranking**: Medal system (🥇🥈🥉) for incident assignments
+- **Resolution time metrics**: P50 (Median), P90, P95 percentiles
+- **Top service highlight**: Service with most incidents (callout box)
+- **Time range**: Last 30 days
+- **Trend identification**: Helps identify incident patterns
+
+##### PagerDuty Status Card (Main Area - Auto-Refresh)
+- **Always visible**: Located next to "How to use" section
+- **Real-time counters**: Shows true count via full pagination
+- **Visual traffic light**: 3-column grid with labeled counts
+- **Quick access lists**: Top 5 active and top 5 resolved
+- **Clickable incidents**: Direct links to PagerDuty
+- **Auto-refresh**: Every 3 minutes
+- **Manual refresh**: Button available
+
 ### 🔍 Documentation & Knowledge
 - **Wiki**: Search Arlo Confluence documentation with intelligent ranking
 - **Ask_ARLOCHAT**: Interact with Arlo's Slack chat system for questions
@@ -98,13 +190,16 @@ Arlo GenAI serves as a **centralized operations hub** that:
 ```
 User Browser → Flask Web Server → Multiple Tool Modules → External APIs
                                                          ├─ Datadog API
+                                                         ├─ PagerDuty API
                                                          ├─ Confluence API
                                                          ├─ ServiceNow API
                                                          ├─ LLaMA 3 (Ollama)
                                                          └─ Google Gemini
 ```
 
-### Status Monitor Flow (Auto-refresh)
+### Auto-Refresh Monitors (Background Updates)
+
+#### Arlo Status Monitor (Sidebar)
 1. **Auto-load**: Loads immediately on page load
 2. **Scraping**: Fetches data from status.arlo.com
 3. **Parsing**: Extracts summary, core services status, and past incidents
@@ -113,6 +208,18 @@ User Browser → Flask Web Server → Multiple Tool Modules → External APIs
 6. **Visual Indicators**: 
    - ✅ Green checkmark for "All Good" services
    - ⚠️ Red warning for services with issues
+
+#### PagerDuty Status Monitor (Main Area)
+1. **Auto-load**: Loads immediately on page load
+2. **API Pagination**: Fetches ALL incidents from last 7 days (up to 1000 max)
+3. **Categorization**: Separates by status (triggered, acknowledged, resolved)
+4. **Display**: Shows in main area next to "How to use" section
+5. **Auto-refresh**: Updates every 3 minutes (180 seconds) automatically
+6. **Features**:
+   - Real incident counts (not limited to 100)
+   - Top 5 active and top 5 resolved displayed
+   - Clickable incidents open in PagerDuty
+   - Color-coded borders by status
 
 ### Datadog Dashboard Flow
 1. **User Input**: Select "DD_Red_Metrics" or "DD_Red_ADT" and optionally enter service name
@@ -213,7 +320,7 @@ cp .env.example .env
 docker-compose up -d
 
 # 4. Access the application
-# Open http://localhost:5001 in your browser
+# Open http://localhost:8080 in your browser
 ```
 
 ### Using the helper script
@@ -252,30 +359,52 @@ python3 app.py
 ## 🧪 How to Use
 
 ### Basic Usage
-1. **Access the application**: Open http://localhost:5001 in your browser
-2. **Monitor status**: Check the auto-refresh status monitor in the sidebar (updates every 3 minutes)
+1. **Access the application**: Open http://localhost:8080 in your browser
+2. **Monitor real-time status**: 
+   - **Sidebar (Arlo Status)**: Check Arlo system status (updates every 3 minutes)
+   - **Main Area (PagerDuty Status)**: View active/resolved incidents (updates every 3 minutes)
+   - Both monitors update automatically and have manual refresh buttons (🔄)
 3. **Select tools**: Choose one or more tools from the checkbox list
 4. **Configure options**: 
-   - **Time Range** (for DD_Red_Metrics, DD_Red_ADT, DD_Errors, P0_Streaming): Select from dropdown (1h, 2h, 4h, 2d, 1w)
+   - **Time Range** (for DD_Red_Metrics, DD_Red_ADT, DD_Errors): Select from dropdown (1h, 2h, 4h, 2d, 1w)
    - Auto-shows only when these tools are selected
 5. **Enter query** (optional): Type your search (service name, keyword, etc.)
    - Some tools work without a query
+   - PagerDuty tools can filter by service or incident number
 6. **Execute**: Click "Send" button
 7. **View results**: See formatted results with interactive charts
-8. **Check history**: Click on past queries in the sidebar to view previous results
-9. **New search**: Click "New Chat" to reset
+8. **Interact with PagerDuty**:
+   - Click any incident in PagerDuty Status card to open in PagerDuty
+   - Use PagerDuty checkboxes for detailed analysis
+9. **Check history**: 
+   - View last 3 searches in sidebar
+   - Click "Show X more" to expand
+   - Click previous queries to reload results
+   - Use search box to filter history
+10. **New search**: Click "New Chat" to reset
 
 ### Tool Names Reference
-- **Wiki**: Confluence documentation search
-- **Owners**: Service ownership information
-- **Arlo_Versions**: Service version checker
-- **DD_Red_Metrics**: Datadog RED Metrics dashboard
-- **DD_Red_ADT**: Datadog ADT dashboard
-- **DD_Errors**: Services with errors only
+
+#### Monitoring & Metrics
+- **DD_Red_Metrics**: Datadog RED Metrics dashboard with charts
+- **DD_Red_ADT**: Datadog ADT dashboard with metrics
+- **DD_Errors**: Services with errors only (filtered view)
 - **P0_Streaming**: Splunk P0 Streaming dashboard
-- **Holiday_Oncall**: On-call and holiday information
-- **Suggestions**: AI-powered recommendations
-- **Ask_ARLOCHAT**: Slack bot integration
+
+#### PagerDuty Tools
+- **PagerDuty**: Incidents list with full details (last 7 days)
+- **PagerDuty_Dashboards**: Analytics dashboard with interactive charts (last 30 days)
+- **PagerDuty_Insights**: Advanced insights and trends analysis (last 30 days)
+
+#### Documentation & Knowledge
+- **Wiki**: Confluence documentation search
+- **Arlo_Versions**: Service version checker across environments
+- **Owners**: Service ownership and responsibility information
+- **Holiday_Oncall**: On-call engineers, holidays, and escalation paths
+
+#### AI & Support
+- **Suggestions**: AI-powered troubleshooting recommendations
+- **Ask_ARLOCHAT**: Slack bot integration for queries
 
 ### 📊 Using Monitoring Tools
 
@@ -309,13 +438,67 @@ python3 app.py
 
 #### Monitor System Status (Automatic)
 ```
+Arlo Status (Sidebar):
 - Look at the sidebar Status Monitor
 - Updated automatically every 3 minutes
 - Shows:
   - System operational status
-  - Core services with ✅/⚠️ indicators
-  - Last 7 incidents
+  - ALL core services with ✅/⚠️ indicators (no scrolling)
+  - Last 7 incidents (scrollable)
 - No action required, always visible
+
+PagerDuty Status (Main Area):
+- Look at the PagerDuty card next to "How to use"
+- Updated automatically every 3 minutes
+- Shows:
+  - Real counts: Triggered, Acknowledged, Resolved (last 7 days)
+  - Top 5 active incidents
+  - Last 5 resolved incidents
+- Click any incident to open in PagerDuty
+- No action required, always visible
+```
+
+### 🚨 Using PagerDuty Tools
+
+#### View All Active Incidents (Detailed List)
+```
+1. Check "PagerDuty"
+2. Leave query empty
+3. Click "Send"
+→ Shows comprehensive table with all incidents (last 7 days)
+→ Organized by status: Triggered → Acknowledged → Resolved
+→ Clickable links to PagerDuty
+```
+
+#### Filter PagerDuty by Service
+```
+1. Check "PagerDuty"
+2. Enter service name: "streaming-service" or "backend-hmspayment"
+3. Click "Send"
+→ Shows only incidents related to that service
+```
+
+#### View Analytics Dashboard
+```
+1. Check "PagerDuty_Dashboards"
+2. Click "Send" (no query needed)
+→ Shows interactive charts:
+  - Incidents by Status (Donut Chart)
+  - Incidents by Urgency (Donut Chart)
+  - Top 10 Services (Bar Chart)
+→ Last 30 days of data
+```
+
+#### View Insights and Trends
+```
+1. Check "PagerDuty_Insights"
+2. Click "Send" (no query needed)
+→ Shows advanced analytics:
+  - Average resolution time
+  - Busiest day/hour patterns
+  - Top 5 users by assignments
+  - Resolution time percentiles (P50, P90, P95)
+→ Last 30 days of data
 ```
 
 ### 📊 Understanding the Metrics
@@ -411,6 +594,20 @@ SPLUNK_TOKEN=your_splunk_token_here
 2. Go to Settings → Tokens
 3. Create a new token with appropriate permissions
 
+#### PagerDuty Configuration
+```bash
+PAGERDUTY_API_TOKEN=your_pagerduty_api_token_here
+```
+
+**How to get PagerDuty token:**
+1. Log in to your PagerDuty account
+2. Go to User Settings → User API Tokens
+3. Click "Create API User Token"
+4. Give it a name (e.g., "GOC_AgenticAI")
+5. Copy the token immediately (it won't be shown again)
+
+📖 For detailed PagerDuty setup instructions, see [PAGERDUTY_SETUP.md](PAGERDUTY_SETUP.md)
+
 #### Slack Configuration (for ArloChat)
 ```bash
 SLACK_BOT_TOKEN=your_slack_bot_token_here
@@ -464,6 +661,9 @@ multi-agent-mcp/
 ├── tools/                     # Backend tool modules
 │   ├── datadog_dashboards.py # Datadog metrics & charts
 │   ├── datadog_connect.py    # Datadog API connection
+│   ├── pagerduty_tool.py     # PagerDuty incidents
+│   ├── pagerduty_analytics.py# PagerDuty analytics & dashboards
+│   ├── pagerduty_insights.py # PagerDuty insights & trends
 │   ├── confluence_tool.py    # Confluence search
 │   ├── read_versions.py      # Service version checker
 │   ├── read_arlo_status.py   # System health monitor
@@ -492,20 +692,48 @@ multi-agent-mcp/
 ## 🎨 UI/UX Features
 
 ### Modern Interface
-- **Dark theme**: Reduces eye strain for extended use
-- **Gradient header**: Purple gradient design
+- **Dual theme support**: Dark/Light theme toggle (🌓 button)
+- **Centered branding**: "🧠 GOC_AgenticAI 🧠" prominently centered in header
+- **Gradient header**: Teal-to-green gradient design
+- **Two-column main layout**: "How to use" + PagerDuty Status side-by-side
 - **Card-based results**: Each tool displays results in styled cards
 - **Real-time feedback**: Live execution timer and loading indicators
-- **Interactive charts**: Hover over charts to see exact values
-- **Responsive layout**: 3-column grid adapts to screen size
+- **Interactive charts**: Hover over Chart.js visualizations for exact values
+- **Responsive layout**: Grid systems adapt to screen size
+- **Color consistency**: Unified teal/green (#20d6ca) for all section titles
+
+### Sidebar Features
+- **Compact History**: Shows last 3 searches by default
+  - "Show X more" button to expand
+  - "Show less" to collapse
+  - Search filter to find specific queries
+  - Auto-collapses when cleared
+- **Arlo Status Monitor**: Single-column vertical layout
+  - All core services visible without scrolling
+  - Past incidents scrollable (max 7)
+  - Manual refresh button (🔄)
+  - Auto-refresh every 3 minutes
+
+### Main Area Features
+- **PagerDuty Status Card**: Prominent real-time incident tracking
+  - Three-column traffic light display with labels
+  - Shows true counts via API pagination (up to 1000 incidents)
+  - Two-column incident lists (Active | Resolved)
+  - Clickable incidents open in new PagerDuty tab
+  - Manual refresh button
+  - Auto-refresh every 3 minutes
+  - Purple/pink gradient summary card
+  - Custom purple scrollbar
 
 ### User Experience
 - **Multi-select tools**: Run multiple tools simultaneously
 - **Smart time range**: Auto-shows for Datadog queries
-- **Search history**: Track previous queries
-- **Direct links**: Quick access to Datadog, Confluence, etc.
+- **Intelligent history**: Compact by default, expandable on demand
+- **Direct links**: Quick access to Datadog, PagerDuty, Confluence, etc.
 - **Error highlighting**: Services with errors shown in red
 - **New Chat button**: Quick reset for new searches
+- **Visual feedback**: Hover effects, transitions, and click states
+- **Tooltips**: Full text on hover for truncated items
 
 ## 🐛 Troubleshooting
 
@@ -535,7 +763,7 @@ multi-agent-mcp/
 **Port already in use:**
 ```bash
 # Change port in app.py: flask_app.run(port=5002)
-# Or kill process: lsof -ti:5001 | xargs kill -9
+# Or kill process: lsof -ti:8080 | xargs kill -9
 ```
 
 ## 📈 Performance
@@ -564,18 +792,101 @@ The application itself includes:
 
 ## 📚 Additional Documentation
 
-- **[QUICK_START.md](QUICK_START.md)**: Fast setup guide
-- **[DOCKER_README.md](DOCKER_README.md)**: Detailed Docker instructions
-- **[DATADOG_SETUP.md](DATADOG_SETUP.md)**: Datadog configuration guide
+- **[QUICK_START.md](QUICK_START.md)**: Fast setup guide for getting started in minutes
+- **[DOCKER_README.md](DOCKER_README.md)**: Detailed Docker deployment instructions
+- **[DATADOG_SETUP.md](DATADOG_SETUP.md)**: Datadog configuration and API setup guide
+- **[PAGERDUTY_SETUP.md](PAGERDUTY_SETUP.md)**: PagerDuty integration setup and usage guide
+- **[CHANGELOG.md](CHANGELOG.md)**: Version history and release notes
+
+## 🎨 Interface Layout
+
+### Main Interface Structure
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   🧠 GOC_AgenticAI 🧠                  🌓  │ ← Centered title
+├──────────────┬────────────────────────────┬─────────────────┤
+│ Sidebar      │ Main Content Area          │                 │
+│              │                            │                 │
+│ ➕ New Chat │ ┌─────────────────────────┬─────────────────┐│
+│              │ │ How to use:             │ 🚨 PagerDuty   ││
+│ 📜 History   │ │ 1️⃣ Select tools        │    Status       ││
+│ • Query 1    │ │ 2️⃣ Type query           │                 ││
+│ • Query 2    │ │ 3️⃣ Click Send           │  🔴 0  🟡 0     ││
+│ • Query 3    │ │ 💡 Example...           │     🟢 107      ││
+│ ▼ Show more  │ │                         │                 ││
+│              │ │                         │ Active | Resolv ││
+│ 🌐 Arlo      │ └─────────────────────────┴─────────────────┘│
+│    Status    │                                              │
+│ ✅ Summary   │ [Tool Checkboxes]                           │
+│ Services:    │ [Time Range Selector]                       │
+│ • All Good   │ [Text Input]                                │
+│ Incidents:   │ [Send Button]                               │
+│ • Last 7     │                                              │
+│              │ [Results Area with Charts & Tables]         │
+└──────────────┴──────────────────────────────────────────────┘
+```
+
+### Key Layout Features
+- **Centered Header**: GOC_AgenticAI branding centered for professional appearance
+- **Three-Section Layout**: Sidebar | Main Content | (Expandable for results)
+- **Side-by-Side Top Section**: "How to use" paired with PagerDuty Status
+- **Auto-Refresh Monitors**: Both Arlo and PagerDuty update independently
+- **Compact History**: Expandable from 3 to all searches
+- **Responsive Design**: Adapts to different screen sizes
+
+## 🔄 Upgrading from v1.x to v2.0
+
+If you're upgrading from version 1.x (Arlo_AgenticAI), follow these steps:
+
+### 1. Update Environment Variables
+Add the new PagerDuty configuration to your `.env` file:
+```bash
+PAGERDUTY_API_TOKEN=your_pagerduty_api_token_here
+```
+
+### 2. Pull Latest Changes
+```bash
+git pull origin main
+```
+
+### 3. Rebuild Docker Container (if using Docker)
+```bash
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+### 4. Restart Local Application (if running locally)
+```bash
+# Kill existing process
+lsof -ti:8080 | xargs kill -9
+
+# Restart
+python3 app.py
+```
+
+### 5. Verify New Features
+- Check PagerDuty Status card in main area
+- Verify History shows only last 3 by default
+- Confirm centered "GOC_AgenticAI" title
+- Test PagerDuty tools (checkboxes)
+
+### Breaking Changes
+- Application name changed from `Arlo_AgenticAI` to `GOC_AgenticAI`
+- Docker image name changed from `arlo-agenticai` to `goc-agenticai` (update your scripts)
+- PagerDuty Status moved from sidebar to main area
 
 ## 🤝 Contributing
 
 Contributions are welcome! Areas for improvement:
-- Additional monitoring integrations (Prometheus, Grafana, etc.)
+- Additional monitoring integrations (Prometheus, Grafana, New Relic, etc.)
 - More AI model options
 - Enhanced chart types and visualizations
 - Mobile-responsive improvements
-- Additional tool integrations
+- Additional PagerDuty analytics
+- Notification system for critical alerts
+- Multi-language support
+- Custom alert thresholds
 
 ## 📝 License
 
@@ -589,11 +900,14 @@ Expertise: DevOps, SRE, Operational Resilience, and AI-driven tooling for techni
 
 ## 🙏 Acknowledgments
 
-- **Chart.js**: For beautiful, interactive charts
+- **Chart.js**: For beautiful, interactive charts and visualizations
 - **Flask**: Lightweight and powerful web framework
-- **Datadog**: Comprehensive monitoring platform
-- **Ollama**: Local LLaMA 3 deployment
+- **Datadog**: Comprehensive monitoring and metrics platform
+- **PagerDuty**: Incident management and on-call scheduling
+- **Confluence**: Knowledge base and documentation
+- **Ollama**: Local LLaMA 3 deployment for AI recommendations
 - **Google Gemini**: Advanced AI capabilities
+- **Beautiful Soup**: HTML parsing for status scraping
 
 ---
 

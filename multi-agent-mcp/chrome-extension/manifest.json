@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "🧠 Arlo GenAI 🧠",
+    "name": "🧠 GOC AgenticAI 🧠",
     "version": "1.0",
     "description": "Extensión to interact with MCP Server",
     "permissions": ["storage", "activeTab", "scripting"],

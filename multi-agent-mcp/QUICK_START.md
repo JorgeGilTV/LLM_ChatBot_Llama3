@@ -1,4 +1,4 @@
-# 🚀 Quick Start Guide - Arlo GenAI
+# 🚀 Quick Start Guide - GOC AgenticAI
 
 ## ✅ Prerequisites
 
@@ -25,7 +25,7 @@ docker-compose up -d
 ```
 
 ### Step 3: Access the application
-Open your browser at: **http://localhost:5001**
+Open your browser at: **http://localhost:8080**
 
 ## 🎯 Quick Commands
 
@@ -51,27 +51,42 @@ Open your browser at: **http://localhost:5001**
 
 ## 🧪 Test the Application
 
-1. **Open**: http://localhost:5001
-2. **Check Status Monitor**: Sidebar shows real-time Arlo status (auto-refreshes every 3 minutes)
-3. **Select** a tool checkbox (e.g., "DD_Red_Metrics" or "Arlo_Versions")
-4. **Select Time Range** (if Datadog/Splunk tools selected)
-5. **Type** a search term (optional, e.g., "streaming-service")
-6. **Click** "Send"
-7. **View results**: Interactive charts and formatted data
+1. **Open**: http://localhost:8080
+2. **Check Real-Time Monitors** (both auto-refresh every 3 minutes):
+   - **Arlo Status** (Sidebar): System-wide operational status
+   - **PagerDuty Status** (Main Area): Active/resolved incidents with clickable links
+3. **Browse History**: 
+   - See your last 3 searches
+   - Click "Show X more" to expand
+   - Click any past query to reload results
+4. **Select** a tool checkbox:
+   - Monitoring: "DD_Red_Metrics", "DD_Errors"
+   - PagerDuty: "PagerDuty", "PagerDuty_Dashboards", "PagerDuty_Insights"
+   - Documentation: "Wiki", "Owners", "Arlo_Versions"
+5. **Select Time Range** (if Datadog tools selected)
+6. **Type** a search term (optional):
+   - Service name: "streaming-service"
+   - PagerDuty incident: "227205"
+7. **Click** "Send"
+8. **View results**: Interactive charts, tables, and formatted data
+9. **Interact**: 
+   - Click PagerDuty incidents to open in new tab
+   - Hover over charts for details
+   - Download results as DOCX
 
 ## 🔧 Troubleshooting
 
-### Port 5001 already in use?
+### Port 8080 already in use?
 ```bash
 # Change port in docker-compose.yml
 ports:
-  - "8080:5001"  # Maps host 8080 to container 5001
+  - "8080:8080"  # Maps host 8080 to container 8080
 ```
 
 ### Container won't start?
 ```bash
 # Check logs
-docker-compose logs arlo-genai
+docker-compose logs arlo-agenticai
 
 # Rebuild without cache
 docker-compose build --no-cache
@@ -129,5 +144,5 @@ To use monitoring features, configure your credentials:
 
 Contact the development team or check the logs:
 ```bash
-docker-compose logs -f arlo-genai
+docker-compose logs -f arlo-agenticai
 ```

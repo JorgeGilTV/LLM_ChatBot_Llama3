@@ -69,7 +69,7 @@ body {
 }
 
 .history h2 {
-    color: var(--text-secondary);
+    color: var(--accent-primary);
     margin-top: 1rem;
     font-size: 14px;
 }
@@ -146,6 +146,16 @@ body {
 .status-monitor ul {
     list-style: none;
     padding: 0;
+}
+
+/* Core services - show all without scroll */
+#status-services {
+    max-height: none;
+    overflow-y: visible;
+}
+
+/* Past incidents - keep scrollable */
+#status-incidents {
     max-height: 150px;
     overflow-y: auto;
 }
@@ -173,6 +183,100 @@ body {
     margin-bottom: 2px;
 }
 
+/* PagerDuty Card in Main Area */
+.pagerduty-card {
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.pagerduty-card:hover {
+    box-shadow: 0 6px 16px var(--shadow);
+    transform: translateY(-2px);
+}
+
+.pagerduty-card ul {
+    list-style: none;
+}
+
+.pagerduty-card ul li {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+    border-left: 3px solid #8b5cf6;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.pagerduty-card ul li:hover {
+    transform: translateX(4px);
+    box-shadow: 0 2px 6px var(--shadow);
+    background: var(--bg-primary);
+    cursor: pointer;
+}
+
+.pagerduty-card ul li:active {
+    transform: translateX(2px);
+    box-shadow: 0 1px 3px var(--shadow);
+}
+
+.pagerduty-card ul li strong {
+    color: #8b5cf6;
+    display: block;
+    margin-bottom: 3px;
+    font-size: 12px;
+}
+
+.pagerduty-card ul li.triggered {
+    border-left-color: #ef4444;
+}
+
+.pagerduty-card ul li.triggered strong {
+    color: #ef4444;
+}
+
+.pagerduty-card ul li.acknowledged {
+    border-left-color: #f59e0b;
+}
+
+.pagerduty-card ul li.acknowledged strong {
+    color: #f59e0b;
+}
+
+.pagerduty-card ul li.resolved {
+    border-left-color: #10b981;
+}
+
+.pagerduty-card ul li.resolved strong {
+    color: #10b981;
+}
+
+/* Custom scrollbar for PagerDuty lists */
+.pagerduty-card ul::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pagerduty-card ul::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+}
+
+.pagerduty-card ul::-webkit-scrollbar-thumb {
+    background: #8b5cf6;
+    border-radius: 3px;
+}
+
+.pagerduty-card ul::-webkit-scrollbar-thumb:hover {
+    background: #7c3aed;
+}
+
 /* Área principal */
 .chat-area {
     flex: 1;
@@ -185,7 +289,7 @@ body {
     background: linear-gradient(90deg, #1b9494, #08ac5f);
     padding: 1rem;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     font-size: 1.5rem;
     font-weight: bold;
@@ -193,6 +297,7 @@ body {
     border-radius: 8px;
     margin-bottom: 1rem;
     box-shadow: 0 4px 12px var(--shadow);
+    position: relative;
 }
 
 .theme-toggle {
@@ -209,6 +314,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: absolute;
+    right: 1rem;
 }
 
 .theme-toggle:hover {
@@ -471,4 +578,283 @@ button[type="submit"]:active {
 
 #alerts-table button:hover {
     background: #237c8a;
+}
+
+/* ✅ Collapsible tool sections */
+.collapsible-tool {
+    margin: 15px 0 !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    transition: box-shadow 0.3s ease;
+}
+
+.collapsible-tool:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+}
+
+.tool-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    padding: 12px 15px !important;
+    cursor: pointer !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    transition: background 0.2s;
+}
+
+.tool-header:hover {
+    background: linear-gradient(135deg, #5568d3 0%, #653a8b 100%) !important;
+}
+
+.tool-header h3 {
+    margin: 0 !important;
+    color: white !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+}
+
+.tool-toggle-btn {
+    background: rgba(255,255,255,0.2) !important;
+    border: none !important;
+    color: white !important;
+    cursor: pointer !important;
+    padding: 6px 12px !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    transition: background 0.2s, transform 0.2s !important;
+}
+
+.tool-toggle-btn:hover {
+    background: rgba(255,255,255,0.3) !important;
+    transform: scale(1.05);
+}
+
+.tool-toggle-btn:active {
+    transform: scale(0.95);
+}
+
+.tool-content {
+    padding: 15px !important;
+    background: white !important;
+    transition: all 0.3s ease-in-out;
+    overflow: hidden;
+}
+
+/* Smooth transition for collapse/expand */
+.tool-content[style*="display: none"] {
+    max-height: 0 !important;
+    padding: 0 15px !important;
+    opacity: 0;
+}
+
+.tool-content[style*="display: block"] {
+    max-height: none !important;
+    opacity: 1;
+}
+
+/* ✅ Collapsible subsections (for nested sections like RED Metrics / ADT within DD_Errors) */
+.subsection-collapsible {
+    margin: 12px 0 !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+    transition: box-shadow 0.3s ease;
+}
+
+.subsection-collapsible:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+}
+
+.subsection-header {
+    cursor: pointer !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    transition: background 0.2s;
+}
+
+.subsection-header:hover {
+    opacity: 0.95;
+}
+
+.subsection-header h3 {
+    margin: 0 !important;
+    font-size: 15px !important;
+    font-weight: bold !important;
+}
+
+.subsection-toggle-btn {
+    cursor: pointer !important;
+    padding: 4px 10px !important;
+    border-radius: 4px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    transition: all 0.2s !important;
+}
+
+.subsection-toggle-btn:hover {
+    transform: scale(1.05);
+    opacity: 0.8;
+}
+
+.subsection-toggle-btn:active {
+    transform: scale(0.95);
+}
+
+.subsection-content {
+    transition: all 0.3s ease-in-out;
+    overflow: hidden;
+}
+
+.subsection-content[style*="display: none"] {
+    max-height: 0 !important;
+    padding: 0 10px !important;
+    opacity: 0;
+}
+
+.subsection-content[style*="display: block"] {
+    max-height: none !important;
+    opacity: 1;
+}
+
+/* ✅ Tabs system */
+.tabs-container {
+    margin: 20px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    background: white;
+}
+
+.tabs-header {
+    display: flex;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-bottom: 2px solid #e0e0e0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.tabs-header::-webkit-scrollbar {
+    height: 4px;
+}
+
+.tabs-header::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.tabs-header::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.tabs-header::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #4a5568;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+    position: relative;
+    outline: none;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.5);
+    color: #2d3748;
+}
+
+.tab-btn.active {
+    color: #667eea;
+    background: white;
+    border-bottom: 3px solid #667eea;
+    font-weight: bold;
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
+}
+
+.tabs-body {
+    background: white;
+    min-height: 200px;
+    padding: 0;
+    margin: 0;
+}
+
+.tab-content {
+    padding: 10px 20px 20px 20px;
+    animation: fadeIn 0.3s ease;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.tab-content-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tab-content[style*="display: none"],
+.tab-content[style*="display:none"] {
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+}
+
+.tab-content[style*="display: block"],
+.tab-content[style*="display:block"] {
+    display: block !important;
+    height: auto !important;
+    visibility: visible !important;
+    position: relative !important;
+    left: auto !important;
 }

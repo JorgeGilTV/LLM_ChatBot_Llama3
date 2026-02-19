@@ -4,6 +4,7 @@ import requests
 import time
 import json
 import re
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
@@ -469,19 +470,30 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                 dash_title = dashboard.get("title", "Untitled")
                 dash_url = dashboard.get("url", f"https://{dd_site}/dashboard/{dash_id}")
                 
+                # Calculate timestamp range for display
+                import time
+                current_time_header = int(time.time())
+                from_time_header = current_time_header - (timerange_hours * 3600)
+                timestamp_range_html = format_timestamp_range(from_time_header, current_time_header)
+                
                 # Dashboard header
                 output += f"""
                 <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                            padding: 8px; 
-                            border-radius: 4px; 
-                            margin: 6px 0;
-                            color: white;'>
-                    <h2 style='margin: 0 0 4px 0; color: white; font-size: 15px;'>📊 {html.escape(dash_title)}</h2>
-                    <p style='margin: 0;'>
-                        <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 12px;'>
+                            padding: 12px; 
+                            border-radius: 6px; 
+                            margin: 8px 0;
+                            color: white;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                    <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 {html.escape(dash_title)}</h2>
+                    <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
+                        Real-time metrics and performance monitoring
+                    </p>
+                    <p style='margin: 0 0 8px 0;'>
+                        <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
                             Open Interactive Dashboard →
                         </a>
                     </p>
+                    {timestamp_range_html}
                 </div>
                 
                 """
@@ -3127,3 +3139,416 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
         import traceback
         traceback.print_exc()
         return f"<p>❌ Error reading all errors: {html.escape(str(e))}</p>"
+
+
+def read_datadog_failed_pods(query: str = "", timerange_hours: int = 4) -> str:
+    """
+    Get Kubernetes pods with failures (ImagePullBackOff, CrashLoopBackOff, etc.)
+    that could be causing 4xx errors
+    """
+    print("=" * 80)
+    print("🚨 Datadog Failed Pods Monitor")
+    print("=" * 80)
+    
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "datadoghq.com")
+    
+    if not dd_api_key or not dd_app_key:
+        return "<p>⚠️ Datadog credentials not configured</p>"
+    
+    try:
+        # Calculate time range
+        end_time = datetime.now()
+        start_time = end_time - timedelta(hours=timerange_hours)
+        
+        from_ts = int(start_time.timestamp())
+        to_ts = int(end_time.timestamp())
+        
+        print(f"📅 Time range: {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')}")
+        
+        # Query for failed pods
+        # Using Datadog metrics API to get pod status
+        base_url = f"https://{dd_site}/api/v1"
+        headers = {
+            "DD-API-KEY": dd_api_key,
+            "DD-APPLICATION-KEY": dd_app_key,
+            "Content-Type": "application/json"
+        }
+        
+        # Query for pods with error states
+        pod_queries = [
+            "kubernetes.pods.running{pod_status:imagepullbackoff,env:production}",
+            "kubernetes.pods.running{pod_status:crashloopbackoff,env:production}",
+            "kubernetes.pods.running{pod_status:error,env:production}",
+            "kubernetes.pods.running{pod_status:pending,env:production}",
+        ]
+        
+        failed_pods = []
+        
+        for query_str in pod_queries:
+            query_url = f"{base_url}/query"
+            params = {
+                "from": from_ts,
+                "to": to_ts,
+                "query": query_str
+            }
+            
+            response = requests.get(query_url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('series'):
+                    for series in data['series']:
+                        pod_name = series.get('scope', 'unknown')
+                        status = series.get('tag_set', [])
+                        
+                        # Extract namespace and pod info from tags
+                        namespace = next((tag.split(':')[1] for tag in status if tag.startswith('kube_namespace:')), 'unknown')
+                        pod_status = next((tag.split(':')[1] for tag in status if tag.startswith('pod_status:')), 'unknown')
+                        
+                        failed_pods.append({
+                            'namespace': namespace,
+                            'pod': pod_name,
+                            'status': pod_status,
+                            'points': series.get('pointlist', [])
+                        })
+        
+        # Build HTML output
+        output = f"""
+        <div style='background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); 
+                    padding: 16px; 
+                    border-radius: 8px; 
+                    margin: 12px 0;
+                    color: white;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 8px 0; color: white; font-size: 20px; font-weight: bold;'>
+                🚨 Failed Pods Monitor - Potential 4xx Error Sources
+            </h2>
+            <p style='margin: 0; font-size: 13px; opacity: 0.95;'>
+                Monitoring Kubernetes pods with failure states that may cause service errors
+            </p>
+            <div style='margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; font-size: 12px;'>
+                <strong>📅 Time Range:</strong> {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')} ({timerange_hours}h)
+            </div>
+        </div>
+        """
+        
+        if not failed_pods:
+            output += """
+            <div style='background-color: #d1fae5; padding: 16px; border-left: 4px solid #10b981; border-radius: 4px; margin: 12px 0;'>
+                <p style='margin: 0; color: #065f46; font-weight: bold;'>
+                    ✅ No failed pods detected in the specified time range
+                </p>
+                <p style='margin: 8px 0 0 0; color: #047857; font-size: 13px;'>
+                    All pods are running normally in production environment.
+                </p>
+            </div>
+            """
+        else:
+            # Group by namespace
+            pods_by_namespace = {}
+            for pod in failed_pods:
+                ns = pod['namespace']
+                if ns not in pods_by_namespace:
+                    pods_by_namespace[ns] = []
+                pods_by_namespace[ns].append(pod)
+            
+            output += f"""
+            <div style='background-color: #fee2e2; padding: 12px; border-left: 4px solid #ef4444; border-radius: 4px; margin: 12px 0;'>
+                <p style='margin: 0; color: #991b1b; font-weight: bold; font-size: 15px;'>
+                    ⚠️ Found {len(failed_pods)} failed pod(s) across {len(pods_by_namespace)} namespace(s)
+                </p>
+            </div>
+            """
+            
+            # Display pods grouped by namespace
+            for namespace, pods in sorted(pods_by_namespace.items()):
+                output += f"""
+                <div style='background: white; border: 2px solid #fca5a5; border-radius: 8px; padding: 16px; margin: 12px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                    <h3 style='margin: 0 0 12px 0; color: #dc2626; font-size: 16px; border-bottom: 2px solid #fca5a5; padding-bottom: 8px;'>
+                        📦 Namespace: {html.escape(namespace)}
+                        <span style='background: #fef2f2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;'>
+                            {len(pods)} pod(s)
+                        </span>
+                    </h3>
+                """
+                
+                for pod in pods:
+                    status_color = {
+                        'imagepullbackoff': '#dc2626',
+                        'crashloopbackoff': '#ea580c',
+                        'error': '#dc2626',
+                        'pending': '#f59e0b'
+                    }.get(pod['status'].lower(), '#6b7280')
+                    
+                    status_icon = {
+                        'imagepullbackoff': '🔴',
+                        'crashloopbackoff': '🔄',
+                        'error': '❌',
+                        'pending': '⏳'
+                    }.get(pod['status'].lower(), '⚠️')
+                    
+                    output += f"""
+                    <div style='background: #fef2f2; border-left: 4px solid {status_color}; padding: 12px; margin: 8px 0; border-radius: 4px;'>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div style='flex: 1;'>
+                                <p style='margin: 0 0 4px 0; font-weight: bold; color: #1f2937; font-size: 14px;'>
+                                    {status_icon} {html.escape(pod['pod'])}
+                                </p>
+                                <p style='margin: 0; font-size: 12px; color: #6b7280;'>
+                                    Status: <span style='color: {status_color}; font-weight: bold;'>{pod['status'].upper()}</span>
+                                </p>
+                            </div>
+                            <div>
+                                <span style='background: {status_color}; color: white; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;'>
+                                    FAILED
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    """
+                
+                output += "</div>"
+        
+        # Add link to Datadog
+        datadog_url = "https://arlo.datadoghq.com/orchestration/explorer/pod?query=env%3Aproduction%20pod_status%3Aimagepullbackoff"
+        output += f"""
+        <div style='background: #f3f4f6; padding: 12px; border-radius: 6px; margin: 16px 0; border: 1px solid #d1d5db;'>
+            <p style='margin: 0 0 8px 0; color: #374151; font-size: 13px; font-weight: bold;'>
+                📊 View in Datadog:
+            </p>
+            <a href='{datadog_url}' target='_blank' 
+               style='display: inline-block; background: #632ca6; color: white; padding: 8px 16px; 
+                      border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold;'>
+                🔗 Open Kubernetes Pod Explorer
+            </a>
+        </div>
+        
+        <div style='background: #fffbeb; padding: 12px; border-left: 4px solid #f59e0b; border-radius: 4px; margin: 16px 0;'>
+            <p style='margin: 0 0 8px 0; color: #92400e; font-weight: bold; font-size: 13px;'>
+                💡 Common Causes of Failed Pods & 4xx Errors:
+            </p>
+            <ul style='margin: 4px 0 0 0; padding-left: 20px; color: #78350f; font-size: 12px; line-height: 1.6;'>
+                <li><strong>ImagePullBackOff:</strong> Docker image not found or no access to registry</li>
+                <li><strong>CrashLoopBackOff:</strong> Application crashes repeatedly after starting</li>
+                <li><strong>Pending:</strong> Not enough resources or scheduling issues</li>
+                <li><strong>Impact:</strong> Failed pods → Service unavailable → 502/503/504 errors</li>
+            </ul>
+        </div>
+        """
+        
+        print(f"✅ Completed: Found {len(failed_pods)} failed pods")
+        return output
+        
+    except Exception as e:
+        print(f"❌ Error reading failed pods: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"""
+        <div style='background-color: #fee2e2; padding: 16px; border-left: 4px solid #ef4444; border-radius: 4px; margin: 12px 0;'>
+            <p style='margin: 0; color: #991b1b; font-weight: bold;'>
+                ❌ Error reading failed pods: {html.escape(str(e))}
+            </p>
+        </div>
+        """
+
+
+def read_datadog_403_errors(query: str = "", timerange_hours: int = 4) -> str:
+    """
+    Monitor 403 Forbidden errors from Datadog APM traces
+    Specifically for Artifactory and other services returning 403 errors
+    """
+    print("=" * 80)
+    print("🚫 Datadog 403 Errors Monitor (APM Traces)")
+    print("=" * 80)
+    
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+    
+    if not dd_api_key or not dd_app_key:
+        return "<p>⚠️ Datadog credentials not configured</p>"
+    
+    try:
+        # Calculate time range
+        end_time = datetime.now()
+        start_time = end_time - timedelta(hours=timerange_hours)
+        
+        from_ts = int(start_time.timestamp() * 1000)  # APM uses milliseconds
+        to_ts = int(end_time.timestamp() * 1000)
+        
+        print(f"📅 Time range: {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')}")
+        
+        # Query APM for 403 errors
+        base_url = f"https://{dd_site}/api/v1"
+        headers = {
+            "DD-API-KEY": dd_api_key,
+            "DD-APPLICATION-KEY": dd_app_key,
+            "Content-Type": "application/json"
+        }
+        
+        # Search for traces with 403 status code
+        search_url = f"{base_url}/trace/search"
+        
+        # Query for 403 errors across all services
+        body = {
+            "query": "@http.status_code:403 env:production",
+            "start": from_ts,
+            "end": to_ts
+        }
+        
+        response = requests.post(search_url, headers=headers, json=body, timeout=30)
+        
+        traces_403 = []
+        
+        if response.status_code == 200:
+            data = response.json()
+            traces = data.get('data', [])
+            
+            for trace in traces[:100]:  # Limit to 100 most recent
+                # Extract relevant info from trace
+                service = trace.get('service', 'unknown')
+                resource = trace.get('resource', 'unknown')
+                duration = trace.get('duration', 0)
+                timestamp = trace.get('start', 0)
+                
+                traces_403.append({
+                    'service': service,
+                    'resource': resource,
+                    'duration': duration / 1000000,  # Convert to ms
+                    'timestamp': datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+                })
+        
+        # Build HTML output
+        output = f"""
+        <div style='background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); 
+                    padding: 16px; 
+                    border-radius: 8px; 
+                    margin: 12px 0;
+                    color: white;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 8px 0; color: white; font-size: 20px; font-weight: bold;'>
+                🚫 403 Forbidden Errors Monitor (APM Traces)
+            </h2>
+            <p style='margin: 0; font-size: 13px; opacity: 0.95;'>
+                Monitoring HTTP 403 Forbidden responses from production services
+            </p>
+            <div style='margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; font-size: 12px;'>
+                <strong>📅 Time Range:</strong> {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')} ({timerange_hours}h)
+            </div>
+        </div>
+        """
+        
+        if not traces_403:
+            output += """
+            <div style='background-color: #d1fae5; padding: 16px; border-left: 4px solid #10b981; border-radius: 4px; margin: 12px 0;'>
+                <p style='margin: 0; color: #065f46; font-weight: bold;'>
+                    ✅ No 403 errors detected in the specified time range
+                </p>
+                <p style='margin: 8px 0 0 0; color: #047857; font-size: 13px;'>
+                    All requests are being authorized successfully.
+                </p>
+            </div>
+            """
+        else:
+            # Group by service
+            errors_by_service = {}
+            for trace in traces_403:
+                svc = trace['service']
+                if svc not in errors_by_service:
+                    errors_by_service[svc] = []
+                errors_by_service[svc].append(trace)
+            
+            output += f"""
+            <div style='background-color: #fee2e2; padding: 12px; border-left: 4px solid #dc2626; border-radius: 4px; margin: 12px 0;'>
+                <p style='margin: 0; color: #991b1b; font-weight: bold; font-size: 15px;'>
+                    ⚠️ Found {len(traces_403)} 403 error(s) across {len(errors_by_service)} service(s)
+                </p>
+            </div>
+            """
+            
+            # Display errors grouped by service
+            for service, errors in sorted(errors_by_service.items(), key=lambda x: len(x[1]), reverse=True):
+                output += f"""
+                <div style='background: white; border: 2px solid #fca5a5; border-radius: 8px; padding: 16px; margin: 12px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                    <h3 style='margin: 0 0 12px 0; color: #dc2626; font-size: 16px; border-bottom: 2px solid #fca5a5; padding-bottom: 8px;'>
+                        🔴 Service: {html.escape(service)}
+                        <span style='background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;'>
+                            {len(errors)} error(s)
+                        </span>
+                    </h3>
+                """
+                
+                # Show top 5 errors for this service
+                for error in errors[:5]:
+                    output += f"""
+                    <div style='background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px; margin: 8px 0; border-radius: 4px;'>
+                        <div style='margin-bottom: 6px;'>
+                            <span style='background: #dc2626; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold;'>
+                                403 FORBIDDEN
+                            </span>
+                            <span style='color: #6b7280; font-size: 11px; margin-left: 8px;'>
+                                {error['timestamp']}
+                            </span>
+                        </div>
+                        <p style='margin: 4px 0; font-size: 13px; color: #1f2937; word-break: break-all;'>
+                            <strong>Resource:</strong> {html.escape(error['resource'])}
+                        </p>
+                        <p style='margin: 4px 0; font-size: 12px; color: #6b7280;'>
+                            <strong>Duration:</strong> {error['duration']:.2f}ms
+                        </p>
+                    </div>
+                    """
+                
+                if len(errors) > 5:
+                    output += f"""
+                    <p style='margin: 8px 0 0 0; color: #6b7280; font-size: 12px; font-style: italic;'>
+                        ... and {len(errors) - 5} more error(s)
+                    </p>
+                    """
+                
+                output += "</div>"
+        
+        # Add link to Datadog APM
+        datadog_url = "https://arlo.datadoghq.com/apm/traces?query=env%3Aproduction%20service%3Aartifactory%20operation_name%3Aservlet.request%20%40http.status_code%3A403"
+        output += f"""
+        <div style='background: #f3f4f6; padding: 12px; border-radius: 6px; margin: 16px 0; border: 1px solid #d1d5db;'>
+            <p style='margin: 0 0 8px 0; color: #374151; font-size: 13px; font-weight: bold;'>
+                📊 View in Datadog APM:
+            </p>
+            <a href='{datadog_url}' target='_blank' 
+               style='display: inline-block; background: #632ca6; color: white; padding: 8px 16px; 
+                      border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold;'>
+                🔗 Open APM Traces Explorer (403 Errors)
+            </a>
+        </div>
+        
+        <div style='background: #fffbeb; padding: 12px; border-left: 4px solid #f59e0b; border-radius: 4px; margin: 16px 0;'>
+            <p style='margin: 0 0 8px 0; color: #92400e; font-weight: bold; font-size: 13px;'>
+                💡 Common Causes of 403 Forbidden Errors:
+            </p>
+            <ul style='margin: 4px 0 0 0; padding-left: 20px; color: #78350f; font-size: 12px; line-height: 1.6;'>
+                <li><strong>Authentication:</strong> Invalid or expired API tokens/credentials</li>
+                <li><strong>Authorization:</strong> User lacks required permissions for the resource</li>
+                <li><strong>IP Whitelist:</strong> Source IP not allowed to access the service</li>
+                <li><strong>Rate Limiting:</strong> Too many requests from the same source</li>
+                <li><strong>Artifactory:</strong> Repository permissions or license issues</li>
+            </ul>
+        </div>
+        """
+        
+        print(f"✅ Completed: Found {len(traces_403)} 403 errors")
+        return output
+        
+    except Exception as e:
+        print(f"❌ Error reading 403 errors: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"""
+        <div style='background-color: #fee2e2; padding: 16px; border-left: 4px solid #ef4444; border-radius: 4px; margin: 12px 0;'>
+            <p style='margin: 0; color: #991b1b; font-weight: bold;'>
+                ❌ Error reading 403 errors: {html.escape(str(e))}
+            </p>
+        </div>
+        """

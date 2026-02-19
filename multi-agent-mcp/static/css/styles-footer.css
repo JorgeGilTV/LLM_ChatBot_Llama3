@@ -1,14 +1,13 @@
 /* Footer styles */
 .app-footer {
     margin-top: 2rem;
-    padding: 1rem;
+    padding: 1.25rem 2rem;
     background: var(--bg-secondary);
-    border-top: 2px solid var(--border-color);
-    border-radius: 8px;
-    text-align: center;
-    font-size: 12px;
+    border-top: 3px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 13px;
     color: var(--text-secondary);
-    box-shadow: 0 -2px 8px var(--shadow);
+    box-shadow: 0 -4px 16px var(--shadow);
 }
 
 .footer-content {
@@ -17,6 +16,44 @@
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
+}
+
+.footer-item {
+    font-weight: 600;
+}
+
+.footer-separator {
+    color: var(--accent-primary);
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.footer-btn {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.footer-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+}
+
+.footer-btn:active {
+    transform: translateY(0);
+}
+
+.ip-display {
+    color: var(--accent-primary);
+    font-weight: 600;
+    min-width: 120px;
 }
 
 .app-footer a {

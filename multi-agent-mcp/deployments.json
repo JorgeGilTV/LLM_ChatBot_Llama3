@@ -1,0 +1,102 @@
+{
+  "deployments": [
+    {
+      "date": "2026-02-16",
+      "time": "12:00",
+      "service": "GRM: HMS Core Services"
+    },
+    {
+      "date": "2026-02-16",
+      "time": "06:00",
+      "service": "GRM-1507 | Normal | 2026/12/12 | Migrate Splunk Prod Deployment server to AL2023"
+    },
+    {
+      "date": "2026-02-17",
+      "time": "01:00",
+      "service": "Bhoomi Akruvala: GRM-1684 | hmsweb"
+    },
+    {
+      "date": "2026-02-17",
+      "time": "05:00",
+      "service": "GRM-862 | [Verisure] MFA"
+    },
+    {
+      "date": "2026-02-17",
+      "time": "11:00",
+      "service": "Dave, Dave & Krupang: GRM-2118 | Fasttrack release for Web Client 6.13.1 EU/ew"
+    },
+    {
+      "date": "2026-02-17",
+      "time": "13:00",
+      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI | Mayank & Bhoomi"
+    },
+    {
+      "date": "2026-02-18",
+      "time": "12:00",
+      "service": "Jinesh & Tanu SmartHome payment"
+    },
+    {
+      "date": "2026-02-18",
+      "time": "13:00",
+      "service": "Partner Platform-GRM-1257"
+    },
+    {
+      "date": "2026-02-18",
+      "time": "13:00",
+      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI | Mayank & Bhoomi"
+    },
+    {
+      "date": "2026-02-19",
+      "time": "06:00",
+      "service": "Kseniiya, Nergui, N & Sonny: GRM-2062 | Nginx ClientAPI DeviceAPI | Bhoomi & Chandani"
+    },
+    {
+      "date": "2026-02-19",
+      "time": "10:00",
+      "service": "Chandani Trivedi: GRM-Diagtool Regular Release"
+    },
+    {
+      "date": "2026-02-19",
+      "time": "11:00",
+      "service": "Dave & Krupang: GRM-1 Web and Account client EU"
+    },
+    {
+      "date": "2026-02-19",
+      "time": "12:00",
+      "service": "Aniket & Jinesh & Tuanan-C Tanuaree: Q000 subscription Deploymn"
+    },
+    {
+      "date": "2026-02-19",
+      "time": "13:00",
+      "service": "Partner Platform-GRM-1257 - Dave & Krupang: GRM-1 Web and-"
+    },
+    {
+      "date": "2026-02-19",
+      "time": "14:00",
+      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI"
+    },
+    {
+      "date": "2026-02-20",
+      "time": "12:00",
+      "service": "Mayank & Tanusree: Growth: Hmspayment GRM-2062 | Nginx ClientAPI DeviceAPI"
+    },
+    {
+      "date": "2026-02-20",
+      "time": "13:00",
+      "service": "SmartHome"
+    },
+    {
+      "date": "2026-02-20",
+      "time": "13:00",
+      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI"
+    },
+    {
+      "date": "2026-02-20",
+      "time": "15:00",
+      "service": "GRM-2132 Fast Track | 2026/02/20 | Fix account"
+    }
+  ],
+  "timezone": "America/Chicago",
+  "last_updated": "2026-02-18T14:00:00-06:00",
+  "note": "Update this file manually to reflect current GRM Calendar deployments. Times are in CST."
+}

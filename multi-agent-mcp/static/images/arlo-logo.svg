@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Arlo Bird Logo -->
+  <defs>
+    <linearGradient id="arloBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00A3E0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0077BE;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Bird body (stylized) -->
+  <path d="M 60 20 Q 45 25, 40 40 Q 38 55, 45 65 Q 50 70, 60 68 Q 70 66, 75 55 Q 78 45, 75 35 Q 72 25, 60 20 Z" 
+        fill="url(#arloBlue)" stroke="#0077BE" stroke-width="2"/>
+  
+  <!-- Bird head -->
+  <circle cx="60" cy="25" r="12" fill="url(#arloBlue)"/>
+  
+  <!-- Bird eye -->
+  <circle cx="63" cy="23" r="3" fill="white"/>
+  <circle cx="64" cy="22" r="1.5" fill="#0077BE"/>
+  
+  <!-- Bird wing (right) -->
+  <path d="M 68 45 Q 80 50, 85 55 Q 88 58, 90 62 Q 85 60, 80 58 Q 72 54, 68 50 Z" 
+        fill="url(#arloBlue)" opacity="0.8"/>
+  
+  <!-- Bird wing (left) -->
+  <path d="M 52 45 Q 40 50, 35 55 Q 32 58, 30 62 Q 35 60, 40 58 Q 48 54, 52 50 Z" 
+        fill="url(#arloBlue)" opacity="0.8"/>
+  
+  <!-- Bird tail -->
+  <path d="M 60 68 Q 58 75, 55 82 Q 57 80, 60 78 Q 63 80, 65 82 Q 62 75, 60 68 Z" 
+        fill="url(#arloBlue)" opacity="0.9"/>
+  
+  <!-- Bird beak -->
+  <path d="M 68 25 L 75 23 L 68 28 Z" fill="#FF6B35"/>
+</svg>

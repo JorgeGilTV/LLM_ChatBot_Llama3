@@ -67,3 +67,11 @@ app1.py
 # Temporary files
 *.tmp
 *.temp
+
+# Old files archived
+old/
+
+# Docker tar files (too large for git)
+*.tar
+*.tar.gz
+config_secure.py

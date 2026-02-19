@@ -1,25 +1,70 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <title>GOC_AgenticAI</title>
+    <title>OneView GOC AI</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="/static/css/styles-footer.css">
     <!-- Load Chart.js globally so it's always available -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Load html2canvas for screenshot capture -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.02);
+            }
+        }
+    </style>
 </head>
 <body>
     <aside class="sidebar">
+        <div class="sidebar-logo">
+            <img src="/static/images/arlo-logo.png" alt="Arlo Logo" class="sidebar-arlo-logo">
+        </div>
         <button class="new-chat" onclick="newChat()">➕ New Chat</button>
         
         <!-- History with search -->
         <div class="history">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>📜 History</h2>
-                <button onclick="clearHistory();" class="clear-history-btn" title="Clear all history">🗑️</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleHistory()">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span id="history-arrow" style="transition: transform 0.3s; font-size: 12px;">▶</span>
+                    <h2 style="margin: 0;">📜 History</h2>
+                </div>
+                <button onclick="event.stopPropagation(); clearHistory();" class="clear-history-btn" title="Clear all history">🗑️</button>
             </div>
-            <input type="text" id="history-search" placeholder="🔍 Search history..." style="width: 100%; padding: 6px; margin: 8px 0; background: #333; border: 1px solid #444; border-radius: 4px; color: #f0f0f0; font-size: 12px;">
-            <ul id="history-list"></ul>
+            <div id="history-content" style="display: none; margin-top: 10px;">
+                <input type="text" id="history-search" placeholder="🔍 Search history..." class="history-search-input">
+                <ul id="history-list"></ul>
+            </div>
+        </div>
+        
+        <!-- Upcoming Deployments Widget -->
+        <div style="background: var(--bg-secondary); padding: 15px; border-radius: 12px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <h2 style="margin: 0; font-size: 15px;">🚀 Next Deployments (24hrs)</h2>
+                <button onclick="loadUpcomingDeployments()" class="refresh-status-btn" title="Refresh Deployments" style="font-size: 14px;">🔄</button>
+            </div>
+            <div style="font-size: 10px; color: #999; margin-bottom: 8px;">All times in CST</div>
+            <div id="deployments-current" style="display: none; font-size: 12px; padding: 8px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 6px; margin-bottom: 10px; color: white; text-align: center; font-weight: bold;">
+                🔴 LIVE: <span id="current-deployment-name"></span>
+            </div>
+            <div id="deployments-summary" style="font-size: 12px; padding: 8px; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); border-radius: 6px; margin-bottom: 10px; color: white; text-align: center;">
+                Loading...
+            </div>
+            <div>
+                <ul id="deployments-list" style="list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 200px; overflow-y: auto;">
+                    <li style="padding: 6px; color: #999; background: var(--bg-tertiary); border-radius: 4px;">Loading...</li>
+                </ul>
+            </div>
+            <div style="margin-top: 8px; font-size: 10px; color: var(--text-secondary); text-align: center;">
+                <span id="deployments-time">Last updated: --:--:--</span>
+            </div>
         </div>
         
         <!-- Auto Status Monitor - Single Column -->
@@ -28,14 +73,14 @@
                 <h2>🌐 Arlo Status <span id="status-time" style="font-size: 10px; color: #999;"></span></h2>
                 <button onclick="loadStatusMonitor()" class="refresh-status-btn" title="Refresh status">🔄</button>
             </div>
-            <div id="status-summary" style="font-size: 11px; padding: 5px; background: #333; border-radius: 4px; margin-bottom: 8px;">
+            <div id="status-summary" class="status-summary">
                 Loading...
             </div>
-            <h3 style="font-size: 12px; margin: 8px 0 4px 0; color: #bbb;">Core Services</h3>
-            <ul id="status-services" style="list-style: none; padding: 0; font-size: 10px; margin-bottom: 12px;">
+            <h3>Core Services</h3>
+            <ul id="status-services" style="list-style: none; padding: 0; font-size: 10px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
                 <li style="padding: 4px; color: #999;">Loading...</li>
             </ul>
-            <h3 style="font-size: 12px; margin: 8px 0 4px 0; color: #bbb;">Past Incidents</h3>
+            <h3>Past Incidents</h3>
             <ul id="status-incidents" style="list-style: none; padding: 0; font-size: 10px;">
                 <li style="padding: 4px; color: #999;">Loading...</li>
             </ul>
@@ -63,7 +108,7 @@
 
     <main class="chat-area">
         <header class="top-bar">
-            <span>🧠 GOC_AgenticAI 🧠</span>
+            <span>🧠 OneView GOC AI 🧠</span>
             <button onclick="toggleTheme()" class="theme-toggle" title="Toggle light/dark theme">🌓</button>
         </header>
         
@@ -71,18 +116,69 @@
         <div style="display: grid; grid-template-columns: 1fr 400px; gap: 20px; margin-bottom: 20px;">
             <!-- Left Column: How to Use -->
             <div class="prompt">
-                <strong style="font-size: 1.15rem;">How to use:</strong><br>
-                <span style="color: #20d6ca;">1️⃣ Select one or more tools from the checkboxes below</span><br>
-                <span style="color: #ff9500; margin-left: 20px;">⚠️ If you select DD_Red_Metrics, DD_Red_ADT or DD_Errors, choose a Time Range</span><br>
-                <span style="color: #20d6ca;">2️⃣ Type your search query (optional for some tools)</span><br>
-                <span style="color: #20d6ca;">3️⃣ Click Send button</span><br>"
-                <span style="color: #fbbf24; font-style: italic;">💡 Example: Select "DD_Red_Metrics","DD_Red_ADT" type "streaming-service", then click Send</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <strong style="font-size: 1.15rem;">How to use:</strong>
+                    <a href="https://onboarding-goc.arlocloud.com" target="_blank" rel="noopener noreferrer" 
+                       style="padding: 6px 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; 
+                              text-decoration: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; 
+                              transition: transform 0.2s, box-shadow 0.2s; display: inline-block;"
+                       onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)';"
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        🚀 GOC Onboarding
+                    </a>
+                </div>
+                <!-- PagerDuty Alert Indicator -->
+                <div id="pd-alert-indicator" style="display: none; text-align: center; margin: 10px 0; padding: 8px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 8px; animation: pulse 2s infinite;">
+                    <div style="font-size: 24px; margin-bottom: 5px;">🚨</div>
+                    <div style="color: white; font-weight: bold; font-size: 12px;">
+                        <span id="pd-alert-count">0</span> TRIGGERED INCIDENTS
+                    </div>
+                </div>
+                <!-- Arlo Status Alert Indicator -->
+                <div id="arlo-alert-indicator" style="display: none; text-align: center; margin: 10px 0; padding: 8px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 8px; animation: pulse 2s infinite;">
+                    <div style="font-size: 24px; margin-bottom: 5px;">🚨</div>
+                    <div style="color: white; font-weight: bold; font-size: 12px;">
+                        <span id="arlo-alert-count">0</span> SERVICES DOWN
+                    </div>
+                </div>
+                <!-- PagerDuty Acknowledged Alert Indicator -->
+                <div id="pd-ack-indicator" style="display: none; text-align: center; margin: 10px 0; padding: 8px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); border-radius: 8px; animation: pulse 2s infinite;">
+                    <div style="font-size: 24px; margin-bottom: 5px;">⚠️</div>
+                    <div style="color: white; font-weight: bold; font-size: 12px;">
+                        <span id="pd-ack-count">0</span> ACKNOWLEDGED INCIDENTS
+                    </div>
+                </div>
+                <span style="color: #3b82f6;">1️⃣ Select one or more tools from the dropdowns below</span><br>
+                <span style="color: #8b5a3c; margin-left: 20px;">⚠️ If you select any Datadog tool (DD_Red_Metrics, DD_Red_ADT, DD_Errors, etc.), choose a Time Range</span><br>
+                <span style="color: #3b82f6;">2️⃣ Type your search query (optional for some tools)</span><br>
+                <span style="color: #3b82f6;">3️⃣ Click Send button</span><br>
+                <span style="color: #8b5a3c; font-style: italic;">💡 Example: Select "DD_Red_Metrics","DD_Red_ADT" type "streaming-service", then click Send</span><br><br>
+                
+                <div id="arlochat-instructions" style="display: none; background: white; padding: 12px; border-radius: 8px; margin-top: 10px; border: 2px solid #667eea; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <strong style="color: #667eea; font-size: 1.05rem;">🤖 MCP_ARLO - Smart MCP Tool</strong><br>
+                    <span style="color: #374151; font-size: 0.9rem; line-height: 1.6;">
+                        Use <strong>keywords</strong> to auto-filter 73+ MCP tools:<br>
+                        • <strong>jira</strong> or ticket IDs (SRE-1272, SV-2345, GOC-10789) → Only Jira tools (14 tools)<br>
+                        • <strong>"jira open/closed"</strong> or <strong>"tickets open"</strong> → Lists tickets by status<br>
+                        • <strong>Add project name</strong> → Filter by project (e.g., "jira open SRE", "tickets closed for GOC")<br>
+                        • <strong>datadog</strong> → Only Datadog tools<br>
+                        • <strong>confluence</strong> → Only Confluence tools<br>
+                        • <strong>splunk</strong> → Only Splunk tools<br>
+                        • <strong>pagerduty</strong> → Only PagerDuty tools<br>
+                        💡 <em>Examples: "SRE-1272" | "jira open" | "jira closed SRE" | "tickets open for GOC"</em>
+                    </span>
+                </div>
+                
+                <!-- Tool Dropdowns moved here -->
+                <div style="margin-top: 1rem;">
+                    <div class="tool-list" id="tool-list"></div>
+                </div>
             </div>
             
             <!-- Right Column: PagerDuty Monitor -->
             <div class="pagerduty-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h2 style="margin: 0; font-size: 16px; color: #20d6ca;">🚨 PagerDuty Status</h2>
+                    <h2 style="margin: 0; font-size: 16px; color: #3b82f6;">🚨 PagerDuty Status</h2>
                     <button onclick="loadPagerDutyMonitor()" class="refresh-status-btn" title="Refresh PagerDuty" style="font-size: 16px;">🔄</button>
                 </div>
                 <div id="pd-summary" style="font-size: 12px; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; margin-bottom: 12px; color: white; text-align: center;">
@@ -91,13 +187,13 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div>
                         <h3 style="font-size: 13px; margin: 0 0 8px 0; color: var(--text-secondary); font-weight: bold;">🔴 Active</h3>
-                        <ul id="pd-active" style="list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 120px; overflow-y: auto;">
+                        <ul id="pd-active" style="list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 250px; overflow-y: auto;">
                             <li style="padding: 6px; color: #999; background: var(--bg-tertiary); border-radius: 4px;">Loading...</li>
                         </ul>
                     </div>
                     <div>
                         <h3 style="font-size: 13px; margin: 0 0 8px 0; color: var(--text-secondary); font-weight: bold;">🟢 Resolved</h3>
-                        <ul id="pd-resolved" style="list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 120px; overflow-y: auto;">
+                        <ul id="pd-resolved" style="list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 250px; overflow-y: auto;">
                             <li style="padding: 6px; color: #999; background: var(--bg-tertiary); border-radius: 4px;">Loading...</li>
                         </ul>
                     </div>
@@ -110,8 +206,6 @@
         
         <!-- ✅ Formulario con ID para JS -->
         <form id="search-form" class="input-form">
-            <div class="tool-list" id="tool-list"></div>
-            
             <!-- Time range selector for Datadog tools -->
             <div id="timerange-container" style="display: none; margin: 10px 0; padding: 10px; background-color: #f0f4f8; border-radius: 4px;">
                 <label for="timerange-select" style="font-weight: bold; margin-right: 10px; color: #2d3748;">Time Range:</label>
@@ -147,9 +241,14 @@
         <!-- Footer -->
         <footer class="app-footer">
             <div class="footer-content">
-                <span>GOC AgenticAI v2.0.0</span>
-                <span>|</span>
-                <span id="last-update">Last update: --</span>
+                <span class="footer-item">OneView GOC AI v2.0.1</span>
+                <span class="footer-separator">•</span>
+                <span class="footer-item" id="last-update">Last update: --</span>
+                <span class="footer-separator">•</span>
+                <button id="check-ip-btn" onclick="checkPublicIP()" class="footer-btn">
+                    🌐 Check IP
+                </button>
+                <span id="public-ip-display" class="ip-display"></span>
             </div>
         </footer>
     </main>
@@ -185,6 +284,38 @@
         }
         setInterval(loadAlerts, 60000);
         document.addEventListener('DOMContentLoaded', loadAlerts);
+        
+        // Function to check public IP
+        function checkPublicIP() {
+            const btn = document.getElementById('check-ip-btn');
+            const display = document.getElementById('public-ip-display');
+            
+            // Show loading state
+            btn.disabled = true;
+            btn.textContent = '⏳ Checking...';
+            display.textContent = '';
+            
+            fetch('/api/public-ip')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ip) {
+                        display.textContent = `IP: ${data.ip}`;
+                        display.style.color = '#4CAF50';
+                    } else {
+                        display.textContent = 'Error: ' + (data.error || 'Unknown');
+                        display.style.color = '#ff5252';
+                    }
+                })
+                .catch(error => {
+                    display.textContent = 'Error: Connection failed';
+                    display.style.color = '#ff5252';
+                    console.error('Error fetching public IP:', error);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = '🌐 Check IP';
+                });
+        }
     
     </script>
 </body>

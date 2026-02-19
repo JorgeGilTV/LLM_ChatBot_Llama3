@@ -36,10 +36,17 @@ env/
 *~
 .DS_Store
 
+# Credentials - NEVER include in Docker image
+.env
+*.key
+*.pem
+*.p12
+
 # Project specific
 *.log
 agent_tool_logs.log
 uv.lock
+static/search_history.json
 
 # Git
 .git/
@@ -62,3 +69,15 @@ app1.py
 
 # Documentation
 README.md
+
+# Build artifacts and large files
+dist/
+*.tar
+goc-agenticai-embedded*.tar
+
+# Presentation files
+PRESENTATION_NOTES_EN.md
+PRESENTATION_SPEECH.md
+DATADOG_SETUP.md
+DOCKER_README.md
+QUICK_START.md

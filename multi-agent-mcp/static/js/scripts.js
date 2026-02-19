@@ -1,4 +1,4 @@
-// Scripts.js loaded - Version 20260209-v20 (Enhanced UI with theme toggle, tooltips, search, etc.)
+// Scripts.js loaded - Version 20260213-v21 (OneView GOC AI - Enhanced UI with theme toggle, tooltips, search, etc.)
 let counterInterval;
 let startTime;
 
@@ -19,13 +19,26 @@ function toggleTheme() {
 
 // Load saved theme on page load
 function loadSavedTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
 }
 
 // ============================================
 // HISTORY MANAGEMENT
 // ============================================
+function toggleHistory() {
+    const content = document.getElementById('history-content');
+    const arrow = document.getElementById('history-arrow');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(90deg)';
+    } else {
+        content.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+}
+
 function clearHistory() {
     if (!confirm('Are you sure you want to clear all history?')) {
         return;
@@ -240,6 +253,47 @@ function toggleSubsection(subsectionId) {
 // Make toggleSubsection available globally
 window.toggleSubsection = toggleSubsection;
 
+// Toggle tool dropdown
+function toggleToolDropdown(dropdownId, event) {
+    if (event) event.stopPropagation();
+    
+    const content = document.getElementById(dropdownId);
+    const header = content.previousElementSibling;
+    const toggle = header.querySelector('.tool-dropdown-toggle');
+    
+    if (content.classList.contains('active')) {
+        content.classList.remove('active');
+        header.classList.remove('active');
+        toggle.textContent = '▼';
+    } else {
+        content.classList.add('active');
+        header.classList.add('active');
+        toggle.textContent = '▲';
+    }
+}
+
+// Make toggleToolDropdown available globally
+window.toggleToolDropdown = toggleToolDropdown;
+
+// Toggle select all tools in a category
+function toggleSelectAll(category, checked) {
+    const dropdownId = `dropdown-${category}`;
+    const content = document.getElementById(dropdownId);
+    
+    if (!content) return;
+    
+    // Get all checkboxes within this dropdown (excluding disabled ones)
+    const checkboxes = content.querySelectorAll('input[type="checkbox"][name="tool"]:not(:disabled)');
+    checkboxes.forEach(cb => {
+        cb.checked = checked;
+    });
+    
+    console.log(`${checked ? '✅' : '❌'} ${category}: ${checked ? 'Selected' : 'Deselected'} ${checkboxes.length} tools`);
+}
+
+// Make toggleSelectAll available globally
+window.toggleSelectAll = toggleSelectAll;
+
 // Tab switching function
 function switchTab(contentId, btnElement) {
     // Hide all tab contents
@@ -326,6 +380,8 @@ function setupTimeRangeSelector() {
         const showTimeRange = selectedTools.includes('DD_Red_Metrics') || 
                               selectedTools.includes('DD_Errors') ||
                               selectedTools.includes('DD_Red_ADT') ||
+                              selectedTools.includes('DD_Failed_Pods') ||
+                              selectedTools.includes('DD_403_Errors') ||
                               selectedTools.includes('P0_Streaming') ||
                               selectedTools.includes('P0_CVR_Streaming') ||
                               selectedTools.includes('P0_ADT_Streaming');
@@ -342,6 +398,30 @@ function setupTimeRangeSelector() {
     
     // Initial check
     updateTimeRangeVisibility();
+}
+
+function setupArlochatInstructions() {
+    const instructionsDiv = document.getElementById('arlochat-instructions');
+    
+    function updateInstructionsVisibility() {
+        const checkboxes = document.querySelectorAll('input[type=checkbox][name=tool]:checked');
+        const selectedTools = Array.from(checkboxes).map(cb => cb.value);
+        
+        // Show instructions only if Ask_ARLOCHAT is selected
+        const showInstructions = selectedTools.includes('Ask_ARLOCHAT');
+        
+        if (instructionsDiv) {
+            instructionsDiv.style.display = showInstructions ? 'block' : 'none';
+        }
+    }
+    
+    // Add event listeners to all tool checkboxes
+    document.querySelectorAll('input[type=checkbox][name=tool]').forEach(checkbox => {
+        checkbox.addEventListener('change', updateInstructionsVisibility);
+    });
+    
+    // Initial check
+    updateInstructionsVisibility();
 }
 
 // Mostrar el spinner y contador mientras se ejecuta la consulta
@@ -583,7 +663,12 @@ function loadPagerDutyMonitor() {
             const timeElement = document.getElementById('pd-time');
             if (timeElement) {
                 const now = new Date();
-                timeElement.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+                const timeString = now.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                timeElement.textContent = `Last updated: ${timeString}`;
             }
             
             // Update summary
@@ -611,6 +696,32 @@ function loadPagerDutyMonitor() {
                             </div>
                         </div>
                     `;
+                }
+            }
+            
+            // Update PagerDuty alert indicators
+            const alertIndicator = document.getElementById('pd-alert-indicator');
+            const alertCount = document.getElementById('pd-alert-count');
+            if (alertIndicator && alertCount) {
+                const triggered = data.triggered || 0;
+                if (triggered > 0) {
+                    alertCount.textContent = triggered;
+                    alertIndicator.style.display = 'block';
+                } else {
+                    alertIndicator.style.display = 'none';
+                }
+            }
+            
+            // Update PagerDuty acknowledged indicator
+            const ackIndicator = document.getElementById('pd-ack-indicator');
+            const ackCount = document.getElementById('pd-ack-count');
+            if (ackIndicator && ackCount) {
+                const acknowledged = data.acknowledged || 0;
+                if (acknowledged > 0) {
+                    ackCount.textContent = acknowledged;
+                    ackIndicator.style.display = 'block';
+                } else {
+                    ackIndicator.style.display = 'none';
                 }
             }
             
@@ -669,6 +780,145 @@ function loadPagerDutyMonitor() {
         });
 }
 
+function loadUpcomingDeployments() {
+    fetch('/api/deployments/upcoming')
+        .then(res => {
+            if (!res.ok) throw new Error('Error loading deployments data');
+            return res.json();
+        })
+        .then(data => {
+            // Update timestamp
+            const timeElement = document.getElementById('deployments-time');
+            if (timeElement) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                timeElement.textContent = `Last updated: ${timeString}`;
+            }
+            
+            // Check if there's a deployment currently in progress
+            const now = new Date();
+            let currentDeployment = null;
+            
+            if (data.deployments && data.deployments.length > 0) {
+                for (const deployment of data.deployments) {
+                    const deployTime = new Date(deployment.timestamp);
+                    const deployEndTime = new Date(deployTime.getTime() + (2 * 60 * 60 * 1000)); // 2 hours duration
+                    
+                    if (now >= deployTime && now <= deployEndTime) {
+                        currentDeployment = deployment;
+                        break;
+                    }
+                }
+            }
+            
+            // Update current deployment banner
+            const currentElement = document.getElementById('deployments-current');
+            const currentNameElement = document.getElementById('current-deployment-name');
+            if (currentElement && currentNameElement) {
+                if (currentDeployment) {
+                    currentNameElement.textContent = currentDeployment.service;
+                    currentElement.style.display = 'block';
+                } else {
+                    currentElement.style.display = 'none';
+                }
+            }
+            
+            // Update summary
+            const summaryElement = document.getElementById('deployments-summary');
+            if (summaryElement) {
+                if (data.error) {
+                    summaryElement.innerHTML = `<span style="color: #fee;">⚠️ ${data.error}</span>`;
+                } else {
+                    const total = data.total || 0;
+                    summaryElement.innerHTML = `
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+                            <div style="font-weight: bold; font-size: 20px;">${data.deployments.length}</div>
+                            <div style="font-size: 11px; opacity: 0.9;">in next 24h</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Update deployments list
+            const listElement = document.getElementById('deployments-list');
+            if (listElement) {
+                if (data.error) {
+                    listElement.innerHTML = '<li style="color: #f56565; border-left-color: #f56565;">⚠️ Unable to load</li>';
+                } else if (!data.deployments || data.deployments.length === 0) {
+                    listElement.innerHTML = '<li style="color: #999;">No deployments in next 24h</li>';
+                } else {
+                    listElement.innerHTML = data.deployments.map(deployment => {
+                        const deployTime = new Date(deployment.timestamp);
+                        const isActive = currentDeployment && currentDeployment.timestamp === deployment.timestamp;
+                        const borderColor = isActive ? '#f59e0b' : '#3b82f6';
+                        const bgColor = isActive ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-tertiary)';
+                        
+                        // Calculate end time (2 hours after start)
+                        const deployEndTime = new Date(deployTime.getTime() + (2 * 60 * 60 * 1000));
+                        
+                        // Format times in CST (no conversion, just display)
+                        const startTimeStr = deployTime.toLocaleTimeString('en-US', {
+                            timeZone: 'America/Chicago',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+                        const endTimeStr = deployEndTime.toLocaleTimeString('en-US', {
+                            timeZone: 'America/Chicago',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+                        
+                        // Check if deployment is today or tomorrow (in CST)
+                        const cstNow = new Date(now.toLocaleString('en-US', {timeZone: 'America/Chicago'}));
+                        const nowDate = cstNow.toDateString();
+                        const deployDate = new Date(deployTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})).toDateString();
+                        const tomorrow = new Date(cstNow);
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        const tomorrowDate = tomorrow.toDateString();
+                        
+                        let dateLabel;
+                        if (deployDate === nowDate) {
+                            dateLabel = 'Today ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                        } else if (deployDate === tomorrowDate) {
+                            dateLabel = 'Tomorrow ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                        } else {
+                            const dateStr = deployTime.toLocaleDateString('en-US', {
+                                timeZone: 'America/Chicago',
+                                month: 'short',
+                                day: 'numeric'
+                            });
+                            dateLabel = dateStr + ' ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                        }
+                        
+                        return `
+                            <li style="padding: 6px; margin-bottom: 4px; background: ${bgColor}; border-radius: 4px; border-left: 3px solid ${borderColor};">
+                                <div style="font-weight: bold; color: ${borderColor}; margin-bottom: 2px; font-size: 11px;">
+                                    ${isActive ? '🔴 ' : ''}${dateLabel}
+                                </div>
+                                <div style="color: var(--text-secondary); font-size: 10px; line-height: 1.4;">
+                                    ${deployment.service}
+                                </div>
+                            </li>
+                        `;
+                    }).join('');
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error loading deployments:', err);
+            const summaryElement = document.getElementById('deployments-summary');
+            if (summaryElement) {
+                summaryElement.innerHTML = '<span style="color: #fee;">⚠️ Connection error</span>';
+            }
+        });
+}
+
 function loadStatusMonitor() {
     fetch('/api/status/monitor')
         .then(res => {
@@ -697,6 +947,8 @@ function loadStatusMonitor() {
             
             // Update core services
             const servicesElement = document.getElementById('status-services');
+            let servicesDown = 0;
+            
             if (servicesElement) {
                 if (data.error) {
                     servicesElement.innerHTML = '<li style="color: #f56565;">Unable to load</li>';
@@ -705,15 +957,30 @@ function loadStatusMonitor() {
                 } else {
                     servicesElement.innerHTML = data.services.map(svc => {
                         const isAllGood = svc.status.trim().toLowerCase() === 'all good';
+                        if (!isAllGood) {
+                            servicesDown++;
+                        }
                         const icon = isAllGood ? '✅' : '⚠️';
-                        const color = isAllGood ? '#48bb78' : '#f56565';
+                        const color = isAllGood ? '#10b981' : '#f56565';
                         return `
-                            <li style="display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; background: #333; border-radius: 3px; margin-bottom: 3px;">
-                                <span style="color: #e0e0e0; font-size: 10px;">${svc.service}</span>
+                            <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #ffffff; border-radius: 6px; margin-bottom: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                                <span style="color: #1e293b; font-size: 10px; font-weight: 700;">${svc.service}</span>
                                 <span style="color: ${color}; font-size: 11px;">${icon}</span>
                             </li>
                         `;
                     }).join('');
+                }
+            }
+            
+            // Update Arlo Status alert indicator
+            const arloAlertIndicator = document.getElementById('arlo-alert-indicator');
+            const arloAlertCount = document.getElementById('arlo-alert-count');
+            if (arloAlertIndicator && arloAlertCount) {
+                if (servicesDown > 0) {
+                    arloAlertCount.textContent = servicesDown;
+                    arloAlertIndicator.style.display = 'block';
+                } else {
+                    arloAlertIndicator.style.display = 'none';
                 }
             }
             
@@ -748,7 +1015,7 @@ function loadStatusMonitor() {
 
 // 🚀 Inicialización al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Initializing GOC_AgenticAI v2.0...');
+    console.log('🚀 Initializing OneView GOC AI v2.0...');
     
     // Load saved theme
     loadSavedTheme();
@@ -762,10 +1029,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load status monitor immediately
     loadStatusMonitor();
     loadPagerDutyMonitor();
+    loadUpcomingDeployments();
     
     // Auto-refresh status every 3 minutes (180000ms)
     setInterval(loadStatusMonitor, 180000);
     setInterval(loadPagerDutyMonitor, 180000);
+    setInterval(loadUpcomingDeployments, 180000);
     
     // Update timestamp initially
     updateLastUpdateTime();
@@ -790,18 +1059,141 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
+            // Function to get logo for section
+            function getSectionLogo(sectionKey) {
+                const logos = {
+                    'datadog': '<img src="/static/images/logos/datadog.svg" class="section-logo" alt="Datadog">',
+                    'splunk': '<img src="/static/images/logos/splunk.svg" class="section-logo" alt="Splunk">',
+                    'pagerduty': '<img src="/static/images/logos/pagerduty.svg" class="section-logo" alt="PagerDuty">',
+                    'confluence': '<img src="/static/images/logos/confluence.svg" class="section-logo" alt="Confluence">',
+                    'slack': '<img src="/static/images/logos/slack.svg" class="section-logo" alt="Slack">',
+                    'other': '🔧'
+                };
+                return logos[sectionKey] || '🔧';
+            }
+            
+            // Function to categorize tools
+            function categorizeTool(toolName) {
+                if (toolName.startsWith('DD_') || toolName.includes('Datadog')) {
+                    return 'datadog';
+                } else if (toolName.startsWith('P0_') || toolName.includes('Splunk')) {
+                    return 'splunk';
+                } else if (toolName.includes('PagerDuty')) {
+                    return 'pagerduty';
+                } else if (toolName === 'Wiki' || toolName === 'Owners' || toolName === 'Arlo_Versions' || toolName === 'Holiday_Oncall') {
+                    return 'confluence';
+                } else if (toolName.includes('Slack')) {
+                    return 'slack';
+                } else if (toolName === 'Ask_ARLOCHAT') {
+                    return 'other';
+                }
+                return 'other';
+            }
+            
+            // Group tools by category
+            const groupedTools = {
+                confluence: [],
+                datadog: [],
+                pagerduty: [],
+                splunk: [],
+                slack: [],
+                other: []
+            };
+            
             data.forEach(tool => {
-                const label = document.createElement('label');
-                label.className = 'tool-item';
-                label.title = tool.desc || tool.name;
-                label.innerHTML = `<input type="checkbox" name="tool" value="${tool.name}"> ${tool.name}`;
-                toolList.appendChild(label);
+                const category = categorizeTool(tool.name);
+                groupedTools[category].push(tool);
             });
             
-            console.log(`✅ Loaded ${data.length} tools`);
+            // Create sections with icons and names
+            const sections = [
+                { key: 'confluence', title: 'Confluence', color: '#0052CC' },
+                { key: 'datadog', title: 'Datadog', color: '#632CA6' },
+                { key: 'pagerduty', title: 'PagerDuty', color: '#06AC38' },
+                { key: 'splunk', title: 'Splunk', color: '#000000' },
+                { key: 'slack', title: 'Slack', color: '#4A154B' },
+                { key: 'other', title: 'Others', color: '#6b7280' }
+            ];
+            
+            sections.forEach(section => {
+                const tools = groupedTools[section.key];
+                if (tools.length === 0) return; // Skip empty sections
+                
+                // Create dropdown container
+                const dropdownDiv = document.createElement('div');
+                dropdownDiv.className = 'tool-dropdown';
+                
+                // Create dropdown header
+                const header = document.createElement('div');
+                header.className = 'tool-dropdown-header';
+                header.style.borderLeftColor = section.color;
+                const dropdownId = `dropdown-${section.key}`;
+                const selectAllId = `select-all-${section.key}`;
+                const logo = getSectionLogo(section.key);
+                header.innerHTML = `
+                    <span class="tool-dropdown-icon" onclick="toggleToolDropdown('${dropdownId}', event)">${logo}</span>
+                    <span class="tool-dropdown-title" onclick="toggleToolDropdown('${dropdownId}', event)">${section.title}</span>
+                    <span class="tool-dropdown-toggle" onclick="toggleToolDropdown('${dropdownId}', event)">
+                        ▲
+                    </span>
+                `;
+                header.classList.add('active');
+                dropdownDiv.appendChild(header);
+                
+                // Create dropdown content (expanded by default)
+                const content = document.createElement('div');
+                content.className = 'tool-dropdown-content active';
+                content.id = dropdownId;
+                
+                // Create tools container
+                const toolsContainer = document.createElement('div');
+                toolsContainer.className = 'tool-dropdown-items';
+                
+                // Add "Select All" checkbox at the top with main indentation
+                const selectAllLabel = document.createElement('label');
+                selectAllLabel.className = 'tool-item tool-item-main';
+                selectAllLabel.innerHTML = `
+                    <input type="checkbox" id="${selectAllId}" onchange="toggleSelectAll('${section.key}', this.checked)">
+                    <span class="tool-item-text" style="font-weight: 700;">Select All</span>
+                `;
+                toolsContainer.appendChild(selectAllLabel);
+                
+                tools.forEach(tool => {
+                    const label = document.createElement('label');
+                    label.className = 'tool-item tool-item-sub';
+                    label.title = tool.desc || tool.name;
+                    
+                    // Splunk and Slack tools are now enabled
+                    // const isDisabled = tool.name === 'P0_Streaming' || 
+                    //                   tool.name === 'P0_CVR_Streaming' || 
+                    //                   tool.name === 'P0_ADT_Streaming';
+                    // if (isDisabled) {
+                    //     label.classList.add('tool-item-disabled');
+                    //     label.title = `${tool.desc || tool.name} (Currently unavailable)`;
+                    // }
+                    
+                    // Display name mapping
+                    const displayName = tool.name === 'Ask_ARLOCHAT' ? 'MCP_ARLO' : tool.name;
+                    
+                    label.innerHTML = `
+                        <input type="checkbox" name="tool" value="${tool.name}">
+                        <span class="tool-item-text">${displayName}</span>
+                    `;
+                    toolsContainer.appendChild(label);
+                });
+                
+                content.appendChild(toolsContainer);
+                dropdownDiv.appendChild(content);
+                toolList.appendChild(dropdownDiv);
+            });
+            
+            console.log(`✅ Loaded ${data.length} tools in ${sections.filter(s => groupedTools[s.key].length > 0).length} sections`);
             
             // Add event listeners to show/hide timerange selector
             setupTimeRangeSelector();
+            
+            // Add event listener to show/hide Ask_ARLOCHAT instructions
+            setupArlochatInstructions();
         })
         .catch(err => {
             console.error('Error loading tools:', err);
@@ -948,36 +1340,50 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Download results as Word document
-function downloadResults() {
+async function downloadResults() {
     const resultsBox = document.getElementById('results-box');
     if (!resultsBox || resultsBox.innerHTML === '') {
         showNotification('No results to download');
         return;
     }
     
-    // Get the HTML content
-    const htmlContent = resultsBox.innerHTML;
-    
-    // Show loading notification
-    showNotification('Generating document...');
-    
-    // Send to backend for document generation
-    fetch('/api/download/docx', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            html_content: htmlContent
-        })
-    })
-    .then(response => {
+    try {
+        // Show loading notification
+        showNotification('📸 Capturing screenshot...');
+        
+        // Capture the visual screenshot using html2canvas
+        const canvas = await html2canvas(resultsBox, {
+            backgroundColor: '#ffffff',
+            scale: 2, // Higher quality (2x resolution)
+            logging: false,
+            useCORS: true,
+            allowTaint: true,
+            windowWidth: resultsBox.scrollWidth,
+            windowHeight: resultsBox.scrollHeight
+        });
+        
+        // Convert canvas to base64 image
+        const imageData = canvas.toDataURL('image/png');
+        
+        showNotification('📄 Generating document...');
+        
+        // Send to backend for document generation
+        const response = await fetch('/api/download/docx', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                screenshot_image: imageData
+            })
+        });
+        
         if (!response.ok) {
             throw new Error('Failed to generate document');
         }
-        return response.blob();
-    })
-    .then(blob => {
+        
+        const blob = await response.blob();
+        
         // Create download link
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -995,9 +1401,8 @@ function downloadResults() {
         document.body.removeChild(a);
         
         showNotification('✅ Document downloaded successfully!');
-    })
-    .catch(err => {
+    } catch (err) {
         console.error('Error downloading document:', err);
         showNotification('❌ Error downloading document: ' + err.message);
-    });
+    }
 }

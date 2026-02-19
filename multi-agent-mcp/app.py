@@ -6,32 +6,67 @@ import sys
 import os
 import logging
 import io
+import base64
+import html
 from datetime import datetime
+
+# Load secure embedded credentials (for compiled executable)
+try:
+    from config_secure import load_secure_env
+    load_secure_env()
+    print("✅ Loaded embedded credentials")
+except ImportError:
+    # If not compiled, will use .env file below
+    print("ℹ️  Using .env file for credentials")
+    pass
 try:
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from bs4 import BeautifulSoup
-    import re
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
-    print("⚠️ python-docx or beautifulsoup4 not installed. Download feature will be disabled.")
+    print("⚠️ python-docx not installed. Download feature will be disabled.")
 
 # Importar tools existentes
 from tools.gemini_tool import ask_gemini
-from tools.llama_tool import ask_llama
+#from tools.llama_tool import ask_llama
 from tools.confluence_tool import confluence_search
 #from tools.tickets_tool import read_tickets
 from tools.history_tool import add_to_history, get_history
-from tools.suggestions_tool import AI_suggestions
-from tools.ask_arlochat import ask_arlo
+#from tools.suggestions_tool import AI_suggestions
+
+# Import ask_arlochat (auto-detects best mode: SDK async or HTTP fallback)
+try:
+    from tools.ask_arlochat import ask_arlo, MCP_SDK_AVAILABLE
+    ARLOCHAT_AVAILABLE = True
+    if MCP_SDK_AVAILABLE:
+        print("✅ ArloChat MCP loaded (SDK Async mode - Python 3.10+)")
+    else:
+        print("✅ ArloChat MCP loaded (HTTP Fallback mode - Python 3.9+)")
+except ImportError as e:
+    print(f"⚠️  WARNING: ArloChat import failed: {e}")
+    ARLOCHAT_AVAILABLE = False
+    MCP_SDK_AVAILABLE = False
+    
+    # Create a placeholder function
+    def ask_arlo(question: str = "") -> str:
+        return f"""
+        <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #c53030;'>
+                ❌ <strong>ArloChat module failed to load</strong><br><br>
+                Error: {html.escape(str(e))}<br><br>
+                Please check the logs for more details.
+            </p>
+        </div>
+        """
+
 from tools.service_owners import service_owners_search
 from tools.noc_kt import noc_kt_search
 from tools.read_arlo_status import read_arlo_status
 from tools.oncall_support import confluence_oncall_today
 from tools.read_versions import read_versions
-from tools.datadog_dashboards import read_datadog_dashboards, read_datadog_errors_only, read_datadog_adt, read_datadog_adt_errors_only, read_datadog_all_errors
+from tools.datadog_dashboards import read_datadog_dashboards, read_datadog_errors_only, read_datadog_adt, read_datadog_adt_errors_only, read_datadog_all_errors, read_datadog_failed_pods, read_datadog_403_errors
 from tools.splunk_tool import read_splunk_p0_dashboard, read_splunk_p0_cvr_dashboard, read_splunk_p0_adt_dashboard
 from tools.pagerduty_tool import get_pagerduty_incidents
 from tools.pagerduty_analytics import get_pagerduty_analytics
@@ -56,17 +91,16 @@ TOOLS = {
     "DD_Red_Metrics": {"description": "List and search Datadog dashboards", "function": read_datadog_dashboards},
     "DD_Red_ADT": {"description": "Show RED Metrics - ADT dashboard from Datadog", "function": read_datadog_adt},
     "DD_Errors": {"description": "Show services with errors > 0 from RED Metrics & ADT dashboards", "function": read_datadog_all_errors},
-    # TEMPORARILY DISABLED - IP not whitelisted (need 189.128.95.0/24 or Full Tunnel VPN)
-    #"P0_Streaming": {"description": "Show P0 Streaming dashboard from Splunk", "function": read_splunk_p0_dashboard},
-    #"P0_CVR_Streaming": {"description": "Show P0 CVR Streaming dashboard from Splunk", "function": read_splunk_p0_cvr_dashboard},
-    #"P0_ADT_Streaming": {"description": "Show P0 ADT Streaming dashboard from Splunk", "function": read_splunk_p0_adt_dashboard},
+    "DD_Failed_Pods": {"description": "Monitor Kubernetes pods with failures (ImagePullBackOff, CrashLoop) causing 4xx errors", "function": read_datadog_failed_pods},
+    "DD_403_Errors": {"description": "Monitor 403 Forbidden errors from APM traces (Artifactory, authentication issues)", "function": read_datadog_403_errors},
+    "P0_Streaming": {"description": "Show P0 Streaming dashboard from Splunk", "function": read_splunk_p0_dashboard},
+    "P0_CVR_Streaming": {"description": "Show P0 CVR Streaming dashboard from Splunk", "function": read_splunk_p0_cvr_dashboard},
+    "P0_ADT_Streaming": {"description": "Show P0 ADT Streaming dashboard from Splunk", "function": read_splunk_p0_adt_dashboard},
     "Holiday_Oncall": {"description": "Verify status in ARLO webpage", "function": confluence_oncall_today},
     "PagerDuty": {"description": "Get active incidents from PagerDuty", "function": get_pagerduty_incidents},
     "PagerDuty_Dashboards": {"description": "Show PagerDuty analytics with charts and metrics", "function": get_pagerduty_analytics},
     "PagerDuty_Insights": {"description": "Show incident activity insights and trends", "function": get_pagerduty_insights},
-    #"Suggestions": {"description": "Generate recommendations using LLaMA with JIRA, Grafana, and Wiki", "function": AI_suggestions},
-    #"Ask_ARLOCHAT": {"description": "Ask ARLO CHAT about anything", "function": ask_arlo}
-    
+    "Ask_ARLOCHAT": {"description": "Ask ARLO CHAT via MCP", "function": ask_arlo}
 }
 registered_tools = [(name, tool["description"]) for name, tool in TOOLS.items()]
 
@@ -133,7 +167,7 @@ def api_run():
             continue
         try:
             # Pass timerange to Datadog and Splunk tools
-            if tool_name in ['DD_Red_Metrics', 'DD_Errors', 'DD_Red_ADT', 'P0_Streaming', 'P0_CVR_Streaming', 'P0_ADT_Streaming']:
+            if tool_name in ['DD_Red_Metrics', 'DD_Errors', 'DD_Red_ADT', 'DD_Failed_Pods', 'DD_403_Errors', 'P0_Streaming', 'P0_CVR_Streaming', 'P0_ADT_Streaming']:
                 res = func(input_text, timerange)
             else:
                 res = func(input_text)
@@ -216,22 +250,22 @@ def api_alert_status():
 
 @flask_app.route('/api/download/docx', methods=['POST'])
 def download_docx():
-    """Generate and download results as Word document"""
+    """Generate and download results as Word document with screenshot image"""
     if not DOCX_AVAILABLE:
-        return jsonify({'error': 'Document generation not available. Please install python-docx and beautifulsoup4'}), 503
+        return jsonify({'error': 'Document generation not available. Please install python-docx'}), 503
     
     try:
         data = request.json
-        html_content = data.get('html_content', '')
+        screenshot_image = data.get('screenshot_image', '')
         
-        if not html_content:
-            return jsonify({'error': 'No content provided'}), 400
+        if not screenshot_image:
+            return jsonify({'error': 'No screenshot provided'}), 400
         
         # Create Word document
         doc = Document()
         
         # Add title
-        title = doc.add_heading('GOC AgenticAI Results', level=0)
+        title = doc.add_heading('OneView GOC AI Results', level=0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         # Add timestamp
@@ -243,35 +277,19 @@ def download_docx():
         
         doc.add_paragraph()  # Add spacing
         
-        # Parse HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Process each element
-        for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'p', 'div', 'strong', 'em', 'ul', 'ol', 'li']):
-            text = element.get_text(strip=True)
-            if not text:
-                continue
+        # Decode and insert screenshot image
+        try:
+            # Remove the data:image/png;base64, prefix
+            img_data = screenshot_image.split(',')[1]
+            img_bytes = base64.b64decode(img_data)
             
-            # Handle headings
-            if element.name in ['h1', 'h2', 'h3', 'h4']:
-                level = int(element.name[1])
-                heading = doc.add_heading(text, level=level)
-            # Handle list items
-            elif element.name == 'li':
-                para = doc.add_paragraph(text, style='List Bullet')
-            # Handle regular paragraphs
-            else:
-                # Skip if this text is already part of a heading or list
-                if element.find_parent(['h1', 'h2', 'h3', 'h4', 'ul', 'ol']):
-                    continue
-                    
-                para = doc.add_paragraph(text)
-                
-                # Apply text formatting
-                if element.name == 'strong' or element.find('strong'):
-                    para.runs[0].font.bold = True
-                if element.name == 'em' or element.find('em'):
-                    para.runs[0].font.italic = True
+            # Add image to document (full width)
+            img_stream = io.BytesIO(img_bytes)
+            doc.add_picture(img_stream, width=Inches(6.5))
+            
+        except Exception as e:
+            logging.error(f"Could not add screenshot image: {e}")
+            return jsonify({'error': f'Failed to process screenshot: {str(e)}'}), 500
         
         # Save document to BytesIO
         doc_io = io.BytesIO()
@@ -430,5 +448,290 @@ def api_pagerduty_monitor():
         logging.error(f"Error in PagerDuty monitor: {e}")
         return jsonify({'error': str(e)})
 
+@flask_app.route('/api/public-ip', methods=['GET'])
+def get_public_ip():
+    """Get the current public IP address"""
+    try:
+        import requests
+        # Try multiple services for reliability
+        services = [
+            'https://api.ipify.org?format=json',
+            'https://ipinfo.io/json',
+            'https://ifconfig.me/all.json'
+        ]
+        
+        for service in services:
+            try:
+                response = requests.get(service, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    # Different services use different keys
+                    ip = data.get('ip') or data.get('ip_addr')
+                    if ip:
+                        return jsonify({'ip': ip, 'service': service})
+            except:
+                continue
+        
+        return jsonify({'error': 'Unable to fetch public IP'}), 500
+    except Exception as e:
+        logging.error(f"Error fetching public IP: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/api/deployments/upcoming')
+def api_deployments_upcoming():
+    """Endpoint for upcoming deployments from Confluence GRM Calendar"""
+    try:
+        import requests
+        from datetime import datetime, timedelta, timezone
+        from zoneinfo import ZoneInfo
+        from bs4 import BeautifulSoup
+        import re
+        
+        cst = ZoneInfo('America/Chicago')
+        
+        email = os.getenv("ATLASSIAN_EMAIL")
+        token = os.getenv("CONFLUENCE_TOKEN")
+        
+        if not email or not token:
+            return jsonify({'error': 'Confluence credentials not configured'})
+        
+        auth = (email, token)
+        today = datetime.now(timezone.utc)
+        
+        # Try to get calendar events via Team Calendars API
+        # Team Calendars subcalendar ID for GRM Calendar
+        deployments = []
+        
+        # First try: Get events via Team Calendars REST API
+        try:
+            # The calendar page has events we can try to extract
+            calendar_api_url = "https://arlo.atlassian.net/wiki/rest/calendar-services/1.0/calendar/events.json"
+            
+            # Get events for next 7 days
+            start_date = today.strftime('%Y-%m-%d')
+            end_date = (today + timedelta(days=7)).strftime('%Y-%m-%d')
+            
+            params = {
+                'start': start_date,
+                'end': end_date,
+                'subCalendarId': '153256867',  # GRM Calendar page ID
+                'userTimeZoneId': 'America/Chicago'  # CST
+            }
+            
+            logging.info(f"🔍 Trying Team Calendar API with params: {params}")
+            cal_resp = requests.get(calendar_api_url, auth=auth, params=params, timeout=10)
+            
+            if cal_resp.status_code == 200:
+                events = cal_resp.json()
+                logging.info(f"📅 Got {len(events)} events from Calendar API")
+                
+                for event in events:
+                    try:
+                        title = event.get('title', 'Untitled Deployment')
+                        start_time = event.get('start', '')
+                        
+                        if start_time:
+                            # Parse ISO format timestamp and convert to CST
+                            deploy_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                            deploy_dt_cst = deploy_dt.astimezone(cst)
+                            
+                            deployments.append({
+                                'date': deploy_dt_cst.strftime('%b %d, %Y'),
+                                'service': title,
+                                'timestamp': deploy_dt_cst.isoformat()
+                            })
+                    except Exception as e:
+                        logging.error(f"Error parsing event: {e}")
+                        continue
+                        
+        except Exception as e:
+            logging.warning(f"Team Calendar API failed: {e}, trying page scraping...")
+        
+        # If API didn't work, try scraping the page content
+        if not deployments:
+            logging.info(f"📄 Falling back to page content scraping")
+            page_id = "153256867"
+            page_url = f"https://arlo.atlassian.net/wiki/rest/api/content/{page_id}?expand=body.storage"
+            
+            resp = requests.get(page_url, auth=auth, timeout=10)
+            
+            if resp.status_code == 200:
+                page_data = resp.json()
+                content_html = page_data.get('body', {}).get('storage', {}).get('value', '')
+                
+                if content_html:
+                    soup = BeautifulSoup(content_html, 'html.parser')
+                    logging.info(f"📄 Content HTML length: {len(content_html)} chars")
+                    
+                    # Look for calendar macro and its subcalendar attribute
+                    calendar_macro = soup.find('ac:structured-macro', {'ac:name': 'calendar'})
+                    
+                    if calendar_macro:
+                        # Try to extract subcalendar IDs
+                        subcalendars = calendar_macro.find_all('ac:parameter', {'ac:name': 'subcalendarid'})
+                        logging.info(f"📅 Found {len(subcalendars)} subcalendars in macro")
+                        
+                        # For now, log what we find for debugging
+                        for sub in subcalendars:
+                            logging.info(f"Subcalendar: {sub.get_text()}")
+        
+        # If still no deployments found, load from local JSON file
+        if not deployments:
+            logging.warning("⚠️ No deployments found via API or scraping, loading from deployments.json")
+            
+            try:
+                import json
+                from pathlib import Path
+                
+                json_file = Path(__file__).parent / 'deployments.json'
+                
+                if json_file.exists():
+                    with open(json_file, 'r') as f:
+                        data = json.load(f)
+                        
+                    for item in data.get('deployments', []):
+                        date_str = item.get('date')
+                        time_str = item.get('time', '12:00')
+                        service = item.get('service', 'Unknown')
+                        
+                        # Create timestamp in CST
+                        timestamp = f"{date_str}T{time_str}:00-06:00"
+                        
+                        deployments.append({
+                            'date': datetime.fromisoformat(timestamp).strftime('%b %d, %Y'),
+                            'service': service,
+                            'timestamp': timestamp
+                        })
+                    
+                    logging.info(f"📂 Loaded {len(deployments)} deployments from JSON file")
+                else:
+                    logging.error("❌ deployments.json file not found")
+                    deployments = [
+                        {'date': 'Feb 18, 2026', 'service': 'Check Confluence Calendar or update deployments.json', 'timestamp': '2026-02-18T12:00:00-06:00'}
+                    ]
+                    
+            except Exception as e:
+                logging.error(f"❌ Error loading deployments.json: {e}")
+                deployments = [
+                    {'date': 'Feb 18, 2026', 'service': 'Error loading deployments data', 'timestamp': '2026-02-18T12:00:00-06:00'}
+                ]
+        
+        # Filter deployments from now to next 24 hours
+        next_window = today + timedelta(hours=24)
+        filtered_deployments = []
+        
+        for deploy in deployments:
+            try:
+                deploy_date = datetime.fromisoformat(deploy['timestamp'])
+                # Include only future deployments within next 24 hours
+                if deploy_date >= today and deploy_date <= next_window:
+                    filtered_deployments.append(deploy)
+            except Exception as e:
+                logging.error(f"Error filtering deployment: {e}")
+                pass
+        
+        deployments = filtered_deployments
+        
+        # Sort by time
+        deployments.sort(key=lambda x: x.get('timestamp', ''))
+        
+        # Limit to next 15 deployments
+        upcoming = deployments[:15]
+        
+        logging.info(f"✅ Deployments: Found {len(upcoming)} deployment(s) in next 24h")
+        
+        return jsonify({
+            'deployments': upcoming,
+            'total': len(deployments),
+            'timestamp': time.strftime('%H:%M:%S')
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching deployments: {e}")
+        return jsonify({'error': str(e)})
+
+
+# ============================================
+# MCP SERVER ENDPOINTS
+# ============================================
+
+@flask_app.route('/mcp/sse', methods=['GET', 'POST'])
+async def mcp_sse_endpoint():
+    """
+    MCP Server SSE endpoint
+    Exposes OneView GOC AI tools as MCP server for consumption by Claude Desktop, Cursor, etc.
+    """
+    try:
+        from mcp_server import get_mcp_server
+        from mcp.server.sse import sse_server
+        from starlette.requests import Request as StarletteRequest
+        from starlette.responses import StreamingResponse
+        
+        # Get the MCP server instance
+        server = get_mcp_server()
+        
+        # Convert Flask request to Starlette request format
+        # This is needed because MCP SDK uses Starlette
+        from werkzeug.datastructures import Headers
+        
+        # Create a simple adapter
+        if request.method == 'GET':
+            # For SSE connections
+            async def event_stream():
+                async with sse_server() as streams:
+                    send, receive = streams
+                    
+                    # Handle the SSE connection
+                    async for message in server.handle_sse(receive, send):
+                        yield f"data: {json.dumps(message)}\n\n"
+            
+            return flask_app.response_class(
+                event_stream(),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'X-Accel-Buffering': 'no'
+                }
+            )
+        else:
+            # Handle POST messages
+            data = request.get_json()
+            # Process the message through MCP server
+            result = await server.handle_request(data)
+            return jsonify(result)
+            
+    except Exception as e:
+        logging.error(f"❌ MCP Server endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@flask_app.route('/mcp/info')
+def mcp_info():
+    """
+    MCP Server information endpoint
+    Returns available tools and server metadata
+    """
+    from mcp_server import TOOL_REGISTRY
+    
+    return jsonify({
+        'name': 'oneview-goc-ai',
+        'version': '3.0.0',
+        'description': 'OneView GOC AI - Unified monitoring and operations platform',
+        'protocol': 'mcp',
+        'transport': 'sse',
+        'endpoint': '/mcp/sse',
+        'tools': [
+            {
+                'name': name,
+                'description': info['description']
+            }
+            for name, info in TOOL_REGISTRY.items()
+        ],
+        'total_tools': len(TOOL_REGISTRY)
+    })
+
+
 if __name__ == '__main__':
-    flask_app.run(host='0.0.0.0', port=8080)
+    # Use port 8080
+    port = int(os.getenv('PORT', 8080))
+    flask_app.run(host='0.0.0.0', port=port)

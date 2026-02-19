@@ -70,4 +70,22 @@ def service_owners_search(query):
         table_html += row_html
     table_html += "</table>"
 
+    # Add source URL at the bottom
+    confluence_url = f"https://arlo.atlassian.net/wiki/spaces/ET/pages/{page_id}"
+    table_html += f"""
+    <div style='background: #f3f4f6; padding: 12px; border-radius: 6px; margin: 16px 0 0 0; border: 1px solid #d1d5db;'>
+        <p style='margin: 0 0 8px 0; color: #374151; font-size: 13px; font-weight: bold;'>
+            📚 Source Information:
+        </p>
+        <a href='{confluence_url}' target='_blank' 
+           style='display: inline-block; background: #0052CC; color: white; padding: 8px 16px; 
+                  border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold;'>
+            🔗 View in Confluence (Service Owners)
+        </a>
+        <p style='margin: 8px 0 0 0; color: #6b7280; font-size: 11px;'>
+            Page ID: {page_id}
+        </p>
+    </div>
+    """
+
     return table_html

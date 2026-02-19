@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "oneview-goc-ai": {
+      "command": "python",
+      "args": [
+        "/Users/jgilmacias.c/Documents/GenAI/LLM_ChatBot_Llama3/multi-agent-mcp/run_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/jgilmacias.c/Documents/GenAI/LLM_ChatBot_Llama3/multi-agent-mcp"
+      }
+    }
+  }
+}

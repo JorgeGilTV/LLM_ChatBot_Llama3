@@ -1,4 +1,4 @@
-# 🧠 GOC AgenticAI - Multi-Agent Operations Dashboard
+# 🧠 OneView GOC AI - Multi-Agent Operations Dashboard
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Flask](https://img.shields.io/badge/Flask-3.1+-green.svg)](https://flask.palletsprojects.com/)
@@ -6,7 +6,7 @@
 [![Datadog](https://img.shields.io/badge/Datadog-Integration-purple.svg)](https://www.datadoghq.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
 
-GOC AgenticAI is a comprehensive web-based platform that integrates **real-time monitoring**, **documentation search**, and **AI-powered recommendations**. Designed for DevOps, SRE, and support teams, it streamlines troubleshooting workflows by combining multiple data sources and AI tools into a single intelligent interface.
+OneView GOC AI is a comprehensive web-based platform that integrates **real-time monitoring**, **documentation search**, and **AI-powered recommendations**. Designed for DevOps, SRE, and support teams, it streamlines troubleshooting workflows by combining multiple data sources and AI tools into a single intelligent interface.
 
 **Key Highlights:** 
 - 🚨 **PagerDuty Integration**: Full incident management with 3 specialized tools (incidents list, analytics dashboard, insights & trends)
@@ -14,7 +14,15 @@ GOC AgenticAI is a comprehensive web-based platform that integrates **real-time 
 - 🔄 **Auto-Refresh Monitors**: Both Arlo Status and PagerDuty Status update every 3 minutes
 - 🎯 **Smart Layout**: Two-column main area with centered branding and prominent status cards
 
-## 🆕 What's New in v2.0
+## 🆕 What's New in v3.0
+
+### 🌐 MCP Server Capability (NEW!)
+- ✅ **Bidirectional MCP Hub**: Functions as both MCP Client AND MCP Server
+- ✅ **15 Tools Exposed**: All integrated tools available via MCP protocol
+- ✅ **SSE Transport**: Server-Sent Events for real-time communication
+- ✅ **stdio Mode**: Alternative transport for Claude Desktop integration
+- ✅ **Standard Protocol**: Compatible with Claude Desktop, Cursor, and any MCP client
+- ✅ **Full Documentation**: Step-by-step guides for integration
 
 ### PagerDuty Integration Suite
 - ✅ **3 PagerDuty Tools**: Incidents list, Analytics dashboard, Insights & trends
@@ -22,19 +30,22 @@ GOC AgenticAI is a comprehensive web-based platform that integrates **real-time 
 - ✅ **Full Pagination**: Fetches ALL incidents (up to 1000) for accurate counts
 - ✅ **Clickable Incidents**: Direct links to PagerDuty from status card
 - ✅ **Visual Traffic Light**: Labeled status indicators (Triggered, Acknowledged, Resolved)
+- ✅ **Alert Indicators**: Visual 🚨 alerts for triggered/acknowledged incidents
 
 ### UI/UX Improvements
-- ✅ **Centered Branding**: "GOC_AgenticAI" prominently centered in header
-- ✅ **Compact History**: Shows last 3 searches with expandable "Show more" button
-- ✅ **Optimized Sidebar**: Arlo Status back to single-column with all services visible
-- ✅ **Two-Column Main Area**: Better space utilization with side-by-side layout
+- ✅ **Centered Branding**: "OneView GOC AI" prominently centered in header
+- ✅ **Compact History**: Collapsible history section with arrow toggle
+- ✅ **Next Deployments**: 24-hour deployment calendar with LIVE indicator
+- ✅ **Two-Column Layout**: Status services displayed in efficient grid
 - ✅ **Unified Colors**: Consistent teal/green theme across all section titles
+- ✅ **Service Alerts**: Orange/red/yellow indicators for service status
 
 ### Performance & Features
 - ✅ **API Pagination**: PagerDuty monitor fetches complete data sets
 - ✅ **Custom Scrollbars**: Purple-themed for PagerDuty, consistent styling
 - ✅ **Hover Effects**: Visual feedback on all interactive elements
 - ✅ **Smart Search**: History search shows all matches, not limited to 3
+- ✅ **Timezone Aware**: CST-based deployment scheduling with local time display
 
 ---
 
@@ -59,13 +70,14 @@ GOC AgenticAI is a comprehensive web-based platform that integrates **real-time 
 
 ## 🎯 What Does This Project Do?
 
-GOC AgenticAI serves as a **centralized operations hub** that:
+OneView GOC AI serves as a **centralized operations hub** that:
 
 1. **Real-Time Monitoring**: Connects to Datadog to display live service metrics (requests, errors, latency) with interactive charts
 2. **Intelligent Search**: Searches through Confluence documentation, service versions, and knowledge bases
 3. **Service Discovery**: Identifies service owners, on-call engineers, and system status
 4. **AI Assistance**: Provides troubleshooting recommendations using LLaMA 3 and Google Gemini
 5. **Error Detection**: Automatically identifies and highlights services experiencing errors
+6. **🆕 MCP Server**: Exposes all integrated tools via Model Context Protocol for consumption by Claude Desktop, Cursor, and other AI assistants
 
 ## 🚀 Key Features
 
@@ -184,17 +196,67 @@ GOC AgenticAI serves as a **centralized operations hub** that:
 - **Suggestions**: AI-powered troubleshooting recommendations using LLaMA 3
 - **Ask_Gemini**: Google Gemini integration for general queries
 
+### 🌐 MCP Server (NEW in v3.0)
+
+OneView GOC AI now functions as a **full MCP (Model Context Protocol) Server**, exposing all integrated tools for consumption by other AI assistants:
+
+#### Available as MCP Server
+- **15 Integrated Tools**: All monitoring and operations tools exposed via MCP
+- **SSE Transport**: Real-time communication using Server-Sent Events
+- **stdio Mode**: Alternative transport for direct integration
+- **Compatible Clients**: Works with Claude Desktop, Cursor, and any MCP-compatible client
+
+#### MCP Endpoints
+- `GET /mcp/info` - Server metadata and tool listing
+- `GET/POST /mcp/sse` - MCP protocol endpoint (SSE transport)
+
+#### Quick Start with Claude Desktop
+1. Copy `claude_desktop_config.json` to your Claude config directory
+2. Restart Claude Desktop
+3. All OneView tools available in Claude!
+
+**See [MCP_SERVER.md](MCP_SERVER.md) for complete setup instructions.**
+
 ## 🔧 How It Works
 
 ### Architecture Overview
 ```
+┌─────────────────────────────────────────────────────────────┐
+│              AI Assistants (MCP Clients)                     │
+│         Claude Desktop / Cursor / etc.                       │
+└───────────────────────┬─────────────────────────────────────┘
+                        │ MCP Protocol (SSE/stdio)
+┌───────────────────────▼─────────────────────────────────────┐
+│                 OneView GOC AI Server                        │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  MCP Server (exposes 15 tools)                         │ │
+│  └────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  Flask Web UI (human interface)                        │ │
+│  └────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  MCP Client (consumes ArloChat 73+ tools)              │ │
+│  └────────────────────────────────────────────────────────┘ │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+           ┌────────────┴───────────────┐
+           │                            │
+┌──────────▼───────┐        ┌──────────▼──────────┐
+│  External APIs   │        │   ArloChat MCP      │
+│  - Datadog       │        │   (73+ tools)       │
+│  - PagerDuty     │        └─────────────────────┘
+│  - Confluence    │
+│  - Splunk        │
+│  - Jira          │
+└──────────────────┘
+
 User Browser → Flask Web Server → Multiple Tool Modules → External APIs
-                                                         ├─ Datadog API
-                                                         ├─ PagerDuty API
-                                                         ├─ Confluence API
-                                                         ├─ ServiceNow API
-                                                         ├─ LLaMA 3 (Ollama)
-                                                         └─ Google Gemini
+                                                        ├─ Datadog API
+                                                        ├─ PagerDuty API
+                                                        ├─ Confluence API
+                                                        ├─ ServiceNow API
+                                                        ├─ LLaMA 3 (Ollama)
+                                                        └─ Google Gemini
 ```
 
 ### Auto-Refresh Monitors (Background Updates)
@@ -603,7 +665,7 @@ PAGERDUTY_API_TOKEN=your_pagerduty_api_token_here
 1. Log in to your PagerDuty account
 2. Go to User Settings → User API Tokens
 3. Click "Create API User Token"
-4. Give it a name (e.g., "GOC_AgenticAI")
+4. Give it a name (e.g., "OneView_GOC_AI")
 5. Copy the token immediately (it won't be shown again)
 
 📖 For detailed PagerDuty setup instructions, see [PAGERDUTY_SETUP.md](PAGERDUTY_SETUP.md)
@@ -693,7 +755,7 @@ multi-agent-mcp/
 
 ### Modern Interface
 - **Dual theme support**: Dark/Light theme toggle (🌓 button)
-- **Centered branding**: "🧠 GOC_AgenticAI 🧠" prominently centered in header
+- **Centered branding**: "🧠 OneView GOC AI 🧠" prominently centered in header
 - **Gradient header**: Teal-to-green gradient design
 - **Two-column main layout**: "How to use" + PagerDuty Status side-by-side
 - **Card-based results**: Each tool displays results in styled cards
@@ -792,6 +854,7 @@ The application itself includes:
 
 ## 📚 Additional Documentation
 
+- **[MCP_SERVER.md](MCP_SERVER.md)**: 🆕 Complete MCP Server setup guide for Claude Desktop and Cursor integration
 - **[QUICK_START.md](QUICK_START.md)**: Fast setup guide for getting started in minutes
 - **[DOCKER_README.md](DOCKER_README.md)**: Detailed Docker deployment instructions
 - **[DATADOG_SETUP.md](DATADOG_SETUP.md)**: Datadog configuration and API setup guide
@@ -803,7 +866,7 @@ The application itself includes:
 ### Main Interface Structure
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   🧠 GOC_AgenticAI 🧠                  🌓  │ ← Centered title
+│                   🧠 OneView GOC AI 🧠                  🌓  │ ← Centered title
 ├──────────────┬────────────────────────────┬─────────────────┤
 │ Sidebar      │ Main Content Area          │                 │
 │              │                            │                 │
@@ -827,7 +890,7 @@ The application itself includes:
 ```
 
 ### Key Layout Features
-- **Centered Header**: GOC_AgenticAI branding centered for professional appearance
+- **Centered Header**: OneView GOC AI branding centered for professional appearance
 - **Three-Section Layout**: Sidebar | Main Content | (Expandable for results)
 - **Side-by-Side Top Section**: "How to use" paired with PagerDuty Status
 - **Auto-Refresh Monitors**: Both Arlo and PagerDuty update independently
@@ -868,11 +931,11 @@ python3 app.py
 ### 5. Verify New Features
 - Check PagerDuty Status card in main area
 - Verify History shows only last 3 by default
-- Confirm centered "GOC_AgenticAI" title
+- Confirm centered "OneView GOC AI" title
 - Test PagerDuty tools (checkboxes)
 
 ### Breaking Changes
-- Application name changed from `Arlo_AgenticAI` to `GOC_AgenticAI`
+- Application name changed from `Arlo_AgenticAI` to `OneView GOC AI`
 - Docker image name changed from `arlo-agenticai` to `goc-agenticai` (update your scripts)
 - PagerDuty Status moved from sidebar to main area
 

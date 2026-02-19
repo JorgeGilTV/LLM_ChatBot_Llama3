@@ -1,0 +1,84 @@
+{
+  "mcpServers": {
+    "oneview-goc-ai": {
+      "url": "http://localhost:8080/mcp/sse",
+      "transport": "sse",
+      "name": "OneView GOC AI",
+      "version": "3.0.0",
+      "description": "Unified monitoring and operations platform for Arlo services",
+      "author": "Arlo Technologies",
+      "capabilities": {
+        "tools": true,
+        "resources": false,
+        "prompts": false
+      },
+      "tools": [
+        {
+          "name": "wiki_search",
+          "description": "Search Arlo Confluence documentation"
+        },
+        {
+          "name": "service_owners",
+          "description": "Find service owners/teams"
+        },
+        {
+          "name": "arlo_versions",
+          "description": "Get service version information"
+        },
+        {
+          "name": "datadog_red_metrics",
+          "description": "Get Datadog RED metrics (Rate, Errors, Duration)"
+        },
+        {
+          "name": "datadog_red_adt",
+          "description": "Get Datadog RED metrics for ADT dashboard"
+        },
+        {
+          "name": "datadog_errors",
+          "description": "Show services with errors"
+        },
+        {
+          "name": "datadog_failed_pods",
+          "description": "Monitor Kubernetes pods with failures"
+        },
+        {
+          "name": "datadog_403_errors",
+          "description": "Monitor 403 Forbidden errors"
+        },
+        {
+          "name": "splunk_p0_streaming",
+          "description": "Get Splunk P0 Streaming dashboard"
+        },
+        {
+          "name": "splunk_p0_cvr",
+          "description": "Get Splunk P0 CVR dashboard"
+        },
+        {
+          "name": "splunk_p0_adt",
+          "description": "Get Splunk P0 ADT dashboard"
+        },
+        {
+          "name": "pagerduty_incidents",
+          "description": "Get PagerDuty incidents"
+        },
+        {
+          "name": "pagerduty_analytics",
+          "description": "Get PagerDuty analytics and charts"
+        },
+        {
+          "name": "pagerduty_insights",
+          "description": "Get incident insights and trends"
+        },
+        {
+          "name": "oncall_schedule",
+          "description": "Get current on-call schedule"
+        }
+      ],
+      "endpoints": {
+        "info": "http://localhost:8080/mcp/info",
+        "sse": "http://localhost:8080/mcp/sse"
+      },
+      "documentation": "https://github.com/your-org/oneview-goc-ai"
+    }
+  }
+}

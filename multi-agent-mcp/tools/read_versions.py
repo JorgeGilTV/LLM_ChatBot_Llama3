@@ -31,11 +31,82 @@ def read_versions(query: str) -> str:
     else:
         return "<p>Error: No credentials found. Please set ARLO_USER/ARLO_PASSWORD or ATLASSIAN_EMAIL/CONFLUENCE_TOKEN in .env file</p>"
     
-    # Fetch JSON data
-    try:
-        resp = requests.get(json_url, auth=auth, timeout=15)
-    except Exception as e:
-        return f"<p>Error fetching Arlo Versions JSON: {html.escape(str(e))}</p>"
+    # Fetch JSON data with retry logic
+    max_retries = 3
+    retry_delay = 2
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"🔄 Attempt {attempt + 1}/{max_retries} to fetch versions.arlocloud.com")
+            resp = requests.get(json_url, auth=auth, timeout=20)
+            break  # Success, exit retry loop
+        except requests.exceptions.ConnectionError as e:
+            last_error = e
+            error_str = str(e)
+            if "Name or service not known" in error_str or "Failed to resolve" in error_str:
+                # DNS resolution failure - likely not connected to VPN
+                return f"""
+                <div style='background-color: #fff3cd; padding: 16px; border-left: 4px solid #f59e0b; border-radius: 6px; margin: 12px 0;'>
+                    <h3 style='margin: 0 0 8px 0; color: #92400e; font-size: 16px;'>⚠️ Cannot Connect to Arlo Versions</h3>
+                    <p style='margin: 0 0 8px 0; color: #78350f; font-size: 13px;'>
+                        <strong>Error:</strong> Unable to resolve <code>versions.arlocloud.com</code>
+                    </p>
+                    <div style='background: #fef3c7; padding: 12px; border-radius: 4px; margin: 8px 0;'>
+                        <p style='margin: 0 0 6px 0; color: #92400e; font-weight: bold; font-size: 13px;'>
+                            💡 Possible Solutions:
+                        </p>
+                        <ul style='margin: 0; padding-left: 20px; color: #78350f; font-size: 12px;'>
+                            <li><strong>Check VPN:</strong> versions.arlocloud.com is an internal resource - ensure you're connected to Arlo VPN (GlobalProtect)</li>
+                            <li><strong>Verify DNS:</strong> Check if you can ping <code>versions.arlocloud.com</code></li>
+                            <li><strong>Network issues:</strong> Temporary DNS or connectivity problems</li>
+                            <li><strong>Firewall:</strong> Corporate firewall may be blocking access</li>
+                        </ul>
+                    </div>
+                    <div style='background: #e0f2fe; padding: 10px; border-radius: 4px; margin: 8px 0;'>
+                        <p style='margin: 0; color: #0c4a6e; font-size: 12px;'>
+                            <strong>🔍 Quick Check:</strong><br>
+                            • VPN Status: Open GlobalProtect and verify connection<br>
+                            • Public IP: Click "🌐 Check IP" button in footer to verify your IP<br>
+                            • If IP shows Querétaro (189.x or 187.x), VPN may not be routing this domain
+                        </p>
+                    </div>
+                </div>
+                """
+            else:
+                # Other connection error
+                if attempt < max_retries - 1:
+                    print(f"⚠️  Connection error, retrying in {retry_delay}s...")
+                    import time
+                    time.sleep(retry_delay)
+                    continue
+        except requests.exceptions.Timeout as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                print(f"⚠️  Timeout, retrying in {retry_delay}s...")
+                import time
+                time.sleep(retry_delay)
+                continue
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                print(f"⚠️  Error: {str(e)}, retrying in {retry_delay}s...")
+                import time
+                time.sleep(retry_delay)
+                continue
+    else:
+        # All retries failed
+        return f"""
+        <div style='background-color: #fee2e2; padding: 16px; border-left: 4px solid #ef4444; border-radius: 6px; margin: 12px 0;'>
+            <h3 style='margin: 0 0 8px 0; color: #991b1b; font-size: 16px;'>❌ Failed to Fetch Arlo Versions</h3>
+            <p style='margin: 0 0 8px 0; color: #7f1d1d; font-size: 13px;'>
+                Tried {max_retries} times but could not connect to versions.arlocloud.com
+            </p>
+            <p style='margin: 0; color: #991b1b; font-size: 12px;'>
+                <strong>Error:</strong> {html.escape(str(last_error))}
+            </p>
+        </div>
+        """
     
     if resp.status_code == 401:
         return f"<p>Error 401: Authentication failed. Please verify your credentials in the .env file</p>"

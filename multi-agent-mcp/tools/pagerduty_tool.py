@@ -82,6 +82,21 @@ def get_pagerduty_incidents(query=""):
         acknowledged = [i for i in incidents if i.get("status") == "acknowledged"]
         resolved = [i for i in incidents if i.get("status") == "resolved"]
         
+        # Identify recently resolved incidents (last 24 hours)
+        now = datetime.utcnow()
+        recent_cutoff = now - timedelta(hours=24)
+        recently_resolved = []
+        
+        for incident in resolved:
+            try:
+                resolved_at_str = incident.get("last_status_change_at", "")
+                if resolved_at_str:
+                    resolved_at = datetime.fromisoformat(resolved_at_str.replace("Z", "+00:00"))
+                    if resolved_at.replace(tzinfo=None) >= recent_cutoff:
+                        recently_resolved.append(incident)
+            except:
+                pass
+        
         # Build HTML output with summary
         html_output = f"<h2 style='color: #10b981;'>🚨 PagerDuty Alerts - Last 7 Days</h2>"
         html_output += f"<div style='background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>"
@@ -90,6 +105,14 @@ def get_pagerduty_incidents(query=""):
         html_output += f"<p style='margin: 5px 0; color: #ef4444;'><strong>🔴 Triggered:</strong> {len(triggered)}</p>"
         html_output += f"<p style='margin: 5px 0; color: #f59e0b;'><strong>🟡 Acknowledged:</strong> {len(acknowledged)}</p>"
         html_output += f"<p style='margin: 5px 0; color: #10b981;'><strong>🟢 Resolved:</strong> {len(resolved)}</p>"
+        
+        # Highlight recently resolved incidents
+        if recently_resolved:
+            html_output += f"<div style='background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; margin-top: 10px; border-radius: 4px;'>"
+            html_output += f"<p style='margin: 0; color: #92400e; font-weight: bold;'>⚠️ Recently Resolved (Last 24h): {len(recently_resolved)}</p>"
+            html_output += f"<p style='margin: 5px 0 0 0; font-size: 12px; color: #78350f;'>Check for recurring patterns or potential instability</p>"
+            html_output += f"</div>"
+        
         html_output += f"</div>"
         
         if query:

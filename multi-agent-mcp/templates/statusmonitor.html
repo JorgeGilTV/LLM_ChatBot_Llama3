@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Monitor Dashboard - OneView GOC AI</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script>
+        // Pass environment from Flask template to JavaScript
+        const ENVIRONMENT = {{ environment|tojson|safe if environment else 'null' }};
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            background: #f8f9fb;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        
+        /* Blink animation for PagerDuty status */
+        @keyframes pd-blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.4; }
+        }
+        
+        .pd-status-blink {
+            animation: pd-blink 2s ease-in-out infinite;
+        }
+        
+        /* Header Navigation */
+        .header {
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .header-content {
+            padding: 10px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+        
+        .logo {
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo img {
+            height: 28px;
+            width: auto;
+        }
+        
+        .nav-menu {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+        
+        .nav-menu a {
+            color: #374151;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: color 0.15s ease-in-out;
+            letter-spacing: -0.01em;
+        }
+        
+        .nav-menu a:hover {
+            color: #0095da;
+        }
+        
+        .nav-menu a.active {
+            color: #0095da;
+            border-bottom: 3px solid #0095da;
+            padding-bottom: 5px;
+        }
+        
+        .container {
+            padding: 16px 40px;
+        }
+        
+        #loading {
+            display: none;
+            position: fixed;
+            top: 90px;
+            right: 40px;
+            text-align: center;
+            padding: 14px 24px;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+            z-index: 1000;
+            border-left: 4px solid #0095da;
+        }
+        
+        #loading.show {
+            display: block;
+        }
+        
+        #loading h3 {
+            font-size: 15px;
+            margin: 0;
+            color: #111827;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        
+        #loading p {
+            display: none;
+        }
+        
+        #dashboard {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            overflow: hidden;
+            padding: 24px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .auto-refresh-info {
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+            margin-top: 20px;
+            padding: 10px;
+            background: #ffffff;
+            border-radius: 10px;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            border: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Navigation -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <a href="/" class="logo">
+                    <img src="/static/images/arlo-logo.png" alt="Arlo">
+                </a>
+                <nav>
+                    <ul class="nav-menu">
+                        <li><a href="/statusmonitor" class="{{ 'active' if not environment else '' }}">All Environments</a></li>
+                        <li><a href="/statusmonitor/production" class="{{ 'active' if environment == 'production' else '' }}">Production</a></li>
+                        <li><a href="/statusmonitor/goldendev" class="{{ 'active' if environment == 'goldendev' else '' }}">GoldenDev</a></li>
+                        <li><a href="/statusmonitor/goldenqa" class="{{ 'active' if environment == 'goldenqa' else '' }}">GoldenQA</a></li>
+                        <li><a href="/statusmonitor/samsung" class="{{ 'active' if environment == 'samsung' else '' }}">Samsung</a></li>
+                        <li><a href="/statusmonitor/adt" class="{{ 'active' if environment == 'adt' else '' }}">ADT</a></li>
+                        <li><a href="/statusmonitor/redmetrics-us" class="{{ 'active' if environment == 'redmetrics-us' else '' }}">RED Metrics US</a></li>
+                    </ul>
+                </nav>
+            </div>
+            <div style="font-size: 13px; color: #718096;">
+                <span style="font-weight: 600; color: #2d3748;">GOC</span> Status Monitor
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="loading">
+            <h3>⏳ Loading dashboard data...</h3>
+            <p style="margin-top: 10px; color: #718096;">Fetching metrics from Datadog APM</p>
+        </div>
+        
+        <div id="dashboard"></div>
+        
+        <div class="auto-refresh-info">
+            ⏰ Dashboard auto-refreshes every 2 minutes
+        </div>
+    </div>
+    
+    <script>
+        let autoRefreshInterval = null;
+        
+        // Function to initialize pie chart
+        window.initializePieChart = function(chartData) {
+            console.log('🎨 Initializing pie chart with data:', chartData);
+            
+            // Destroy existing chart if it exists
+            if (window.statusPieChartInstance) {
+                console.log('♻️ Destroying existing chart...');
+                window.statusPieChartInstance.destroy();
+            }
+            
+            // Check if canvas exists
+            const canvas = document.getElementById('statusPieChart');
+            if (!canvas) {
+                console.error('❌ Canvas element #statusPieChart not found!');
+                return;
+            }
+            console.log('✅ Canvas found:', canvas);
+            
+            // Check if Chart.js is loaded
+            if (typeof Chart === 'undefined') {
+                console.error('❌ Chart.js library not loaded!');
+                return;
+            }
+            console.log('✅ Chart.js loaded');
+            
+            // Check if datalabels plugin is loaded
+            if (typeof ChartDataLabels === 'undefined') {
+                console.error('⚠️ ChartDataLabels plugin not loaded, continuing without it...');
+            }
+            
+            // Create Pie Chart for Service Status
+            const ctxPie = canvas.getContext('2d');
+            const plugins = typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : [];
+            
+            window.statusPieChartInstance = new Chart(ctxPie, {
+                type: 'pie',
+                data: {
+                    labels: ['Healthy', 'Warning', 'Critical'],
+                    datasets: [{
+                        data: [chartData.healthy, chartData.warning, chartData.critical],
+                        backgroundColor: [
+                            '#10b981',  // green
+                            '#f59e0b',  // orange
+                            '#dc2626'   // red
+                        ],
+                        borderWidth: 3,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = chartData.total;
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return label + ': ' + value + ' (' + percentage + '%)';
+                                }
+                            }
+                        },
+                        datalabels: {
+                            color: '#ffffff',
+                            font: {
+                                weight: 'bold',
+                                size: 16
+                            },
+                            formatter: function(value, context) {
+                                if (value === 0) return '';
+                                return value;
+                            },
+                            textAlign: 'center'
+                        }
+                    }
+                },
+                plugins: plugins
+            });
+            
+            console.log('✅ Pie chart created successfully');
+        };
+        
+        function updateClientTimestamp() {
+            // Update the "Last updated" timestamp with client's local time and timezone
+            const now = new Date();
+            
+            // Get timezone abbreviation (PST, EST, UTC, etc.)
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const tzAbbr = new Date().toLocaleTimeString('en-US', { 
+                timeZoneName: 'short' 
+            }).split(' ').pop();
+            
+            // Format time (24-hour format for consistency)
+            const timeString = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            
+            // Format date (YYYY-MM-DD)
+            const dateString = now.toLocaleDateString('en-CA');
+            
+            // Find timestamp container in header (right side with border-left)
+            const dashboard = document.getElementById('dashboard');
+            if (!dashboard) return;
+            
+            // Find all divs that could be the timestamp container
+            const allDivs = dashboard.querySelectorAll('div');
+            
+            allDivs.forEach(div => {
+                const style = div.getAttribute('style') || '';
+                
+                // Find the time display div (12px, font-weight: 700) - UPDATED SIZE
+                if (style.includes('font-size: 12px') && 
+                    style.includes('font-weight: 700') && 
+                    style.includes('color: #111827')) {
+                    const text = div.textContent.trim();
+                    // Check if it's a placeholder or old time
+                    if (text.includes(':') || text.includes('--')) {
+                        div.textContent = timeString;
+                    }
+                }
+                
+                // Find the "Last updated" label div (9px) - UPDATED SIZE
+                if (style.includes('font-size: 9px') && 
+                    style.includes('color: #9ca3af')) {
+                    const text = div.textContent.trim();
+                    if (text.includes('Last updated')) {
+                        div.textContent = `Last updated (${tzAbbr})`;
+                    }
+                    // Find date display
+                    if (text.match(/\d{4}-\d{2}-\d{2}/) || text.includes('--')) {
+                        div.textContent = `${dateString} ${tzAbbr}`;
+                    }
+                }
+            });
+        }
+        
+        function clearCacheAndReload() {
+            console.log('🧹 Clearing cache and forcing refresh...');
+            
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+            
+            // Call cache clear endpoint
+            fetch('/api/cache/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('✅ Cache cleared:', data);
+                // Now reload dashboard with fresh data
+                loadDashboard();
+            })
+            .catch(error => {
+                console.error('❌ Error clearing cache:', error);
+                loading.classList.remove('show');
+                alert('Error clearing cache. Reloading anyway...');
+                loadDashboard();
+            });
+        }
+        
+        function loadDashboard() {
+            const loading = document.getElementById('loading');
+            const dashboard = document.getElementById('dashboard');
+            
+            // Get timerange value if element exists (after first load), otherwise use default
+            const timerangeElement = document.getElementById('timerange');
+            const timerange = timerangeElement ? timerangeElement.value : 4;
+            
+            // DON'T clear dashboard content - keep old data visible while loading new
+            loading.classList.add('show');
+            
+            fetch('/api/statusmonitor', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    timerange: parseInt(timerange),
+                    environment: ENVIRONMENT  // Pass environment from template
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.classList.remove('show');
+                // Only update dashboard after new data is ready
+                dashboard.innerHTML = data.html;
+                
+                // Update timestamp with client's local time and timezone
+                updateClientTimestamp();
+                
+                // Execute inline scripts manually
+                const scripts = dashboard.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    newScript.textContent = script.textContent;
+                    script.parentNode.replaceChild(newScript, script);
+                });
+                
+                // Initialize pie chart after DOM update
+                setTimeout(() => {
+                    if (window.chartData) {
+                        initializePieChart(window.chartData);
+                    }
+                }, 100);
+                
+                // Add event listener to timerange select after it's loaded
+                const newTimerangeElement = document.getElementById('timerange');
+                if (newTimerangeElement && !newTimerangeElement.hasAttribute('data-listener')) {
+                    newTimerangeElement.setAttribute('data-listener', 'true');
+                    newTimerangeElement.addEventListener('change', function() {
+                        loadDashboard();
+                    });
+                }
+            })
+            .catch(error => {
+                loading.classList.remove('show');
+                console.error('Dashboard load error:', error);
+                // Show error overlay without clearing existing data
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fee; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000;';
+                errorDiv.innerHTML = '❌ Error loading dashboard: ' + error.message;
+                document.body.appendChild(errorDiv);
+                setTimeout(() => errorDiv.remove(), 5000);
+            });
+        }
+        
+        function setupAutoRefresh() {
+            // Clear existing interval if any
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            
+            // Set up auto-refresh every 2 minutes (120000 ms)
+            autoRefreshInterval = setInterval(() => {
+                console.log('🔄 Auto-refreshing dashboard...');
+                loadDashboard();
+            }, 120000);
+        }
+        
+        function startLiveClock() {
+            // Update timestamp every second for real-time display
+            setInterval(() => {
+                updateClientTimestamp();
+            }, 1000);
+        }
+        
+        // Load dashboard on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDashboard();
+            setupAutoRefresh();
+            startLiveClock();  // Start live timestamp updates
+        });
+    </script>
+</body>
+</html>

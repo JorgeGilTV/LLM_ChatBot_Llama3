@@ -50,6 +50,11 @@ agent_tool_logs.log
 uv.lock
 static/search_history.json
 
+# Database files (metrics history)
+data/
+*.db
+*.db-journal
+
 # Chrome extension
 chrome-extension.crx
 chrome-extension.pem

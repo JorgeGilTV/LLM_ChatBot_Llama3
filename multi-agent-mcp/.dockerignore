@@ -66,6 +66,10 @@ chrome-extension.pem
 testmail.py
 app_fine.py
 app1.py
+test_*.py
+debug_*.py
+inspect_*.py
+test_api.sh
 
 # Documentation
 README.md

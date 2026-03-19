@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Console - Metrics Database</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px 32px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .back-button {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            transition: background 0.2s;
+        }
+
+        .back-button:hover {
+            background: #5568d3;
+        }
+
+        .query-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .query-panel h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 16px;
+        }
+
+        #sqlQuery {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: vertical;
+            background: #f9fafb;
+            color: #1f2937;
+        }
+
+        #sqlQuery:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-example {
+            background: #667eea;
+            color: white;
+            font-size: 13px;
+            padding: 8px 14px;
+        }
+
+        .btn-example:hover {
+            background: #5568d3;
+        }
+
+        .examples-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .examples-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+
+        .results-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .results-panel.show {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .results-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .results-meta {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .results-meta span {
+            margin-left: 16px;
+        }
+
+        .error-message {
+            background: #fee;
+            border: 1px solid #fcc;
+            border-radius: 8px;
+            padding: 16px;
+            color: #c00;
+            font-size: 14px;
+        }
+
+        .success-message {
+            background: #efe;
+            border: 1px solid #cfc;
+            border-radius: 8px;
+            padding: 16px;
+            color: #090;
+            font-size: 14px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background: #f9fafb;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        thead th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            white-space: nowrap;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.15s;
+        }
+
+        tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        tbody td {
+            padding: 10px 16px;
+            color: #1f2937;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .schema-info {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .schema-info h4 {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1f2937;
+        }
+
+        .schema-info code {
+            background: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #667eea;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-button">← Back to Dashboard</a>
+        
+        <div class="header">
+            <h1>
+                <span>🗄️</span>
+                SQL Console
+            </h1>
+            <p>Query historical metrics data from the SQLite database (read-only access)</p>
+        </div>
+
+        <div class="query-panel">
+            <h2>📝 SQL Query Editor</h2>
+            
+            <textarea id="sqlQuery" placeholder="Enter your SQL query here... (SELECT only)">SELECT * FROM service_metrics ORDER BY timestamp DESC LIMIT 10;</textarea>
+            
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="executeQuery()">
+                    ▶️ Execute Query
+                </button>
+                <button class="btn btn-secondary" onclick="clearQuery()">
+                    🗑️ Clear
+                </button>
+            </div>
+
+            <div class="examples-section">
+                <h3>💡 Example Queries</h3>
+                <div class="button-group">
+                    <button class="btn btn-example" onclick="loadExample(1)">Recent Metrics</button>
+                    <button class="btn btn-example" onclick="loadExample(2)">Critical Services</button>
+                    <button class="btn btn-example" onclick="loadExample(3)">Error Rate Trends</button>
+                    <button class="btn btn-example" onclick="loadExample(4)">Service Summary</button>
+                    <button class="btn btn-example" onclick="loadExample(5)">Dashboard Snapshots</button>
+                    <button class="btn btn-example" onclick="loadExample(6)">High Latency</button>
+                    <button class="btn btn-example" onclick="loadExample(7)">Traffic Analysis</button>
+                </div>
+            </div>
+
+            <div class="schema-info">
+                <h4>📋 Available Tables</h4>
+                <p><strong>service_metrics:</strong> <code>timestamp</code>, <code>service</code>, <code>environment</code>, <code>status</code>, <code>requests</code>, <code>errors</code>, <code>error_rate</code>, <code>p95_latency</code>, <code>p99_latency</code>, <code>traffic_drop</code>, <code>high_latency</code>, <code>pd_incident</code></p>
+                <p style="margin-top: 8px;"><strong>dashboard_snapshots:</strong> <code>timestamp</code>, <code>environment</code>, <code>total_services</code>, <code>healthy</code>, <code>warning</code>, <code>critical</code>, <code>total_requests</code>, <code>total_errors</code>, <code>overall_error_rate</code></p>
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="loading">
+            <div class="spinner"></div>
+            <p>Executing query...</p>
+        </div>
+
+        <div id="resultsPanel" class="results-panel">
+            <div class="results-header">
+                <h2>📊 Query Results</h2>
+                <div class="results-meta">
+                    <span id="rowCount"></span>
+                    <span id="execTime"></span>
+                </div>
+            </div>
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const exampleQueries = {
+            1: `-- Recent metrics for all services
+SELECT 
+    timestamp, 
+    service, 
+    environment, 
+    status,
+    requests,
+    errors,
+    error_rate,
+    p95_latency
+FROM service_metrics 
+ORDER BY timestamp DESC 
+LIMIT 50;`,
+            
+            2: `-- Critical services in the last 24 hours
+SELECT 
+    timestamp,
+    service,
+    environment,
+    error_rate,
+    requests,
+    errors,
+    CASE 
+        WHEN pd_incident = 1 THEN 'PagerDuty Alert'
+        WHEN traffic_drop = 1 THEN 'Traffic Drop'
+        WHEN error_rate > 5 THEN 'High Error Rate'
+        ELSE 'Unknown'
+    END as reason
+FROM service_metrics 
+WHERE status = 'critical'
+    AND timestamp > datetime('now', '-24 hours')
+ORDER BY timestamp DESC;`,
+            
+            3: `-- Error rate trends for a specific service
+SELECT 
+    datetime(timestamp) as time,
+    service,
+    environment,
+    error_rate,
+    requests,
+    errors
+FROM service_metrics 
+WHERE service = 'backend-auth'  -- Change service name here
+    AND timestamp > datetime('now', '-7 days')
+ORDER BY timestamp ASC;`,
+            
+            4: `-- Service summary - average metrics by service
+SELECT 
+    service,
+    environment,
+    COUNT(*) as measurements,
+    ROUND(AVG(error_rate), 2) as avg_error_rate,
+    ROUND(AVG(requests), 0) as avg_requests,
+    ROUND(AVG(p95_latency), 2) as avg_p95_latency,
+    SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical_count
+FROM service_metrics 
+WHERE timestamp > datetime('now', '-24 hours')
+GROUP BY service, environment
+ORDER BY critical_count DESC, avg_error_rate DESC;`,
+            
+            5: `-- Dashboard snapshots history
+SELECT 
+    timestamp,
+    environment,
+    total_services,
+    healthy,
+    warning,
+    critical,
+    ROUND(overall_error_rate, 2) as error_rate,
+    total_requests,
+    total_errors
+FROM dashboard_snapshots 
+ORDER BY timestamp DESC 
+LIMIT 50;`,
+            
+            6: `-- Services with high latency
+SELECT 
+    timestamp,
+    service,
+    environment,
+    p95_latency,
+    p99_latency,
+    requests,
+    error_rate
+FROM service_metrics 
+WHERE p95_latency > 1000  -- > 1 second
+    AND timestamp > datetime('now', '-24 hours')
+ORDER BY p95_latency DESC;`,
+            
+            7: `-- Traffic analysis - requests per hour
+SELECT 
+    strftime('%Y-%m-%d %H:00', timestamp) as hour,
+    environment,
+    SUM(requests) as total_requests,
+    COUNT(DISTINCT service) as active_services,
+    ROUND(AVG(error_rate), 2) as avg_error_rate
+FROM service_metrics 
+WHERE timestamp > datetime('now', '-48 hours')
+GROUP BY hour, environment
+ORDER BY hour DESC;`
+        };
+
+        function loadExample(num) {
+            document.getElementById('sqlQuery').value = exampleQueries[num];
+        }
+
+        function clearQuery() {
+            document.getElementById('sqlQuery').value = '';
+            document.getElementById('resultsPanel').classList.remove('show');
+        }
+
+        async function executeQuery() {
+            const query = document.getElementById('sqlQuery').value.trim();
+            
+            if (!query) {
+                alert('Please enter a SQL query');
+                return;
+            }
+
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const resultsPanel = document.getElementById('resultsPanel');
+            const resultsContent = document.getElementById('resultsContent');
+
+            loadingIndicator.classList.add('show');
+            resultsPanel.classList.remove('show');
+
+            try {
+                const response = await fetch('/admin/sql/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+
+                const data = await response.json();
+                loadingIndicator.classList.remove('show');
+
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    displayError(data.error);
+                }
+            } catch (error) {
+                loadingIndicator.classList.remove('show');
+                displayError('Network error: ' + error.message);
+            }
+        }
+
+        function displayResults(data) {
+            const resultsPanel = document.getElementById('resultsPanel');
+            const resultsContent = document.getElementById('resultsContent');
+            const rowCount = document.getElementById('rowCount');
+            const execTime = document.getElementById('execTime');
+
+            rowCount.textContent = `📊 ${data.row_count} rows`;
+            execTime.textContent = `⚡ ${data.execution_time_ms}ms`;
+
+            if (data.row_count === 0) {
+                resultsContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>No results found</p>
+                    </div>
+                `;
+            } else {
+                let html = '<div class="table-container"><table><thead><tr>';
+                
+                // Table headers
+                data.columns.forEach(col => {
+                    html += `<th>${escapeHtml(col)}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+
+                // Table rows
+                data.rows.forEach(row => {
+                    html += '<tr>';
+                    data.columns.forEach(col => {
+                        let value = row[col];
+                        
+                        // Format values
+                        if (value === null || value === undefined) {
+                            value = '<span style="color: #9ca3af;">NULL</span>';
+                        } else if (typeof value === 'number') {
+                            if (col.includes('rate') || col.includes('latency')) {
+                                value = value.toFixed(2);
+                            } else if (Number.isInteger(value)) {
+                                value = value.toLocaleString();
+                            }
+                        } else if (col === 'status') {
+                            const statusColors = {
+                                'healthy': '#10b981',
+                                'warning': '#f59e0b',
+                                'critical': '#ef4444',
+                                'inactive': '#6b7280'
+                            };
+                            const color = statusColors[value] || '#6b7280';
+                            value = `<span style="color: ${color}; font-weight: 600;">●</span> ${value}`;
+                        }
+                        
+                        html += `<td>${value}</td>`;
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table></div>';
+                resultsContent.innerHTML = html;
+            }
+
+            resultsPanel.classList.add('show');
+            resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function displayError(errorMsg) {
+            const resultsPanel = document.getElementById('resultsPanel');
+            const resultsContent = document.getElementById('resultsContent');
+
+            resultsContent.innerHTML = `
+                <div class="error-message">
+                    <strong>❌ Error:</strong> ${escapeHtml(errorMsg)}
+                </div>
+            `;
+
+            resultsPanel.classList.add('show');
+            resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Enable Ctrl/Cmd + Enter to execute query
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('sqlQuery').addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    executeQuery();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

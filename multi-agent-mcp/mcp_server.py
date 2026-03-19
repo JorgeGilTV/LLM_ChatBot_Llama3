@@ -23,9 +23,12 @@ from tools.datadog_dashboards import (
     read_datadog_adt_errors_only, 
     read_datadog_all_errors, 
     read_datadog_failed_pods, 
-    read_datadog_403_errors
+    read_datadog_403_errors,
+    search_datadog_dashboards,
+    search_datadog_services
 )
 from tools.splunk_tool import read_splunk_p0_dashboard, read_splunk_p0_cvr_dashboard, read_splunk_p0_adt_dashboard
+from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.pagerduty_tool import get_pagerduty_incidents
 from tools.pagerduty_analytics import get_pagerduty_analytics
 from tools.pagerduty_insights import get_pagerduty_insights
@@ -78,6 +81,42 @@ TOOL_REGISTRY = {
                 }
             },
             "required": ["query"]
+        }
+    },
+    "datadog_search": {
+        "description": "Search and list Datadog dashboards by name or query. Returns dashboard titles, IDs, and links.",
+        "function": search_datadog_dashboards,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search term to filter dashboards (e.g., 'streaming', 'redis', 'api')"
+                },
+                "timerange": {
+                    "type": "integer",
+                    "description": "Time range in hours for dashboard links (default: 4)",
+                    "default": 4
+                }
+            }
+        }
+    },
+    "datadog_services": {
+        "description": "Search and list Datadog APM services by name (e.g., 'backend-hmsmatter', 'api-payment'). Shows service performance metrics.",
+        "function": search_datadog_services,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Service name to search (e.g., 'hmsmatter', 'payment', 'streaming')"
+                },
+                "timerange": {
+                    "type": "integer",
+                    "description": "Time range in hours for service links (default: 4)",
+                    "default": 4
+                }
+            }
         }
     },
     "datadog_red_metrics": {
@@ -222,6 +261,42 @@ TOOL_REGISTRY = {
                     "type": "string",
                     "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
                     "default": "4h"
+                }
+            }
+        }
+    },
+    "grafana_dns_mapper": {
+        "description": "Monitor DNS Mapper IP usage for HMS/CVR streaming services in Grafana (Zone 4)",
+        "function": get_grafana_dns_mapper,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional: search query"
+                },
+                "timerange": {
+                    "type": "integer",
+                    "description": "Time range in hours (default: 4)",
+                    "default": 4
+                }
+            }
+        }
+    },
+    "grafana_savant_z2": {
+        "description": "Monitor Savant infrastructure in Harlem datacenter - Zone 2 (z2)",
+        "function": get_grafana_savant_z2,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional: search query"
+                },
+                "timerange": {
+                    "type": "integer",
+                    "description": "Time range in hours (default: 4)",
+                    "default": 4
                 }
             }
         }

@@ -163,14 +163,15 @@ def generate_splunk_error_help(error_message: str) -> str:
     """
     return html
 
-def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
+def read_splunk_p0_dashboard(query: str = "", timerange: int = 4) -> str:
     """
     Shows the P0 Streaming dashboard from Splunk with metrics and graphs.
     If a service name is provided, filters for that specific service.
     Args:
         query: Service name or search filter
-        timerange_hours: Number of hours to look back (default: 4)
+        timerange: Number of hours to look back (default: 4)
     """
+    timerange_hours = timerange  # Normalize parameter name
     print("=" * 80)
     print("📊 Reading Splunk P0 Dashboard")
     print(f"📝 Query received: '{query}'")
@@ -320,6 +321,15 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         # Calculate total events per zone
         zone_totals = {zone: sum(counts) for zone, counts in zone_data.items()}
         
+        # Calculate JVM crashes/outliers per zone from JVM query results
+        jvm_data = all_results.get('jvm') or []
+        zone_outliers = {"z1": 0, "z2": 0, "z3": 0, "z4": 0}
+        
+        for datapoint in jvm_data:
+            for zone in ["z1", "z2", "z3", "z4"]:
+                crash_count = int(datapoint.get(zone, 0))
+                zone_outliers[zone] += crash_count
+        
         # Generate Chart.js charts for each zone
         output += f"""
         <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 12px 0;'>
@@ -339,8 +349,8 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
             zone_color = zone_colors.get(zone_key, "#4e79a7")
             chart_id = f"chart_p0_{zone_key}"
             
-            # Calculate outliers/errors (0 for now, can be enhanced later)
-            outliers = 0
+            # Calculate outliers/errors from JVM crashes
+            outliers = zone_outliers.get(zone_key, 0)
             error_percentage = 0.0 if total_events == 0 else (outliers / total_events * 100)
             
             output += f"""
@@ -698,14 +708,15 @@ def read_splunk_p0_dashboard(query: str = "", timerange_hours: int = 4) -> str:
         return f"<p>❌ Error reading Splunk dashboard: {html.escape(str(e))}</p>"
 
 
-def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> str:
+def read_splunk_p0_cvr_dashboard(query: str = "", timerange: int = 4) -> str:
     """
     Shows the P0 CVR Streaming dashboard from Splunk with metrics and graphs.
     If a service name is provided, filters for that specific service.
     Args:
         query: Service name or search filter
-        timerange_hours: Number of hours to look back (default: 4)
+        timerange: Number of hours to look back (default: 4)
     """
+    timerange_hours = timerange  # Normalize parameter name
     print("=" * 80)
     print("📊 Reading Splunk P0 CVR Dashboard")
     print(f"📝 Query received: '{query}'")
@@ -1215,14 +1226,15 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange_hours: int = 4) -> s
         return f"<p>❌ Error reading Splunk CVR dashboard: {html.escape(str(e))}</p>"
 
 
-def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> str:
+def read_splunk_p0_adt_dashboard(query: str = "", timerange: int = 4) -> str:
     """
     Shows the P0 ADT Streaming dashboard from Splunk with metrics and graphs.
     If a service name is provided, filters for that specific service.
     Args:
         query: Service name or search filter
-        timerange_hours: Number of hours to look back (default: 4)
+        timerange: Number of hours to look back (default: 4)
     """
+    timerange_hours = timerange  # Normalize parameter name
     print("=" * 80)
     print("📊 Reading Splunk P0 ADT Dashboard")
     print(f"📝 Query received: '{query}'")
@@ -1370,6 +1382,15 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
         # Calculate total events per zone
         zone_totals = {zone: sum(counts) for zone, counts in zone_data.items()}
         
+        # Calculate JVM crashes/outliers per zone from JVM query results
+        jvm_data = all_results.get('jvm') or []
+        zone_outliers = {"z1": 0, "z2": 0, "z3": 0, "z4": 0}
+        
+        for datapoint in jvm_data:
+            for zone in ["z1", "z2", "z3", "z4"]:
+                crash_count = int(datapoint.get(zone, 0))
+                zone_outliers[zone] += crash_count
+        
         # Generate Chart.js charts for each zone
         output += f"""
         <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 12px 0;'>
@@ -1389,8 +1410,8 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange_hours: int = 4) -> s
             zone_color = zone_colors.get(zone_key, "#4e79a7")
             chart_id = f"chart_adt_{zone_key}"
             
-            # Calculate outliers/errors (0 for now, can be enhanced later)
-            outliers = 0
+            # Calculate outliers/errors from JVM crashes
+            outliers = zone_outliers.get(zone_key, 0)
             error_percentage = 0.0 if total_events == 0 else (outliers / total_events * 100)
             
             output += f"""

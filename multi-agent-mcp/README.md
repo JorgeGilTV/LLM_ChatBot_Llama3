@@ -45,7 +45,23 @@ OneView GOC AI is a comprehensive web-based platform that integrates **real-time
 - ✅ **Custom Scrollbars**: Purple-themed for PagerDuty, consistent styling
 - ✅ **Hover Effects**: Visual feedback on all interactive elements
 - ✅ **Smart Search**: History search shows all matches, not limited to 3
-- ✅ **Timezone Aware**: CST-based deployment scheduling with local time display
+- ✅ **Timezone Aware**: Client-side timezone detection with live clock display
+
+### 📊 Historical Metrics & REST API (NEW!)
+- ✅ **SQLite Persistence**: Automatic storage of all service health metrics
+- ✅ **30-Day Retention**: Historical data for trend analysis and retrospectives
+- ✅ **REST API Endpoints**: Full JSON API for external integrations
+- ✅ **SQL Console**: Web-based SQL query interface at `/admin/sql` (read-only, secure)
+- ✅ **Service Trends**: Automatic detection of improving/stable/degrading services
+- ✅ **Critical History**: Track all critical incidents with full context
+- ✅ **PagerDuty Incidents**: Historical incident tracking with resolution times
+- ✅ **State Changes**: Track when services change between healthy/warning/critical
+- ✅ **Performance Baselines**: Weekly aggregates for anomaly detection
+- ✅ **Deployment History**: Track deployments and correlate with issues
+- ✅ **Outage Tracking**: Full outage records with duration and root cause
+- ✅ **Tool Analytics**: Usage metrics for optimization
+- ✅ **Health Check Endpoint**: Ready for load balancers and monitoring tools
+- ✅ **Zero Configuration**: Database auto-initializes on first run
 
 ---
 
@@ -75,13 +91,15 @@ OneView GOC AI serves as a **centralized operations hub** that:
 1. **Real-Time Monitoring**: Connects to Datadog to display live service metrics (requests, errors, latency) with interactive charts
 2. **Intelligent Search**: Searches through Confluence documentation, service versions, and knowledge bases
 3. **Service Discovery**: Identifies service owners, on-call engineers, and system status
-4. **AI Assistance**: Provides troubleshooting recommendations using LLaMA 3 and Google Gemini
+4. **AI Assistance**: Provides troubleshooting recommendations using AWS Bedrock Claude 3.5 Sonnet (via API keys)
 5. **Error Detection**: Automatically identifies and highlights services experiencing errors
 6. **🆕 MCP Server**: Exposes all integrated tools via Model Context Protocol for consumption by Claude Desktop, Cursor, and other AI assistants
 
 ## 🚀 Key Features
 
 ### 📊 Monitoring & Metrics
+
+**🕐 Timezone:** All timestamps display in **user's local timezone** (automatically detected) with live clock updates
 
 #### Automatic Status Monitors
 
@@ -110,6 +128,13 @@ OneView GOC AI serves as a **centralized operations hub** that:
 #### Datadog Integration
 - **DD_Red_Metrics**: 
   - Displays RED metrics (Requests, Errors, Latency) for all services
+- **DD_Red_ADT**: 
+  - RED metrics for ADT partner integration services
+- **DD_Red_Samsung** ⭐ NEW:
+  - RED metrics for Samsung network services (Dashboard: `wnz-fqh-z4f`)
+  - Full monitoring with requests, errors, and latency graphs
+- **DD_Samsung_Errors** ⭐ NEW:
+  - Filtered view showing only Samsung services with errors > 0
   - Interactive bar charts with Chart.js visualization
   - Real-time data from Datadog API
   - Filter by service name
@@ -193,8 +218,8 @@ OneView GOC AI serves as a **centralized operations hub** that:
 - **Holiday_Oncall**: Check current on-call engineers, holidays, and escalation paths
 
 ### 🤖 AI-Powered Tools
-- **Suggestions**: AI-powered troubleshooting recommendations using LLaMA 3
-- **Ask_Gemini**: Google Gemini integration for general queries
+- **Ask_Bedrock**: AWS Bedrock (Claude 3.5 Sonnet) integration for AI-powered responses and troubleshooting
+- **Suggestions**: AI-powered troubleshooting recommendations
 
 ### 🌐 MCP Server (NEW in v3.0)
 
@@ -450,7 +475,9 @@ python3 app.py
 #### Monitoring & Metrics
 - **DD_Red_Metrics**: Datadog RED Metrics dashboard with charts
 - **DD_Red_ADT**: Datadog ADT dashboard with metrics
+- **DD_Red_Samsung**: Datadog Samsung network metrics dashboard (NEW!)
 - **DD_Errors**: Services with errors only (filtered view)
+- **DD_Samsung_Errors**: Samsung network services with errors > 0 (NEW!)
 - **P0_Streaming**: Splunk P0 Streaming dashboard
 
 #### PagerDuty Tools
@@ -841,8 +868,222 @@ multi-agent-mcp/
 - **Environment variables**: All credentials stored in `.env` (not committed)
 - **API key validation**: Keys validated before queries
 - **HTTPS support**: Can be configured with reverse proxy
-- **No data storage**: No persistent storage of sensitive data
+- **Historical data storage**: SQLite database for metrics (30-day retention)
 - **Docker isolation**: Containerized deployment for security
+
+## 🔌 REST API & Historical Data
+
+OneView now includes a comprehensive REST API for programmatic access to service health metrics and historical data.
+
+### Available Endpoints
+
+#### Current Status
+- `GET /api/status/current` - All services current status
+- `GET /api/status/{environment}` - Status for specific environment
+- `GET /api/health` - Health check endpoint
+
+#### Historical Data
+- `GET /api/history/service/{service_name}` - Service history (24h-30d)
+- `GET /api/history/dashboard` - Dashboard snapshots history
+- `GET /api/trends/service/{service_name}` - Trend analysis
+- `GET /api/critical/history` - Critical incidents history
+
+### Usage Examples
+
+```bash
+# Get current production status
+curl http://localhost:5000/api/status/production
+
+# Get service history (last 48 hours)
+curl "http://localhost:5000/api/history/service/arlo-api?environment=production&hours=48"
+
+# Check service trends
+curl "http://localhost:5000/api/trends/service/arlo-api?environment=production"
+
+# Health check
+curl http://localhost:5000/api/health
+```
+
+### Data Persistence
+
+Metrics are automatically saved to SQLite database:
+- **Location**: `/app/data/metrics_history.db` (inside container)
+- **Retention**: 30 days
+- **Collection**: Automatic on each dashboard refresh (~2 min intervals)
+- **Volume Mount**: Use Docker volumes to persist data across container restarts
+
+```bash
+# Run with persistent volume
+docker run -d -p 5000:5000 \
+  -v oneview-data:/app/data \
+  --name oneview \
+  oneview-goc-ai:latest
+```
+
+For complete API documentation, see **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)**.
+
+## 📱 Samsung Network Status Monitor (NEW!)
+
+Dedicated status monitoring page for Samsung partner network services.
+
+**Access:** `http://localhost:8080/statusmonitor/samsung`
+
+### Features
+- 📱 **Samsung-specific Services**: Monitors only Samsung network integration services
+- 🔄 **Dynamic Discovery**: Automatically extracts services from dashboard (always up-to-date!)
+- 🌍 **All Environments**: Shows Samsung services across production, goldendev, and goldenqa
+- ☸️ **EKS Cluster Status**: Real-time health for both clusters extracted from APM traces
+  - Partner Platform (`k8s-ppsamun-product1`)
+  - HMS Guard (`k8s-hmsguard-product`)
+- 📊 **Full Dashboard**: Same rich UI as other environments (pie chart, service grid, metrics)
+- ⚡ **Real-time Updates**: Auto-refresh with Force Refresh option
+- 🗄️ **SQL Console**: Direct access from dashboard header
+- 🕐 **Local Timezone**: Timestamps automatically displayed in your timezone with live clock
+
+### Monitored Services
+Samsung partner integration services (all use `#env:samsung_prod` tag):
+- `backend-pp-samsung-prod` - Partner Platform (Production)
+- `backend-pp-samsung-qa` - Partner Platform (QA)
+- `backend-pp-samsung-dev` - Partner Platform (Development)
+- `hmsguard-samsung-prod` - HMS Guard (Production)
+- `hmsguard-samsung-qa` - HMS Guard (QA)
+- `hmsguard-samsung-dev` - HMS Guard (Development)
+
+### Access Points
+- **From Main Page**: Status Monitor dropdown → "📱 Samsung Network"
+- **Direct URL**: `/statusmonitor/samsung`
+- **Sidebar Navigation**: Available in all environment views
+
+### Dashboard Tools
+In addition to the dedicated page, you can query Samsung metrics from the main chat:
+- **DD_Red_Samsung**: Full Samsung dashboard with all graphs
+- **DD_Samsung_Errors**: Only Samsung services with errors > 0
+
+---
+
+## 🏠 ADT Network Status Monitor (NEW!)
+
+Dedicated status monitoring page for ADT partner network services.
+
+**Access:** `http://localhost:8080/statusmonitor/adt`
+
+### Features
+- 🏠 **ADT-specific Services**: Monitors only ADT partner network services (50+ services)
+- 🔄 **Dynamic Discovery**: Automatically extracts all services from dashboard (always up-to-date!)
+- 🌍 **All Environments**: Shows ADT services across prod, qa, and dev
+- 📊 **Full Dashboard**: Same rich UI as other environments (pie chart, service grid, metrics)
+- ⚡ **Real-time Updates**: Auto-refresh with Force Refresh option
+- 🕐 **Local Timezone**: Timestamps automatically displayed in your timezone with live clock
+
+### Monitored Services
+ADT partner integration services (all use `#env:adt_prod` tag):
+- 50+ ADT services including:
+  - Partner APIs: `backend-partnerplatform`, `backend-partnercloud`, `backend-partner-notifications`, `partner-proxy`
+  - HMS Services: `backend-hmsweb-device`, `backend-hmsweb-media`, `backend-hmsweb-web`, `backend-hmsapi`, `backend-hmsam`
+  - Authentication: `oauth`, `oauth-proxy`, `device-authentication`, `backend-hmsdevicesauth`, `backend-hmsclientsauth`
+  - Video Services: `backend-videoservice-lb`, `backend-videoservice-discovery`
+  - Automation: `backend-hmsautomation`, `backend-hmsautomation-job`, `backend-arloautomation-leader`
+  - Infrastructure: `nginx-deviceapi-partner`, `nginx-clientapi-partner`, `broker-service`, `mqtt-auth`
+  - Core Services: `messaging`, `presence`, `geolocation`, `discovery`, `directory`, `logger`
+  - Support: `backend-supporttool`, `support`, `registration`, `policy`, `advisor`
+  - And 20+ more services from dashboard `cum-ivw-92c`
+
+### Access Points
+- **From Main Page**: Status Monitor dropdown → "🏠 ADT Network"
+- **Direct URL**: `/statusmonitor/adt`
+- **Navigation Tab**: Available in status monitor header
+
+### Dashboard Tools
+In addition to the dedicated page, you can query ADT metrics from the main chat:
+- **DD_Red_ADT**: Full ADT dashboard with all graphs (Dashboard ID: `cum-ivw-92c`)
+- **DD_ADT_Errors**: Only ADT services with errors > 0
+
+---
+
+## 🗄️ SQL Console (NEW!)
+
+Access the web-based SQL query interface at `http://localhost:8080/admin/sql`
+
+### Features
+- 🔒 **Secure**: Read-only access (SELECT queries only)
+- 📝 **Query Editor**: Syntax-highlighted SQL editor with keyboard shortcuts (Ctrl/Cmd + Enter)
+- 💡 **7 Pre-built Examples**: One-click queries for common use cases
+- 📊 **Rich Results**: Color-coded tables with formatted numbers and status indicators
+- ⚡ **Fast**: Execution time displayed for each query
+- 📋 **Schema Info**: Built-in table and column reference
+
+### Example Queries Included
+1. **Recent Metrics** - Last 50 service health measurements
+2. **Critical Services** - All critical incidents in last 24h with reasons
+3. **Error Rate Trends** - Track error rates over time for specific service
+4. **Service Summary** - Aggregated statistics grouped by service
+5. **Dashboard Snapshots** - Historical overall health summaries
+6. **High Latency** - Services with P95 > 1 second
+7. **Traffic Analysis** - Requests per hour with active service count
+
+### Database Schema
+```sql
+-- Service-level metrics (collected every dashboard refresh)
+service_metrics (
+    timestamp, service, environment, status,
+    requests, errors, error_rate,
+    p95_latency, p99_latency,
+    traffic_drop, high_latency, pd_incident
+)
+
+-- Dashboard-level snapshots (collected every dashboard refresh)
+dashboard_snapshots (
+    timestamp, environment,
+    total_services, healthy, warning, critical,
+    total_requests, total_errors, overall_error_rate
+)
+
+-- PagerDuty incident history (NEW!)
+pagerduty_incidents (
+    incident_id, incident_number, title, status, urgency,
+    created_at, resolved_at, service_name,
+    affected_services, duration_minutes, assignees
+)
+
+-- Service state changes tracking (NEW!)
+service_state_changes (
+    timestamp, service_name, environment,
+    previous_state, new_state, trigger_reason,
+    error_rate, latency_p95
+)
+
+-- Performance baselines (weekly aggregates, NEW!)
+service_baselines (
+    service_name, environment, week_start,
+    avg_error_rate, avg_latency_p95, avg_traffic_rpm,
+    peak_traffic_rpm, incidents_count
+)
+
+-- Deployment history (NEW!)
+deployments (
+    timestamp, service_name, environment, version,
+    deployer, status, duration_seconds
+)
+
+-- Service outage tracking (NEW!)
+service_outages (
+    service_name, environment, start_time, end_time,
+    duration_minutes, severity, root_cause, pagerduty_incident_id
+)
+
+-- Tool usage analytics (NEW!)
+tool_usage (
+    timestamp, tool_name, query_text,
+    user_ip, response_time_ms, success
+)
+```
+
+### Access from UI
+- **From Main Page**: Click "📊 Status Monitor ▼" → "🗄️ SQL Console"
+- **From Status Monitor**: Click "🗄️ SQL Console" button in header
+- **Direct URL**: Navigate to `/admin/sql`
+
+---
 
 ## 🚦 Monitoring & Observability
 
@@ -851,10 +1092,15 @@ The application itself includes:
 - **API call tracking**: Debug output for all Datadog queries
 - **Error handling**: Graceful degradation on API failures
 - **Response times**: Logged for performance monitoring
+- **Historical data**: SQLite database stores 30 days of metrics
 
 ## 📚 Additional Documentation
 
 - **[MCP_SERVER.md](MCP_SERVER.md)**: 🆕 Complete MCP Server setup guide for Claude Desktop and Cursor integration
+- **[SQL_CONSOLE_GUIDE.md](SQL_CONSOLE_GUIDE.md)**: 🆕 SQL Console usage guide with examples and best practices
+- **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)**: 🆕 Complete REST API reference
+- **[STATUS_MONITOR_CONFIG.md](STATUS_MONITOR_CONFIG.md)**: 🆕 Status monitoring configuration and thresholds
+- **[CHANGELOG_v3.0.2.md](CHANGELOG_v3.0.2.md)**: 🆕 Latest version changes and bug fixes
 - **[QUICK_START.md](QUICK_START.md)**: Fast setup guide for getting started in minutes
 - **[DOCKER_README.md](DOCKER_README.md)**: Detailed Docker deployment instructions
 - **[DATADOG_SETUP.md](DATADOG_SETUP.md)**: Datadog configuration and API setup guide

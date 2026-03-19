@@ -119,6 +119,169 @@ function showNotification(message, duration = 3000) {
 }
 
 // ============================================
+// AI AUTO-SELECT TOOLS
+// ============================================
+async function autoSelectTools() {
+    const inputText = document.getElementById('input-text').value.trim();
+    
+    if (!inputText) {
+        alert('⚠️ Please enter a question first');
+        return;
+    }
+    
+    const autoSelectBtn = document.getElementById('auto-select-btn');
+    const originalText = autoSelectBtn.textContent;
+    
+    // Create a more visible loading overlay
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'ai-select-loading';
+    loadingDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+        color: white;
+        padding: 30px 50px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+        z-index: 10000;
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+    `;
+    loadingDiv.innerHTML = `
+        <div style="margin-bottom: 10px;">🤖 AI Analyzing...</div>
+        <div style="font-size: 14px; font-weight: normal; opacity: 0.9;">Finding the best tools for your question</div>
+    `;
+    document.body.appendChild(loadingDiv);
+    
+    try {
+        // Show loading state on button
+        autoSelectBtn.disabled = true;
+        autoSelectBtn.textContent = '🤖 Analyzing...';
+        autoSelectBtn.style.opacity = '0.7';
+        
+        console.log('🤖 Calling /api/suggest-tools with query:', inputText);
+        
+        // Call the suggest-tools endpoint
+        const response = await fetch('/api/suggest-tools', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: inputText })
+        });
+        
+        console.log('🤖 Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Server error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const suggestedTools = data.suggested_tools || [];
+        
+        console.log('🤖 Suggested tools:', suggestedTools);
+        
+        if (suggestedTools.length === 0) {
+            alert('⚠️ No tools suggested by AI. Please select manually.');
+            return;
+        }
+        
+        // Uncheck all tools first
+        const allCheckboxes = document.querySelectorAll('input[name=tool]');
+        allCheckboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Check only the suggested tools with visual feedback
+        let checkedCount = 0;
+        suggestedTools.forEach(toolName => {
+            const checkbox = document.querySelector(`input[name=tool][value="${toolName}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+                checkedCount++;
+                
+                // Highlight the selected tool briefly
+                const label = checkbox.closest('label');
+                if (label) {
+                    label.style.backgroundColor = '#e9d5ff';
+                    label.style.transition = 'background-color 0.3s';
+                    setTimeout(() => {
+                        label.style.backgroundColor = '';
+                    }, 2000);
+                }
+            }
+        });
+        
+        // Remove loading overlay
+        loadingDiv.remove();
+        
+        // Show prominent success message
+        const toolNames = suggestedTools.join(', ');
+        const successDiv = document.createElement('div');
+        successDiv.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4);
+            z-index: 10000;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        `;
+        successDiv.innerHTML = `
+            <div style="margin-bottom: 10px;">✅ Tools Selected!</div>
+            <div style="font-size: 14px; font-weight: normal; opacity: 0.9;">${toolNames}</div>
+            <div style="margin-top: 15px; font-size: 13px; font-weight: normal; opacity: 0.8;">Executing automatically...</div>
+        `;
+        document.body.appendChild(successDiv);
+        
+        console.log(`✅ Selected ${checkedCount} tool(s): ${toolNames}`);
+        
+        // Auto-execute after 1.5 seconds to show the success message
+        setTimeout(() => {
+            successDiv.remove();
+            console.log('🚀 Auto-executing selected tools...');
+            
+            // Trigger form submission programmatically
+            const form = document.getElementById('search-form');
+            if (form) {
+                // Manually trigger the submit handler
+                const submitEvent = new Event('submit', { 
+                    bubbles: true, 
+                    cancelable: true 
+                });
+                form.dispatchEvent(submitEvent);
+            }
+        }, 1500);
+        
+    } catch (error) {
+        console.error('❌ Error auto-selecting tools:', error);
+        
+        // Remove loading overlay if still present
+        const loadingDiv = document.getElementById('ai-select-loading');
+        if (loadingDiv) loadingDiv.remove();
+        
+        // Show error
+        alert(`⚠️ Error: ${error.message}`);
+    } finally {
+        // Reset button state
+        autoSelectBtn.disabled = false;
+        autoSelectBtn.textContent = originalText;
+        autoSelectBtn.style.opacity = '1';
+    }
+}
+
+// Make autoSelectTools available globally
+window.autoSelectTools = autoSelectTools;
+
+// ============================================
 // COPY TO CLIPBOARD
 // ============================================
 function copyToClipboard(text) {
@@ -380,6 +543,9 @@ function setupTimeRangeSelector() {
         const showTimeRange = selectedTools.includes('DD_Red_Metrics') || 
                               selectedTools.includes('DD_Errors') ||
                               selectedTools.includes('DD_Red_ADT') ||
+                              selectedTools.includes('DD_Red_Samsung') ||
+                              selectedTools.includes('DD_Red_Metrics_US') ||
+                              selectedTools.includes('DD_Samsung_Errors') ||
                               selectedTools.includes('DD_Failed_Pods') ||
                               selectedTools.includes('DD_403_Errors') ||
                               selectedTools.includes('P0_Streaming') ||
@@ -671,57 +837,37 @@ function loadPagerDutyMonitor() {
                 timeElement.textContent = `Last updated: ${timeString}`;
             }
             
-            // Update summary
+            const triggered = data.triggered || 0;
+            const acknowledged = data.acknowledged || 0;
+            const resolved = data.resolved || 0;
+            
+            // Update counter numbers
+            const triggeredCountEl = document.getElementById('pd-triggered-count');
+            const ackCountEl = document.getElementById('pd-ack-count-number');
+            const resolvedCountEl = document.getElementById('pd-resolved-count-number');
+            
+            if (triggeredCountEl) triggeredCountEl.textContent = triggered;
+            if (ackCountEl) ackCountEl.textContent = acknowledged;
+            if (resolvedCountEl) resolvedCountEl.textContent = resolved;
+            
+            // Update summary background color and blink based on status
             const summaryElement = document.getElementById('pd-summary');
             if (summaryElement) {
                 if (data.error) {
-                    summaryElement.innerHTML = `<span style="color: #fee;">⚠️ ${data.error}</span>`;
+                    summaryElement.style.background = '#dc2626';
+                    summaryElement.classList.add('pd-status-blink');
+                } else if (triggered > 0) {
+                    // Red + blink for triggered incidents
+                    summaryElement.style.background = '#dc2626';
+                    summaryElement.classList.add('pd-status-blink');
+                } else if (acknowledged > 0) {
+                    // Yellow/Orange + blink for acknowledged incidents
+                    summaryElement.style.background = '#f59e0b';
+                    summaryElement.classList.add('pd-status-blink');
                 } else {
-                    const triggered = data.triggered || 0;
-                    const acknowledged = data.acknowledged || 0;
-                    const resolved = data.resolved || 0;
-                    summaryElement.innerHTML = `
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 11px;">
-                            <div style="text-align: center;">
-                                <div style="font-weight: bold; font-size: 18px;">${triggered}</div>
-                                <div style="font-size: 10px; opacity: 0.9;">🔴 Triggered</div>
-                            </div>
-                            <div style="text-align: center;">
-                                <div style="font-weight: bold; font-size: 18px;">${acknowledged}</div>
-                                <div style="font-size: 10px; opacity: 0.9;">🟡 Acknowledged</div>
-                            </div>
-                            <div style="text-align: center;">
-                                <div style="font-weight: bold; font-size: 18px;">${resolved}</div>
-                                <div style="font-size: 10px; opacity: 0.9;">🟢 Resolved</div>
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-            
-            // Update PagerDuty alert indicators
-            const alertIndicator = document.getElementById('pd-alert-indicator');
-            const alertCount = document.getElementById('pd-alert-count');
-            if (alertIndicator && alertCount) {
-                const triggered = data.triggered || 0;
-                if (triggered > 0) {
-                    alertCount.textContent = triggered;
-                    alertIndicator.style.display = 'block';
-                } else {
-                    alertIndicator.style.display = 'none';
-                }
-            }
-            
-            // Update PagerDuty acknowledged indicator
-            const ackIndicator = document.getElementById('pd-ack-indicator');
-            const ackCount = document.getElementById('pd-ack-count');
-            if (ackIndicator && ackCount) {
-                const acknowledged = data.acknowledged || 0;
-                if (acknowledged > 0) {
-                    ackCount.textContent = acknowledged;
-                    ackIndicator.style.display = 'block';
-                } else {
-                    ackIndicator.style.display = 'none';
+                    // Green + no blink for healthy
+                    summaryElement.style.background = '#10b981';
+                    summaryElement.classList.remove('pd-status-blink');
                 }
             }
             
@@ -833,11 +979,15 @@ function loadUpcomingDeployments() {
                 if (data.error) {
                     summaryElement.innerHTML = `<span style="color: #fee;">⚠️ ${data.error}</span>`;
                 } else {
-                    const total = data.total || 0;
+                    // Count upcoming (not past) deployments
+                    const upcomingCount = data.deployments.filter(d => !d.is_past).length;
+                    const pastCount = data.deployments.filter(d => d.is_past).length;
+                    
                     summaryElement.innerHTML = `
                         <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
-                            <div style="font-weight: bold; font-size: 20px;">${data.deployments.length}</div>
-                            <div style="font-size: 11px; opacity: 0.9;">in next 24h</div>
+                            <div style="font-weight: bold; font-size: 20px;">${upcomingCount}</div>
+                            <div style="font-size: 11px; opacity: 0.9;">upcoming</div>
+                            ${pastCount > 0 ? `<div style="font-size: 10px; opacity: 0.7;"> | ${pastCount} past</div>` : ''}
                         </div>
                     `;
                 }
@@ -849,13 +999,35 @@ function loadUpcomingDeployments() {
                 if (data.error) {
                     listElement.innerHTML = '<li style="color: #f56565; border-left-color: #f56565;">⚠️ Unable to load</li>';
                 } else if (!data.deployments || data.deployments.length === 0) {
-                    listElement.innerHTML = '<li style="color: #999;">No deployments in next 24h</li>';
+                    listElement.innerHTML = '<li style="color: #999;">No deployments found</li>';
                 } else {
                     listElement.innerHTML = data.deployments.map(deployment => {
                         const deployTime = new Date(deployment.timestamp);
                         const isActive = currentDeployment && currentDeployment.timestamp === deployment.timestamp;
-                        const borderColor = isActive ? '#f59e0b' : '#3b82f6';
-                        const bgColor = isActive ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-tertiary)';
+                        const isPast = deployment.is_past || deployTime < now;
+                        
+                        // Color scheme based on status
+                        let borderColor, bgColor, textColor, opacity;
+                        
+                        if (isPast) {
+                            // Past deployments in gray
+                            borderColor = '#9ca3af';
+                            bgColor = 'rgba(156, 163, 175, 0.1)';
+                            textColor = '#6b7280';
+                            opacity = '0.7';
+                        } else if (isActive) {
+                            // Active deployment in orange
+                            borderColor = '#f59e0b';
+                            bgColor = 'rgba(245, 158, 11, 0.1)';
+                            textColor = '#f59e0b';
+                            opacity = '1';
+                        } else {
+                            // Future deployments in blue
+                            borderColor = '#3b82f6';
+                            bgColor = 'var(--bg-tertiary)';
+                            textColor = '#3b82f6';
+                            opacity = '1';
+                        }
                         
                         // Calculate end time (2 hours after start)
                         const deployEndTime = new Date(deployTime.getTime() + (2 * 60 * 60 * 1000));
@@ -884,7 +1056,7 @@ function loadUpcomingDeployments() {
                         
                         let dateLabel;
                         if (deployDate === nowDate) {
-                            dateLabel = 'Today ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                            dateLabel = (isPast ? '✓ ' : '') + 'Today ' + startTimeStr + ' - ' + endTimeStr + ' CST';
                         } else if (deployDate === tomorrowDate) {
                             dateLabel = 'Tomorrow ' + startTimeStr + ' - ' + endTimeStr + ' CST';
                         } else {
@@ -893,15 +1065,15 @@ function loadUpcomingDeployments() {
                                 month: 'short',
                                 day: 'numeric'
                             });
-                            dateLabel = dateStr + ' ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                            dateLabel = (isPast ? '✓ ' : '') + dateStr + ' ' + startTimeStr + ' - ' + endTimeStr + ' CST';
                         }
                         
                         return `
-                            <li style="padding: 6px; margin-bottom: 4px; background: ${bgColor}; border-radius: 4px; border-left: 3px solid ${borderColor};">
-                                <div style="font-weight: bold; color: ${borderColor}; margin-bottom: 2px; font-size: 11px;">
+                            <li style="padding: 6px; margin-bottom: 4px; background: ${bgColor}; border-radius: 4px; border-left: 3px solid ${borderColor}; opacity: ${opacity};">
+                                <div style="font-weight: bold; color: ${textColor}; margin-bottom: 2px; font-size: 11px;">
                                     ${isActive ? '🔴 ' : ''}${dateLabel}
                                 </div>
-                                <div style="color: var(--text-secondary); font-size: 10px; line-height: 1.4;">
+                                <div style="color: ${isPast ? '#9ca3af' : 'var(--text-secondary)'}; font-size: 10px; line-height: 1.4; ${isPast ? 'text-decoration: line-through;' : ''}">
                                     ${deployment.service}
                                 </div>
                             </li>
@@ -945,44 +1117,34 @@ function loadStatusMonitor() {
                 }
             }
             
-            // Update core services
+            // Update core services (compact boxes like status monitor)
             const servicesElement = document.getElementById('status-services');
             let servicesDown = 0;
             
             if (servicesElement) {
                 if (data.error) {
-                    servicesElement.innerHTML = '<li style="color: #f56565;">Unable to load</li>';
+                    servicesElement.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 12px; color: #f56565; font-size: 11px;">Unable to load</div>';
                 } else if (!data.services || data.services.length === 0) {
-                    servicesElement.innerHTML = '<li style="color: #999;">No services data</li>';
+                    servicesElement.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 12px; color: #6b7280; font-size: 11px;">No services data</div>';
                 } else {
                     servicesElement.innerHTML = data.services.map(svc => {
                         const isAllGood = svc.status.trim().toLowerCase() === 'all good';
                         if (!isAllGood) {
                             servicesDown++;
                         }
-                        const icon = isAllGood ? '✅' : '⚠️';
-                        const color = isAllGood ? '#10b981' : '#f56565';
+                        const bgColor = isAllGood ? '#10b981' : '#dc2626';
+                        const shortName = svc.service.replace('Live ', '').replace('Video ', '');
                         return `
-                            <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #ffffff; border-radius: 6px; margin-bottom: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                                <span style="color: #1e293b; font-size: 10px; font-weight: 700;">${svc.service}</span>
-                                <span style="color: ${color}; font-size: 11px;">${icon}</span>
-                            </li>
+                            <div style="background: ${bgColor}; padding: 7px 8px; border-radius: 5px; text-align: center;">
+                                <div style="font-size: 10px; color: white; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em;">${shortName}</div>
+                            </div>
                         `;
                     }).join('');
                 }
             }
             
-            // Update Arlo Status alert indicator
-            const arloAlertIndicator = document.getElementById('arlo-alert-indicator');
-            const arloAlertCount = document.getElementById('arlo-alert-count');
-            if (arloAlertIndicator && arloAlertCount) {
-                if (servicesDown > 0) {
-                    arloAlertCount.textContent = servicesDown;
-                    arloAlertIndicator.style.display = 'block';
-                } else {
-                    arloAlertIndicator.style.display = 'none';
-                }
-            }
+            // Note: Arlo status is now displayed separately in its own widget
+            // No longer affects PagerDuty display
             
             // Update incidents
             const incidentsElement = document.getElementById('status-incidents');
@@ -1202,6 +1364,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 toolList.innerHTML = '<p style="color: #f56565; padding: 10px;">⚠️ Error loading tools. Please refresh the page.</p>';
             }
         });
+
+    // Add event listener for AI auto-select button
+    const autoSelectBtn = document.getElementById('auto-select-btn');
+    if (autoSelectBtn) {
+        autoSelectBtn.addEventListener('click', autoSelectTools);
+        console.log('✅ AI Auto-Select button initialized');
+    }
 
     // Manejar envío del formulario
     document.getElementById('search-form').addEventListener('submit', e => {

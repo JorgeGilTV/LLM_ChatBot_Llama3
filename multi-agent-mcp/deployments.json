@@ -1,102 +1,102 @@
 {
   "deployments": [
     {
-      "date": "2026-02-16",
-      "time": "12:00",
-      "service": "GRM: HMS Core Services"
-    },
-    {
-      "date": "2026-02-16",
+      "date": "2026-03-03",
       "time": "06:00",
-      "service": "GRM-1507 | Normal | 2026/12/12 | Migrate Splunk Prod Deployment server to AL2023"
+      "service": "GRM: HMS Core Services | Backend updates"
     },
     {
-      "date": "2026-02-17",
-      "time": "01:00",
-      "service": "Bhoomi Akruvala: GRM-1684 | hmsweb"
-    },
-    {
-      "date": "2026-02-17",
-      "time": "05:00",
-      "service": "GRM-862 | [Verisure] MFA"
-    },
-    {
-      "date": "2026-02-17",
-      "time": "11:00",
-      "service": "Dave, Dave & Krupang: GRM-2118 | Fasttrack release for Web Client 6.13.1 EU/ew"
-    },
-    {
-      "date": "2026-02-17",
-      "time": "13:00",
-      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI | Mayank & Bhoomi"
-    },
-    {
-      "date": "2026-02-18",
+      "date": "2026-03-03",
       "time": "12:00",
-      "service": "Jinesh & Tanu SmartHome payment"
+      "service": "GRM-2150 | Nginx ClientAPI DeviceAPI | Infrastructure"
     },
     {
-      "date": "2026-02-18",
-      "time": "13:00",
-      "service": "Partner Platform-GRM-1257"
-    },
-    {
-      "date": "2026-02-18",
-      "time": "13:00",
-      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI | Mayank & Bhoomi"
-    },
-    {
-      "date": "2026-02-19",
-      "time": "06:00",
-      "service": "Kseniiya, Nergui, N & Sonny: GRM-2062 | Nginx ClientAPI DeviceAPI | Bhoomi & Chandani"
-    },
-    {
-      "date": "2026-02-19",
-      "time": "10:00",
-      "service": "Chandani Trivedi: GRM-Diagtool Regular Release"
-    },
-    {
-      "date": "2026-02-19",
-      "time": "11:00",
-      "service": "Dave & Krupang: GRM-1 Web and Account client EU"
-    },
-    {
-      "date": "2026-02-19",
-      "time": "12:00",
-      "service": "Aniket & Jinesh & Tuanan-C Tanuaree: Q000 subscription Deploymn"
-    },
-    {
-      "date": "2026-02-19",
-      "time": "13:00",
-      "service": "Partner Platform-GRM-1257 - Dave & Krupang: GRM-1 Web and-"
-    },
-    {
-      "date": "2026-02-19",
+      "date": "2026-03-03",
       "time": "14:00",
-      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI"
+      "service": "Backend-hmsdevicemanagement | Database migration"
     },
     {
-      "date": "2026-02-20",
+      "date": "2026-03-04",
+      "time": "06:00",
+      "service": "GRM-2155 | Advisor Service | Performance improvements"
+    },
+    {
+      "date": "2026-03-04",
+      "time": "10:00",
+      "service": "Directory Service | Security patches"
+    },
+    {
+      "date": "2026-03-04",
+      "time": "13:00",
+      "service": "Backend-hmspubsub | Message queue optimization"
+    },
+    {
+      "date": "2026-03-05",
+      "time": "06:00",
+      "service": "GRM-2160 | OAuth Service | Token refresh fixes"
+    },
+    {
+      "date": "2026-03-05",
+      "time": "11:00",
+      "service": "Web Client 6.14.0 | Feature release"
+    },
+    {
+      "date": "2026-03-05",
+      "time": "14:00",
+      "service": "Backend-hmsautomation | Scheduler updates"
+    },
+    {
+      "date": "2026-03-06",
+      "time": "06:00",
+      "service": "GRM-2165 | Streaming Service | Codec optimization"
+    },
+    {
+      "date": "2026-03-06",
       "time": "12:00",
-      "service": "Mayank & Tanusree: Growth: Hmspayment GRM-2062 | Nginx ClientAPI DeviceAPI"
+      "service": "Backend-hmsnotification | Push notification improvements"
     },
     {
-      "date": "2026-02-20",
+      "date": "2026-03-06",
       "time": "13:00",
-      "service": "SmartHome"
+      "service": "Partner Platform | API versioning"
     },
     {
-      "date": "2026-02-20",
+      "date": "2026-03-07",
+      "time": "06:00",
+      "service": "GRM-2170 | Registration Service | Rate limiting"
+    },
+    {
+      "date": "2026-03-07",
+      "time": "10:00",
+      "service": "Backend-hmsclientauth | Session management"
+    },
+    {
+      "date": "2026-03-07",
       "time": "13:00",
-      "service": "GRM-2062 | Nginx ClientAPI DeviceAPI"
+      "service": "Messaging Service | WebSocket improvements"
     },
     {
-      "date": "2026-02-20",
-      "time": "15:00",
-      "service": "GRM-2132 Fast Track | 2026/02/20 | Fix account"
+      "date": "2026-03-08",
+      "time": "06:00",
+      "service": "GRM-2175 | Device-authentication | Certificate rotation"
+    },
+    {
+      "date": "2026-03-08",
+      "time": "12:00",
+      "service": "Backend-hmsapi | API gateway updates"
+    },
+    {
+      "date": "2026-03-08",
+      "time": "14:00",
+      "service": "HMSPayment | Payment processor integration"
+    },
+    {
+      "date": "2026-03-09",
+      "time": "06:00",
+      "service": "GRM-2180 | Broker-service | Kafka cluster upgrade"
     }
   ],
   "timezone": "America/Chicago",
-  "last_updated": "2026-02-18T14:00:00-06:00",
-  "note": "Update this file manually to reflect current GRM Calendar deployments. Times are in CST."
+  "last_updated": "2026-03-02T15:20:00-06:00",
+  "note": "Update this file manually to reflect current GRM Calendar deployments. Times are in CST. Confluence Calendar API currently returns 404 for subcalendar 153256867."
 }

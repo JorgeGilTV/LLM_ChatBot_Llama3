@@ -1,0 +1,168 @@
+<dashboard version="1.0" theme="dark">
+  <label>PartnerAPI nginx → hmsguard-ss-qa Upstream Health</label>
+  <description>Monitors nginx reverse-proxy errors when forwarding RapidSOS callbacks to hmsguard-ss-qa: "no live upstreams" (502) and "upstream timed out" (110). Use to correlate with K8s pod health, HPA, and DNS. Adjust index/host/sourcetype to match your environment.</description>
+
+  <!-- Row 1: Single values - last 24h totals -->
+  <row>
+    <panel>
+      <title>No live upstreams (last 24h)</title>
+      <single>
+        <search>
+          <query>index=* earliest=-24h "no live upstreams" "hmsguard-ss-qa"
+| stats count as total</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="rangeValues">["0","1","10","50"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Upstream timed out (last 24h)</title>
+      <single>
+        <search>
+          <query>index=* earliest=-24h ( "upstream timed out" OR "Connection timed out" ) ( "110" OR "hmsguard" )
+| stats count as total</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="rangeValues">["0","1","10","50"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+
+  <!-- Row 2: Timecharts -->
+  <row>
+    <panel>
+      <title>No live upstreams over time</title>
+      <chart>
+        <search>
+          <query>index=* earliest=-24h "no live upstreams" "hmsguard-ss-qa"
+| timechart span=15m count as "no_live_upstreams"</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Upstream timeouts over time</title>
+      <chart>
+        <search>
+          <query>index=* earliest=-24h ( "upstream timed out" OR "Connection timed out" ) ( "110" OR "hmsguard" )
+| timechart span=15m count as "upstream_timeouts"</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- Row 3: Recent events - no live upstreams -->
+  <row>
+    <panel>
+      <title>Recent events: no live upstreams</title>
+      <table>
+        <search>
+          <query>index=* earliest=-24h "no live upstreams" "hmsguard-ss-qa"
+| rex "upstream: (?&lt;upstream>[^\s]+)"
+| eval upstream=coalesce(upstream,"hmsguard-ss-qa")
+| table _time, host, upstream, _raw
+| sort -_time
+| head 50</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="count">50</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- Row 4: Recent events - upstream timeout -->
+  <row>
+    <panel>
+      <title>Recent events: upstream timed out</title>
+      <table>
+        <search>
+          <query>index=* earliest=-24h ( "upstream timed out" OR "Connection timed out" ) ( "110" OR "hmsguard" )
+| rex "upstream: (?&lt;upstream>[^\s]+)"
+| rex "(?&lt;backend_ip&gt;\d+\.\d+\.\d+\.\d+):(?&lt;backend_port&gt;\d+)"
+| table _time, host, upstream, backend_ip, backend_port, _raw
+| sort -_time
+| head 50</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="count">50</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- Row 5: Backend IPs that timed out (cross-reference with K8s pods) -->
+  <row>
+    <panel>
+      <title>Backends (IP:port) that timed out – cross-reference with K8s pods</title>
+      <table>
+        <search>
+          <query>index=* earliest=-24h ( "upstream timed out" OR "Connection timed out" )
+| rex "upstream: (?&lt;upstream_name&gt;[^\s]+)"
+| rex "(?&lt;backend_ip&gt;\d+\.\d+\.\d+\.\d+):(?&lt;backend_port&gt;\d+)"
+| where isnotnull(backend_ip) AND (upstream_name="hmsguard-ss-qa" OR match(_raw,"hmsguard"))
+| stats count by backend_ip, backend_port, upstream_name, host
+| sort -count</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- Row 6: Count by host -->
+  <row>
+    <panel>
+      <title>Count by host (no live upstreams)</title>
+      <chart>
+        <search>
+          <query>index=* earliest=-24h "no live upstreams" "hmsguard-ss-qa"
+| stats count by host
+| sort -count</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Count by host (upstream timeout)</title>
+      <chart>
+        <search>
+          <query>index=* earliest=-24h ( "upstream timed out" OR "Connection timed out" ) ( "110" OR "hmsguard" )
+| stats count by host
+| sort -count</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+  </row>
+</dashboard>

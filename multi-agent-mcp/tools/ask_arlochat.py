@@ -1,5 +1,5 @@
 """
-ArloChat MCP Integration - Direct Tool Execution
+GocBedrock MCP Integration - Direct Tool Execution
 
 This module provides direct access to MCP tools without AI reasoning:
 
@@ -51,16 +51,93 @@ MCP_SSE_ENDPOINT = f"{MCP_SERVER_URL}/sse"
 
 
 class SimpleMCPClient:
-    """Simple MCP client using HTTP requests instead of the mcp SDK."""
+    """Simple MCP client using HTTP requests for SSE-based MCP server."""
     
     def __init__(self, server_url: str):
         self.server_url = server_url
         self.session = requests.Session()
         self.session_id = None
+        self.message_endpoint = None
+        self.sse_connection = None
+        self.sse_responses = {}  # Store responses by request_id
+        self.sse_thread = None
+        self.sse_running = False
         
-    def initialize(self) -> bool:
-        """Initialize MCP session."""
+    def _sse_reader_thread(self):
+        """Background thread to read SSE events continuously."""
         try:
+            print(f"🔗 SSE reader thread starting...")
+            
+            for line in self.sse_connection.iter_lines(decode_unicode=True):
+                if not self.sse_running:
+                    break
+                
+                if line.startswith('data: '):
+                    data = line[6:].strip()
+                    
+                    # Skip endpoint announcements
+                    if data.startswith('/messages/'):
+                        continue
+                    
+                    try:
+                        # Try to parse as JSON
+                        event_data = json.loads(data)
+                        request_id = event_data.get('id')
+                        
+                        if request_id:
+                            print(f"📨 Got SSE response for request {request_id}")
+                            self.sse_responses[request_id] = event_data
+                    except json.JSONDecodeError:
+                        continue
+            
+            print(f"🔌 SSE reader thread stopped")
+        except Exception as e:
+            print(f"❌ SSE reader thread error: {e}")
+            self.sse_running = False
+    
+    def initialize(self) -> bool:
+        """Initialize MCP session via SSE."""
+        try:
+            import threading
+            
+            print(f"🔗 Connecting to SSE endpoint: {self.server_url}/sse")
+            
+            # Connect to SSE endpoint and keep connection open
+            self.sse_connection = self.session.get(
+                f"{self.server_url}/sse",
+                stream=True,
+                timeout=None  # No timeout for persistent connection
+            )
+            
+            if self.sse_connection.status_code != 200:
+                print(f"⚠️  SSE connection failed: {self.sse_connection.status_code}")
+                return False
+            
+            # Read the first SSE event to get session_id
+            for line in self.sse_connection.iter_lines(decode_unicode=True):
+                if line.startswith('data: '):
+                    data = line[6:].strip()
+                    # Parse the endpoint URL
+                    if data.startswith('/messages/'):
+                        self.message_endpoint = f"{self.server_url}{data}"
+                        # Extract session_id from URL
+                        import urllib.parse
+                        parsed = urllib.parse.urlparse(data)
+                        params = urllib.parse.parse_qs(parsed.query)
+                        self.session_id = params.get('session_id', [None])[0]
+                        print(f"✅ Got session_id: {self.session_id}")
+                        break
+            
+            if not self.session_id or not self.message_endpoint:
+                print("⚠️  Failed to get session_id from SSE")
+                return False
+            
+            # Start background thread to read SSE events
+            self.sse_running = True
+            self.sse_thread = threading.Thread(target=self._sse_reader_thread, daemon=True)
+            self.sse_thread.start()
+            print(f"✅ SSE reader thread started")
+            
             # Send initialization request
             payload = {
                 "jsonrpc": "2.0",
@@ -70,33 +147,63 @@ class SimpleMCPClient:
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
                     "clientInfo": {
-                        "name": "arlochat-client",
+                        "name": "gocbedrock-client",
                         "version": "1.0.0"
                     }
                 }
             }
             
-            response = self.session.post(
-                f"{self.server_url}/message",
+            init_response = self.session.post(
+                self.message_endpoint,
                 json=payload,
                 timeout=10
             )
             
-            if response.status_code == 200:
-                result = response.json()
-                print(f"✅ MCP Session initialized: {result.get('result', {}).get('serverInfo', {})}")
-                return True
+            # Accept both 200 (OK) and 202 (Accepted) for async servers
+            if init_response.status_code in [200, 202]:
+                # For 202, wait for response from SSE
+                if init_response.status_code == 202:
+                    print(f"✅ MCP Session accepted (status 202) - waiting for SSE confirmation...")
+                    # Wait up to 5 seconds for init response
+                    for _ in range(50):
+                        if 1 in self.sse_responses:
+                            result = self.sse_responses[1]
+                            print(f"✅ Got init confirmation via SSE")
+                            if result.get('result', {}).get('serverInfo'):
+                                print(f"   Server: {result['result']['serverInfo']}")
+                            return True
+                        time.sleep(0.1)
+                    # Even if we don't get confirmation, proceed if we have session_id
+                    print(f"⚠️  No init confirmation from SSE, but proceeding with session_id")
+                    return True
+                else:
+                    try:
+                        result = init_response.json() if init_response.text else {}
+                        print(f"✅ MCP Session initialized (status {init_response.status_code})")
+                        if result.get('result', {}).get('serverInfo'):
+                            print(f"   Server: {result['result']['serverInfo']}")
+                        return True
+                    except:
+                        print(f"✅ MCP Session accepted (status {init_response.status_code})")
+                        return True
             else:
-                print(f"⚠️  MCP initialization failed: {response.status_code}")
+                print(f"⚠️  MCP initialization failed: {init_response.status_code}")
+                print(f"   Response: {init_response.text[:200]}")
                 return False
                 
         except Exception as e:
             print(f"❌ MCP initialization error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def list_tools(self) -> List[Dict[str, Any]]:
         """List available tools from MCP server."""
         try:
+            if not self.message_endpoint:
+                print("⚠️  No message endpoint - not initialized")
+                return []
+            
             payload = {
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -105,18 +212,31 @@ class SimpleMCPClient:
             }
             
             response = self.session.post(
-                f"{self.server_url}/message",
+                self.message_endpoint,
                 json=payload,
                 timeout=10
             )
             
-            if response.status_code == 200:
-                result = response.json()
-                tools = result.get('result', {}).get('tools', [])
-                print(f"✅ Found {len(tools)} MCP tools")
-                return tools
+            print(f"📊 list_tools response: status={response.status_code}, body_length={len(response.text)}, body={response.text[:100]}")
+            
+            if response.status_code in [200, 202]:
+                # Check if response has content
+                if not response.text or response.text.strip() == "" or response.text.strip().lower() == "accepted":
+                    print(f"⚠️  Empty/minimal response body (status {response.status_code}) - reading from SSE stream")
+                    # For async servers, response comes via SSE - need to reconnect and read
+                    return self._read_sse_response(request_id=2)
+                
+                try:
+                    result = response.json()
+                    tools = result.get('result', {}).get('tools', [])
+                    print(f"✅ Found {len(tools)} MCP tools")
+                    return tools
+                except json.JSONDecodeError as e:
+                    print(f"⚠️  Failed to parse JSON: {e} - trying SSE stream instead")
+                    return self._read_sse_response(request_id=2)
             else:
                 print(f"⚠️  Failed to list tools: {response.status_code}")
+                print(f"   Response: {response.text[:200]}")
                 return []
                 
         except Exception as e:
@@ -126,9 +246,14 @@ class SimpleMCPClient:
     def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
         """Call a specific MCP tool."""
         try:
+            if not self.message_endpoint:
+                print("⚠️  No message endpoint - not initialized")
+                return None
+            
+            request_id = int(time.time() * 1000)
             payload = {
                 "jsonrpc": "2.0",
-                "id": int(time.time() * 1000),
+                "id": request_id,
                 "method": "tools/call",
                 "params": {
                     "name": tool_name,
@@ -137,12 +262,17 @@ class SimpleMCPClient:
             }
             
             response = self.session.post(
-                f"{self.server_url}/message",
+                self.message_endpoint,
                 json=payload,
                 timeout=30
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 202]:
+                # Check if response has content
+                if not response.text or response.text.strip() == "":
+                    print(f"⚠️  Empty response body (status {response.status_code}) - reading from SSE")
+                    return self._read_sse_response(request_id=request_id, timeout=30)
+                
                 result = response.json()
                 
                 # Extract content from response
@@ -164,9 +294,59 @@ class SimpleMCPClient:
             print(f"❌ Error calling tool {tool_name}: {e}")
             return None
     
+    def _read_sse_response(self, request_id: int, timeout: int = 30) -> Any:
+        """Wait for response from SSE background thread."""
+        try:
+            print(f"📡 Waiting for SSE response for request {request_id}...")
+            
+            # Poll for response from background thread
+            import time
+            start_time = time.time()
+            
+            while time.time() - start_time < timeout:
+                if request_id in self.sse_responses:
+                    event_data = self.sse_responses[request_id]
+                    print(f"✅ Got SSE response for request {request_id}")
+                    
+                    if request_id == 2:  # tools/list
+                        tools = event_data.get('result', {}).get('tools', [])
+                        print(f"✅ Found {len(tools)} MCP tools via SSE")
+                        return tools
+                    else:  # tools/call
+                        content_items = event_data.get('result', {}).get('content', [])
+                        text_parts = []
+                        for item in content_items:
+                            if isinstance(item, dict) and item.get('type') == 'text':
+                                text_parts.append(item.get('text', ''))
+                            elif isinstance(item, str):
+                                text_parts.append(item)
+                        return '\n'.join(text_parts) if text_parts else None
+                
+                time.sleep(0.1)  # Poll every 100ms
+            
+            print(f"⏱️  Timeout waiting for SSE response (waited {timeout}s)")
+            return [] if request_id == 2 else None
+            
+        except Exception as e:
+            print(f"❌ Error reading SSE response: {e}")
+            return [] if request_id == 2 else None
+    
     def close(self):
-        """Close the session."""
+        """Close the session and stop SSE reader thread."""
+        print(f"🔌 Closing MCP client...")
+        self.sse_running = False
+        
+        if self.sse_connection:
+            try:
+                self.sse_connection.close()
+            except:
+                pass
+        
+        if self.sse_thread and self.sse_thread.is_alive():
+            self.sse_thread.join(timeout=1)
+        
         self.session.close()
+        print(f"✅ MCP client closed")
 
 
 def extract_keywords(question: str) -> str:
@@ -753,7 +933,7 @@ def format_mcp_result(tool_name: str, result_text: str) -> str:
 
 async def ask_arlo_async(question: str = "") -> str:
     """
-    Ask ArloChat via MCP SDK (async version) - executes MCP tools and returns raw results.
+    Ask GocBedrock via MCP SDK (async version) - executes MCP tools and returns raw results.
     
     Requires MCP SDK (Python 3.10+).
     
@@ -763,7 +943,7 @@ async def ask_arlo_async(question: str = "") -> str:
         HTML formatted tool results
     """
     print("=" * 80)
-    print("🤖 ArloChat MCP - Direct Mode (Async/SDK)")
+    print("🤖 GocBedrock MCP - Direct Mode (Async/SDK)")
     print(f"📝 Question: '{question}'")
     print(f"🌐 MCP Server: {MCP_SSE_ENDPOINT}")
     
@@ -772,7 +952,7 @@ async def ask_arlo_async(question: str = "") -> str:
         <div style='background-color: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 4px; margin: 8px 0;'>
             <p style='margin: 0; color: #856404;'>
                 ⚠️ <strong>No question provided.</strong><br>
-                Please enter a question to ask ArloChat.
+                Please enter a question to ask GocBedrock.
             </p>
         </div>
         """
@@ -1568,7 +1748,7 @@ async def ask_arlo_async(question: str = "") -> str:
                     <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                                 padding: 12px; border-radius: 6px; margin: 8px 0; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
                         <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>
-                            🤖 ArloChat MCP Results
+                            🤖 GocBedrock MCP Results
                         </h2>
                         <p style='margin: 0; font-size: 12px; opacity: 0.95;'>
                             Direct Mode • {visible_results_count} detailed tool result(s) shown
@@ -1722,10 +1902,917 @@ async def ask_arlo_async(question: str = "") -> str:
             """
 
 
-def ask_arlo_sync(question: str = "") -> str:
+async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_from_other_tools: Optional[Dict[str, str]] = None) -> str:
     """
-    Ask ArloChat via MCP using HTTP (sync version - fallback when SDK not available).
-    Executes MCP tools and returns raw results.
+    Ask GocBedrock via MCP using Bedrock intelligence (async version with official SDK).
+    Uses AWS Bedrock to analyze the question and intelligently select and execute MCP tools.
+    
+    Args:
+        question: The user's question/prompt (full text)
+        context_from_other_tools: Optional dict with results from other tools (e.g., DD_Red_Metrics, DD_Search)
+                                   Format: {"tool_name": "html_result", ...}
+    Returns:
+        HTML formatted tool results
+    """
+    print("=" * 80)
+    print("🤖 GocBedrock MCP - Bedrock Intelligence Mode (SDK)")
+    print(f"📝 Question: '{question}'")
+    print(f"🌐 MCP Server: {MCP_SSE_ENDPOINT}")
+    
+    if not question or not question.strip():
+        return """
+        <div style='background-color: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #856404;'>
+                ⚠️ <strong>No question provided.</strong><br>
+                Please enter a question to ask GocBedrock.
+            </p>
+        </div>
+        """
+    
+    try:
+        # Import required modules at the start
+        from tools.bedrock_tool import ask_bedrock
+        from tools.deployments_calendar import get_grm_deployments
+        
+        # Check if question is about deployments (before MCP)
+        question_lower = question.lower()
+        deployment_keywords = ['deployment', 'deploy', 'despliegue', 'release', 'próximo', 
+                              'proximas', 'pasados', 'pasado', 'past', 'anteriores', 'previous', 
+                              'scheduled', 'programado', 'calendario', 'calendar', 'grm']
+        
+        is_deployment_query = any(kw in question_lower for kw in deployment_keywords)
+        
+        if is_deployment_query:
+            print("📅 Detected deployment query - using local GRM Deployments tool")
+            
+            # Detect if asking for past deployments
+            past_keywords = ['past', 'pasado', 'pasados', 'anteriores', 'previous', 'último', 'ultimos', 'last']
+            is_past_query = any(kw in question_lower for kw in past_keywords)
+            
+            # Extract time range if mentioned
+            limit_count = None  # Will limit results if user asked for specific number
+            
+            # Try to find time range with unit
+            timerange_match = re.search(r'(\d+)\s*(hora|hour|horas|hours|day|days|dia|dias)', question_lower)
+            if timerange_match:
+                timerange_hours = int(timerange_match.group(1))
+                unit = timerange_match.group(2)
+                if 'day' in unit or 'dia' in unit:
+                    timerange_hours *= 24  # Convert days to hours
+                print(f"⏰ Extracted time range: {timerange_hours} hours")
+            else:
+                # Try to find number without unit (e.g., "past 3 deployments")
+                number_match = re.search(r'(?:past|last|próximos?|últimos?|next)\s+(\d+)', question_lower)
+                if number_match:
+                    limit_count = int(number_match.group(1))
+                    # Use a large window to ensure we capture enough deployments
+                    timerange_hours = 72  # 3 days
+                    print(f"⏰ User asked for {limit_count} deployments → using {timerange_hours} hours window, will limit to {limit_count} results")
+                else:
+                    # No specific number mentioned - if it's a generic "últimos/past/next" query, show at least 4
+                    generic_plural_keywords = ['deployments', 'despliegues', 'releases', 'últimos', 'ultimos', 'past', 'próximos', 'proximos']
+                    if any(kw in question_lower for kw in generic_plural_keywords):
+                        timerange_hours = 96  # 4 days to capture enough deployments
+                        limit_count = 4 if is_past_query else 5  # Show at least 4 for past, 5 for future
+                        print(f"⏰ Generic plural query detected → using {timerange_hours} hours window, will show at least {limit_count} deployments")
+                    else:
+                        timerange_hours = 24  # Default for singular queries
+            
+            # If asking for past deployments, use negative timerange
+            if is_past_query:
+                print(f"⏮️  Query is for PAST deployments")
+                timerange_hours = -timerange_hours  # Negative = past
+            else:
+                print(f"⏭️  Query is for FUTURE deployments")
+            
+            # Call GRM deployments directly (passing limit via query parameter if needed)
+            query_param = f"limit:{limit_count}" if limit_count else ""
+            deployments_result = get_grm_deployments(query_param, timerange_hours)
+            
+            # Use Bedrock to generate a conversational response
+            time_context = "past" if is_past_query else "upcoming"
+            response_prompt = f"""You are GocBedrock, an AI assistant for Arlo infrastructure.
+
+User question: "{question}"
+
+Context: {time_context} deployments ({"last" if is_past_query else "next"} {abs(timerange_hours)} hours).
+
+GRM Calendar Data:
+{deployments_result}
+
+Use this EXACT HTML - BE VISUAL:
+
+<div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-width: 100%;">
+    
+    <!-- Hero Header -->
+    <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%); padding: 28px 24px; border-radius: 12px; margin-bottom: 28px; box-shadow: 0 12px 48px rgba(139, 92, 246, 0.3);">
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
+            <span style="font-size: 36px;">📅</span>
+            <h1 style="margin: 0; color: white; font-size: 26px; font-weight: 800; letter-spacing: -0.8px;">Deployment Calendar</h1>
+        </div>
+        <div style="display: inline-block; background: rgba(255,255,255,0.25); padding: 8px 16px; border-radius: 24px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
+            <span style="color: white; font-size: 14px; font-weight: 700;">📌 {time_context.capitalize()}</span>
+        </div>
+    </div>
+    
+    <!-- Count Card -->
+    <div style="display: inline-flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #f0f9ff, #e0f2fe); padding: 16px 24px; border-radius: 12px; border: 2px solid #38bdf8; margin-bottom: 28px; box-shadow: 0 6px 20px rgba(56, 189, 248, 0.2);">
+        <span style="font-size: 28px;">📊</span>
+        <div>
+            <div style="font-size: 32px; font-weight: 900; color: #0369a1; letter-spacing: -1px; line-height: 1;">[X]</div>
+            <div style="font-size: 12px; color: #075985; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DEPLOYMENTS</div>
+        </div>
+    </div>
+    
+    <!-- Deployments Table -->
+    <div style="background: white; padding: 26px; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 6px 20px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+            <span style="font-size: 30px;">🚀</span>
+            <h2 style="margin: 0; color: #0f172a; font-size: 22px; font-weight: 800;">Deployments</h2>
+        </div>
+        
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden;">
+            <thead>
+                <tr style="background: linear-gradient(to right, #f8fafc, #f1f5f9);">
+                    <th style="padding: 14px 16px; text-align: left; color: #475569; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1;">🚀 Service</th>
+                    <th style="padding: 14px 16px; text-align: left; color: #475569; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1;">📅 Date/Time</th>
+                    <th style="padding: 14px 16px; text-align: left; color: #475569; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1;">📝 Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border-bottom: 1px solid #f1f5f9;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+                    <td style="padding: 14px 16px; color: #6366f1; font-weight: 700; font-size: 14px;">[Service]</td>
+                    <td style="padding: 14px 16px; color: #64748b; font-weight: 500;">[Date]</td>
+                    <td style="padding: 14px 16px; color: #475569;">[Details]</td>
+                </tr>
+                <!-- OR if no deployments -->
+                <tr>
+                    <td colspan="3" style="padding: 32px; text-align: center;">
+                        <span style="font-size: 48px; display: block; margin-bottom: 12px;">✨</span>
+                        <div style="color: #64748b; font-size: 15px; font-weight: 600;">No deployments in this period</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+</div>
+
+Return ONLY the HTML (no markdown blocks)."""
+            
+            response_html = ask_bedrock(response_prompt, selected_tools=None)
+            
+            # Clean up any remaining markdown code blocks
+            if '```' in response_html:
+                match = re.search(r'```(?:html)?\s*\n(.*?)\n```', response_html, re.DOTALL)
+                if match:
+                    response_html = match.group(1)
+            
+            # Wrap response with tool info
+            calendar_type = "Past Deployments" if is_past_query else "Upcoming Deployments"
+            final_html = f"""
+        <div style='background-color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 6px; margin-bottom: 16px;'>
+                <h2 style='margin: 0; color: white; font-size: 16px;'>
+                    🤖 GocBedrock Response (GRM Calendar - {calendar_type})
+                </h2>
+            </div>
+            <div style='background-color: #f7fafc; padding: 16px; border-radius: 4px;'>
+                {response_html}
+            </div>
+            {deployments_result}
+        </div>
+        """
+            
+            return final_html
+        
+        print("🔗 Connecting to MCP server via SSE (SDK)...")
+        async with sse_client(MCP_SSE_ENDPOINT) as (read, write):
+            async with ClientSession(read, write) as session:
+                print("🔄 Initializing MCP session...")
+                await session.initialize()
+                
+                print("📋 Fetching available tools from MCP...")
+                mcp_tools_response = await session.list_tools()
+                mcp_tools_list = mcp_tools_response.tools
+                
+                print(f"✅ Got {len(mcp_tools_list)} tools from MCP")
+                
+                if not mcp_tools_list:
+                    raise Exception("No tools available from MCP server")
+                
+                # Convert to dict format for Bedrock
+                mcp_tools = []
+                for tool in mcp_tools_list:
+                    mcp_tools.append({
+                        'name': tool.name,
+                        'description': tool.description if hasattr(tool, 'description') else 'No description'
+                    })
+                
+                # Build tools list for Bedrock
+                tools_description = "Available MCP tools:\n\n"
+                tools_map_mcp = {}  # Map name to MCP tool object
+                for i, tool in enumerate(mcp_tools_list):
+                    tool_name = tool.name
+                    tool_desc = tool.description if hasattr(tool, 'description') else 'No description'
+                    tools_description += f"- **{tool_name}**: {tool_desc}\n"
+                    tools_map_mcp[tool_name] = tool
+                
+                # Step 1: Ask Bedrock to analyze and select tools
+                print("\n🧠 Step 1: Asking Bedrock to analyze question and select MCP tools...")
+                analysis_prompt = f"""You are Bedrock Report, an AI assistant that helps with Arlo infrastructure questions.
+
+{tools_description}
+
+User question: "{question}"
+
+Analyze the user's question and decide which MCP tools (if any) you need to call to answer it.
+Respond with ONLY a JSON object (no markdown, no explanation):
+{{
+    "needs_tools": true/false,
+    "tools_to_call": [
+        {{"tool_name": "tool1", "reason": "why", "params": {{"param": "value"}}}},
+        ...
+    ],
+    "direct_answer": "If no tools needed, provide answer here"
+}}
+
+Guidelines:
+- For Jira searches: use jql parameter like 'text ~ "keywords"' or 'summary ~ "keywords"'
+- For Confluence searches: use cql parameter
+- For Datadog: use query parameter with metric name
+- If question asks for explanations/information, prioritize Confluence tools
+- If question is conversational, set needs_tools=false
+- Be selective - only call truly relevant tools
+- Extract specific search terms from the question
+
+Return ONLY the JSON object."""
+
+                # Call Bedrock
+                analysis_response = ask_bedrock(analysis_prompt, selected_tools=None)
+                
+                # Extract JSON from response
+                json_match = re.search(r'\{.*\}', analysis_response, re.DOTALL)
+                if json_match:
+                    analysis = json.loads(json_match.group(0))
+                else:
+                    print(f"⚠️  Failed to parse Bedrock response: {analysis_response[:200]}")
+                    analysis = {"needs_tools": False, "direct_answer": analysis_response}
+                
+                print(f"📊 Analysis: {json.dumps(analysis, indent=2)}")
+                
+                # Step 2: Execute selected tools using SDK
+                tool_results = []
+                if analysis.get("needs_tools", False):
+                    tools_to_call = analysis.get("tools_to_call", [])
+                    print(f"\n🔧 Step 2: Executing {len(tools_to_call)} selected MCP tool(s)...")
+                    
+                    for tool_call in tools_to_call:
+                        tool_name = tool_call.get("tool_name")
+                        tool_params = tool_call.get("params", {})
+                        reason = tool_call.get("reason", "")
+                        
+                        if tool_name not in tools_map_mcp:
+                            print(f"⚠️  Tool '{tool_name}' not found")
+                            continue
+                        
+                        print(f"\n🎯 Calling: {tool_name}")
+                        print(f"   Reason: {reason}")
+                        print(f"   Params: {tool_params}")
+                        
+                        # Call MCP tool using SDK
+                        try:
+                            result = await session.call_tool(tool_name, tool_params)
+                            
+                            # Extract text from result
+                            result_text = ""
+                            if hasattr(result, 'content'):
+                                for content in result.content:
+                                    if hasattr(content, 'text'):
+                                        result_text += content.text
+                            
+                            if result_text:
+                                # Check for error messages
+                                result_lower = result_text.lower()[:200]
+                                if any(error_keyword in result_lower for error_keyword in [
+                                    'error executing tool', 'error:', 'exception:', 'failed to',
+                                    'could not', 'unable to', 'permission denied', 'not found',
+                                    'connection refused', 'timeout'
+                                ]):
+                                    print(f"   ⚠️  Skipping - contains error message")
+                                else:
+                                    # Truncate long results
+                                    if len(result_text) > 5000:
+                                        result_text = result_text[:5000] + "\n... (truncated)"
+                                    
+                                    print(f"   ✅ Success! Got {len(result_text)} characters")
+                                    tool_results.append({
+                                        "tool": tool_name,
+                                        "result": result_text,
+                                        "reason": reason
+                                    })
+                        except Exception as e:
+                            print(f"   ❌ Error calling tool: {e}")
+                
+                # Step 3: Generate conversational response with Bedrock
+                print("\n💬 Step 3: Generating conversational response with Bedrock...")
+                
+                # Helper function to extract key metrics from HTML results
+                def summarize_tool_results(tool_results_dict: dict) -> str:
+                    """
+                    Extract only key information from tool results, removing HTML/CSS/JS.
+                    Dramatically reduces token count while preserving critical data.
+                    """
+                    summary = []
+                    
+                    for tool_name, html_result in tool_results_dict.items():
+                        # Skip if result is empty or error
+                        if not html_result or 'error' in html_result.lower()[:100]:
+                            summary.append(f"**{tool_name}**: No data or error")
+                            continue
+                        
+                        # Extract service metrics using regex
+                        services_found = []
+                        
+                        # Pattern 1: Extract service names from various formats
+                        service_patterns = [
+                            r'<span[^>]*>([a-z0-9-]+)</span>\s*<span[^>]*>#([a-z]+)',  # backend-service #env
+                            r'🔹\s*([a-z0-9-]+)\s*#([a-z]+)',  # 🔹 service-name #production
+                            r'([a-z0-9-]+)\s*#([a-z]+)',  # service-name #production
+                        ]
+                        
+                        for pattern in service_patterns:
+                            matches = re.findall(pattern, html_result, re.IGNORECASE)
+                            for service, env in matches:
+                                if service not in [s['name'] for s in services_found]:
+                                    # Try to extract metrics for this service
+                                    metrics = {}
+                                    
+                                    # Look for Requests
+                                    req_match = re.search(rf'{re.escape(service)}.*?(\d+(?:\.\d+)?)\s*req/s', html_result, re.DOTALL | re.IGNORECASE)
+                                    if req_match:
+                                        metrics['requests'] = req_match.group(1)
+                                    
+                                    # Look for Errors
+                                    err_match = re.search(rf'{re.escape(service)}.*?(\d+)\s*\(([^)]+)\)', html_result, re.DOTALL | re.IGNORECASE)
+                                    if err_match:
+                                        metrics['errors'] = f"{err_match.group(1)} ({err_match.group(2)})"
+                                    
+                                    # Look for Latency
+                                    lat_match = re.search(rf'{re.escape(service)}.*?(\d+(?:\.\d+)?)\s*ms\s+avg', html_result, re.DOTALL | re.IGNORECASE)
+                                    if lat_match:
+                                        metrics['latency'] = f"{lat_match.group(1)}ms"
+                                    
+                                    services_found.append({
+                                        'name': service,
+                                        'env': env,
+                                        'metrics': metrics
+                                    })
+                        
+                        # Build summary for this tool
+                        if services_found:
+                            tool_summary = f"**{tool_name}**: {len(services_found)} services\n"
+                            
+                            # Only include services with potential issues (high errors or high latency)
+                            problematic_services = []
+                            healthy_count = 0
+                            
+                            for svc in services_found:
+                                metrics = svc['metrics']
+                                is_problematic = False
+                                
+                                # Check for high error rate
+                                if 'errors' in metrics:
+                                    err_text = metrics['errors']
+                                    # Extract percentage
+                                    pct_match = re.search(r'(\d+(?:\.\d+)?)\s*%', err_text)
+                                    if pct_match and float(pct_match.group(1)) > 1.0:
+                                        is_problematic = True
+                                
+                                # Check for high latency
+                                if 'latency' in metrics:
+                                    lat_text = metrics['latency']
+                                    lat_match = re.search(r'(\d+)', lat_text)
+                                    if lat_match and float(lat_match.group(1)) > 1000:  # > 1 second
+                                        is_problematic = True
+                                
+                                if is_problematic:
+                                    problematic_services.append(
+                                        f"  - {svc['name']} ({svc['env']}): "
+                                        f"Req: {metrics.get('requests', 'N/A')}, "
+                                        f"Err: {metrics.get('errors', 'N/A')}, "
+                                        f"Lat: {metrics.get('latency', 'N/A')}"
+                                    )
+                                else:
+                                    healthy_count += 1
+                            
+                            if problematic_services:
+                                tool_summary += f"  ⚠️ {len(problematic_services)} services with issues:\n"
+                                tool_summary += "\n".join(problematic_services[:10])  # Limit to top 10
+                                if len(problematic_services) > 10:
+                                    tool_summary += f"\n  ... and {len(problematic_services) - 10} more"
+                            
+                            if healthy_count > 0:
+                                tool_summary += f"\n  ✅ {healthy_count} services healthy"
+                            
+                            summary.append(tool_summary)
+                        else:
+                            # If no services extracted, provide a basic summary
+                            # Count some common patterns
+                            widget_count = html_result.count('<canvas')
+                            if widget_count > 0:
+                                summary.append(f"**{tool_name}**: Dashboard with ~{widget_count} metric widgets")
+                            else:
+                                # Truncate HTML to first 500 chars
+                                truncated = re.sub(r'<[^>]+>', '', html_result)[:500]
+                                summary.append(f"**{tool_name}**: {truncated}...")
+                    
+                    return "\n\n".join(summary)
+                
+                # Build comprehensive context from both MCP and other tools
+                all_context = ""
+                
+                # Add context from other tools (DD_Red_Metrics, DD_Search, etc.) if provided
+                if context_from_other_tools:
+                    print(f"📊 Including context from {len(context_from_other_tools)} other tool(s)")
+                    
+                    # Calculate original size
+                    original_size = sum(len(str(v)) for v in context_from_other_tools.values())
+                    print(f"   Original context size: {original_size:,} characters")
+                    
+                    # Summarize to reduce token count
+                    summarized = summarize_tool_results(context_from_other_tools)
+                    summarized_size = len(summarized)
+                    
+                    print(f"   Summarized context size: {summarized_size:,} characters (reduction: {100 * (1 - summarized_size/original_size):.1f}%)")
+                    
+                    all_context += "Additional data from monitoring tools:\n\n"
+                    all_context += summarized + "\n\n"
+                
+                # Add context from MCP tools
+                if tool_results:
+                    all_context += "MCP Tool execution results:\n\n"
+                    for tr in tool_results:
+                        all_context += f"**{tr['tool']}** (called because: {tr['reason']}):\n{tr['result']}\n\n"
+                
+                if all_context:
+                    # Check if this is a monitoring query (RED metrics, dashboards, etc.)
+                    is_monitoring_query = any(keyword in all_context.lower() for keyword in 
+                                            ['dd_red_metrics', 'dd_red_adt', 'dd_red_samsung', 'dd_red_metrics_us', 
+                                             'services with issues', 'services healthy', 'req/s', 'latency'])
+                    
+                    if is_monitoring_query:
+                        # For monitoring queries, generate a comprehensive dashboard view
+                        response_prompt = f"""Analyze RED metrics monitoring data and create comprehensive HTML dashboard.
+
+Question: "{question}"
+
+MONITORING DATA:
+{all_context}
+
+TASK:
+Generate a complete HTML dashboard with:
+1. Hero header with overall summary
+2. Dashboard overview cards (show ALL dashboards found with counts)
+3. COMPLETE table of services with elevated metrics (ALL services with issues)
+4. Summary of healthy services
+
+HTML structure (USE THIS EXACT FORMAT):
+
+<div style="font-family: 'Inter', sans-serif; padding: 20px;">
+
+<!-- Hero Header -->
+<div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%); padding: 32px; border-radius: 16px; margin-bottom: 28px; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);">
+    <div style="font-size: 14px; color: rgba(255,255,255,0.9); margin-bottom: 8px;">🚀 RED METRICS — FULL PLATFORM OVERVIEW</div>
+    <h1 style="color: white; font-size: 32px; margin: 0 0 12px 0; font-weight: 800;">RED Metrics: All Services Analysis</h1>
+    <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 15px;">Arlo Platform • Production Environment • [Insert timestamp from data]</p>
+</div>
+
+<!-- Metrics Summary Cards -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px;">
+    <div style="background: #dcfce7; padding: 24px; border-radius: 12px; border: 2px solid #22c55e;">
+        <div style="font-size: 13px; color: #166534; font-weight: 700; margin-bottom: 8px;">✅ HEALTHY SERVICES</div>
+        <div style="font-size: 42px; color: #14532d; font-weight: 900; line-height: 1;">[Count]</div>
+        <div style="font-size: 12px; color: #166534; margin-top: 4px;">of [Total] total services</div>
+    </div>
+    <div style="background: #fef3c7; padding: 24px; border-radius: 12px; border: 2px solid #fbbf24;">
+        <div style="font-size: 13px; color: #92400e; font-weight: 700; margin-bottom: 8px;">⚠️ SERVICES WITH ISSUES</div>
+        <div style="font-size: 42px; color: #78350f; font-weight: 900; line-height: 1;">[Count]</div>
+        <div style="font-size: 12px; color: #92400e; margin-top: 4px;">elevated latency / errors</div>
+    </div>
+    <div style="background: #fecaca; padding: 24px; border-radius: 12px; border: 2px solid #ef4444;">
+        <div style="font-size: 13px; color: #991b1b; font-weight: 700; margin-bottom: 8px;">🔴 ACTIVE ALERTS</div>
+        <div style="font-size: 42px; color: #7f1d1d; font-weight: 900; line-height: 1;">[Count]</div>
+        <div style="font-size: 12px; color: #991b1b; margin-top: 4px;">failing in Datadog right now</div>
+    </div>
+    <div style="background: #e0e7ff; padding: 24px; border-radius: 12px; border: 2px solid #6366f1;">
+        <div style="font-size: 13px; color: #3730a3; font-weight: 700; margin-bottom: 8px;">📊 RED DASHBOARDS</div>
+        <div style="font-size: 42px; color: #312e81; font-weight: 900; line-height: 1;">[Count]</div>
+        <div style="font-size: 12px; color: #3730a3; margin-top: 4px;">ADT • US • Samsung • Z1 • more</div>
+    </div>
+</div>
+
+<!-- Dashboard Coverage Section -->
+<div style="background: white; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
+    <h2 style="font-size: 20px; margin: 0 0 16px 0; color: #1e293b;">📊 RED Metric Dashboard Coverage</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+        <!-- List ALL dashboards found in the data -->
+        <div style="padding: 14px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #8b5cf6;">
+            <div style="font-weight: 600; color: #6d28d9; margin-bottom: 4px;">🟣 RED Metrics - ADT</div>
+            <div style="font-size: 13px; color: #64748b;">PP-Prod • cum-ivw-92c</div>
+        </div>
+        <!-- Add more dashboard cards for US, Samsung, etc. based on data -->
+    </div>
+</div>
+
+<!-- Services with Elevated Metrics (COMPLETE TABLE - ALL 15 SERVICES) -->
+<div style="background: white; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
+    <h2 style="font-size: 20px; margin: 0 0 16px 0; color: #1e293b;">⚠️ Services with Elevated Metrics ([Count] Services)</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 12px; text-align: left; font-size: 13px; color: #475569;">Service</th>
+                <th style="padding: 12px; text-align: right; font-size: 13px; color: #475569;">Req/min</th>
+                <th style="padding: 12px; text-align: right; font-size: 13px; color: #475569;">Error Rate</th>
+                <th style="padding: 12px; text-align: right; font-size: 13px; color: #475569;">Latency (ms)</th>
+                <th style="padding: 12px; text-align: center; font-size: 13px; color: #475569;">Latency Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- CRITICAL: LIST ALL SERVICES FROM THE DATA - NOT JUST A FEW! -->
+            <!-- Example rows showing different severity levels: -->
+            
+            <!-- HIGH LATENCY (> 5000ms) - Use RED for truly critical -->
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 12px; font-weight: 600; color: #1e293b;">backend-hmsdeviceshadow</td>
+                <td style="padding: 12px; text-align: right; color: #0ea5e9;">4,742.7</td>
+                <td style="padding: 12px; text-align: right; color: #10b981;"><span style="background: #dcfce7; padding: 4px 8px; border-radius: 6px; font-weight: 600;">0%</span></td>
+                <td style="padding: 12px; text-align: right; color: #dc2626; font-weight: 700;">6,751.4</td>
+                <td style="padding: 12px; text-align: center;"><span style="background: #fecaca; color: #991b1b; padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 12px;">🔴 CRITICAL</span></td>
+            </tr>
+            
+            <!-- ELEVATED LATENCY (1000-5000ms) - Use YELLOW/ORANGE for anomalies -->
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 12px; font-weight: 600; color: #1e293b;">backend-hmspayment</td>
+                <td style="padding: 12px; text-align: right; color: #0ea5e9;">100.9</td>
+                <td style="padding: 12px; text-align: right; color: #10b981;"><span style="background: #dcfce7; padding: 4px 8px; border-radius: 6px; font-weight: 600;">< 0.1%</span></td>
+                <td style="padding: 12px; text-align: right; color: #d97706; font-weight: 700;">2,521.4</td>
+                <td style="padding: 12px; text-align: center;"><span style="background: #fef3c7; color: #92400e; padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 12px;">⚠️ HIGH LAT</span></td>
+            </tr>
+            
+            <!-- Continue for ALL services in the data -->
+        </tbody>
+    </table>
+</div>
+
+</div>
+
+CRITICAL REQUIREMENTS:
+1. Fill in ALL placeholders with actual data from the monitoring summary
+2. In the "Services with Elevated Metrics" table, include EVERY SINGLE service that has issues
+3. DO NOT truncate the table - show ALL services mentioned in the data
+4. Use the exact HTML structure above
+5. NO Jira table (Python will add it if needed)
+6. NO Tools Executed section
+7. Return ONLY the HTML (start with <div, end with </div>)
+
+LATENCY SEVERITY COLOR GUIDELINES:
+- **🟢 HEALTHY** (< 1000ms): No row needed, count as healthy
+- **🟡 HIGH LAT** (1000-5000ms): Use YELLOW/ORANGE colors
+  - Background: #fef3c7 (light yellow)
+  - Text: #92400e (dark orange)
+  - Badge: "⚠️ HIGH LAT"
+- **🔴 CRITICAL** (> 5000ms): Use RED colors only for truly critical
+  - Background: #fecaca (light red)
+  - Text: #991b1b (dark red)
+  - Badge: "🔴 CRITICAL"
+
+For Error Rate:
+- < 0.1%: Green badge
+- 0.1% - 1%: Yellow badge  
+- > 1%: Orange badge
+- > 5%: Red badge (critical)
+
+PAGERDUTY ANALYSIS REQUIREMENTS:
+- If NO active incidents (triggered/acknowledged), check "Recently Resolved (Last 24 hours)"
+- Analyze patterns: If multiple incidents resolved in last 24 hours, flag as potential instability
+- Recurring issues: If same service had 3+ incidents in 7 days, highlight as recurring pattern
+- Include in Key Findings: Mention recently resolved incidents and any patterns detected
+- Example: "No active PagerDuty alerts, but 5 incidents were resolved in the last 24 hours for hmspayment - potential recurring issue"
+
+EXCLUSIONS - DO NOT REPORT AS PROBLEMS:
+- Different versions across environments: It is NORMAL for services to have different versions in dev/qa/production
+- DO NOT flag version differences as an issue, anomaly, or finding
+- Only mention versions if specifically asked or if there is a deployment-related incident"""
+                    else:
+                        # For non-monitoring queries (Jira-focused), use the summary format
+                        response_prompt = f"""Analyze service health data and create visual HTML report summary.
+
+Question: "{question}"
+
+DATA FROM TOOLS:
+{all_context}
+
+TASK:
+Generate HTML report with:
+1. Hero header (service name, gradient background)
+2. Status metrics cards (count of tickets by status)
+3. Key findings (3 most important insights)
+
+IMPORTANT:
+- DO NOT generate Jira tickets table (will be added separately)
+- DO NOT generate Recommendations section (will be added separately)
+- NO "Tools Executed" section
+- Return ONLY HTML for the summary/analysis
+- Focus on insights, NOT listing all tickets
+
+PAGERDUTY ANALYSIS:
+- Always check for recently resolved incidents (last 24 hours) even if no active alerts
+- Flag recurring patterns: If 3+ incidents for same service in 7 days, mention as potential instability
+- Include in Key Findings: Mention recently resolved incidents and any patterns detected
+
+EXCLUSIONS - DO NOT REPORT AS PROBLEMS:
+- Different versions across environments: It is NORMAL for services to have different versions in dev/qa/production
+- DO NOT flag version differences as an issue or finding
+- Only mention versions if specifically asked or if there is a deployment-related incident
+
+HTML structure for summary:
+
+<div style="font-family: 'Inter', sans-serif; padding: 20px;">
+
+<!-- Hero Header -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); padding: 32px; border-radius: 16px; margin-bottom: 28px;">
+    <h1 style="color: white; font-size: 28px; margin: 0;">🚀 Service Health: backend-hmsguard</h1>
+</div>
+
+<!-- Status Metrics Grid -->
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px;">
+    <div style="background: #fef3c7; padding: 20px; border-radius: 12px; border: 2px solid #fbbf24;">
+        <div style="font-size: 12px; color: #92400e; font-weight: 700;">⚠️ OPEN</div>
+        <div style="font-size: 36px; color: #78350f; font-weight: 900;">15</div>
+    </div>
+    <div style="background: #dbeafe; padding: 20px; border-radius: 12px; border: 2px solid #3b82f6;">
+        <div style="font-size: 12px; color: #1e40af; font-weight: 700;">🔧 IN PROGRESS</div>
+        <div style="font-size: 36px; color: #1e3a8a; font-weight: 900;">8</div>
+    </div>
+    <div style="background: #dcfce7; padding: 20px; border-radius: 12px; border: 2px solid #22c55e;">
+        <div style="font-size: 12px; color: #166534; font-weight: 700;">✅ RESOLVED</div>
+        <div style="font-size: 36px; color: #14532d; font-weight: 900;">2</div>
+    </div>
+</div>
+
+<!-- Key Findings -->
+<div style="background: white; padding: 28px; border-radius: 16px; border: 1px solid #e5e7eb;">
+    <h2 style="font-size: 22px; margin: 0 0 20px 0;">🔍 Key Findings</h2>
+    <div style="padding: 18px; background: #fef2f2; border-radius: 10px; border-left: 5px solid #ef4444; margin-bottom: 12px;">
+        <div style="font-weight: 700; color: #991b1b; margin-bottom: 6px;">⚠️ Critical Issue</div>
+        <div style="color: #64748b;">Describe most critical issue from data</div>
+    </div>
+    <div style="padding: 18px; background: #fffbeb; border-radius: 10px; border-left: 5px solid #f59e0b; margin-bottom: 12px;">
+        <div style="font-weight: 700; color: #92400e; margin-bottom: 6px;">📊 Active Work</div>
+        <div style="color: #64748b;">Summarize ongoing work/tickets</div>
+    </div>
+    <div style="padding: 18px; background: #f0fdf4; border-radius: 10px; border-left: 5px solid #22c55e;">
+        <div style="font-weight: 700; color: #166534; margin-bottom: 6px;">✅ Positive Signals</div>
+        <div style="color: #64748b;">Any good news or healthy metrics</div>
+    </div>
+</div>
+
+</div>
+
+CRITICAL RULES:
+- Return ONLY the HTML above (hero + metrics + findings)
+- NO Jira table (Python will generate it)
+- NO Recommendations (Python will add them)
+- NO "Tools Executed" section
+- Start with <div and end with </div>"""
+                
+                else:
+                    # No tools needed - direct answer (simplified format)
+                    response_prompt = f"""You are GocBedrock, an AI assistant for Arlo infrastructure.
+
+User question: "{question}"
+
+This is an informational question. Use this EXACT HTML structure - BE VISUAL:
+
+<div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-width: 100%;">
+    
+    <!-- Hero Header -->
+    <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%); padding: 28px 24px; border-radius: 12px; margin-bottom: 28px; box-shadow: 0 12px 48px rgba(139, 92, 246, 0.3);">
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <span style="font-size: 36px;">💬</span>
+            <h1 style="margin: 0; color: white; font-size: 26px; font-weight: 800; letter-spacing: -0.8px;">Information & Guidance</h1>
+        </div>
+    </div>
+    
+    <!-- Main Content Card - VISUAL -->
+    <div style="background: white; padding: 26px; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 6px 20px rgba(0,0,0,0.1);">
+        <div style="color: #334155; font-size: 15px; line-height: 1.9; letter-spacing: 0.01em;">
+            [Explanation with icons, visual elements, short paragraphs. Use <div> cards with emojis for key points]
+        </div>
+    </div>
+    
+</div>
+
+RULES:
+- Use emojis and icons generously
+- Break into short visual cards with emoji icons
+- Use <strong> for key terms
+- Include examples in visual boxes
+- Be concise - max 2-3 sentences per point
+
+Return ONLY the HTML (no markdown blocks)."""
+                
+                response_html = ask_bedrock(response_prompt, selected_tools=None)
+                
+                # Clean up any remaining markdown code blocks
+                if '```' in response_html:
+                    json_match = re.search(r'```(?:html)?\s*\n(.*?)\n```', response_html, re.DOTALL)
+                    if json_match:
+                        response_html = json_match.group(1)
+                
+                # SPECIFIC cleanup - ONLY remove "Tools Executed" sections, NOT Jira or Recommendations
+                # 1. Remove ONLY divs with cyan/teal background that contain "Tools Executed"
+                response_html = re.sub(r'(?i)<div[^>]*background[^>]*(?:#e0f2fe|#cfe9f8|#bae6fd)[^>]*>[\s\S]*?(?:🔧\s*)?tools?\s+executed[\s\S]*?</div>', '', response_html, flags=re.DOTALL)
+                # 2. Remove h2/h3 with EXACT text "Tools Executed" (don't touch other headings)
+                response_html = re.sub(r'(?i)<h[23][^>]*>\s*(?:🔧|📊)?\s*tools?\s+executed:?\s*</h[23]>', '', response_html)
+                # 3. Remove bullet lists ONLY if they say "Tools Executed:" at start
+                response_html = re.sub(r'(?i)<ul[^>]*>\s*<li[^>]*>(?:🔧|📊)?\s*tools?\s+executed:?[\s\S]*?</ul>', '', response_html, flags=re.DOTALL)
+                # 4. Remove standalone line that starts with "Tools Executed:"
+                response_html = re.sub(r'(?i)^(?:🔧|📊)?\s*tools?\s+executed:.*?$', '', response_html, flags=re.MULTILINE)
+                
+                print(f"✅ Generated response: {len(response_html)} characters (cleaned)")
+                
+                # PYTHON-SIDE: Extract ALL Jira tickets from MCP tool results
+                jira_tickets = []
+                for tr in tool_results:
+                    if tr['tool'] == 'jira_search':
+                        result_text = tr['result']
+                        print(f"🎫 Extracting Jira tickets from jira_search result ({len(result_text)} chars)")
+                        print(f"📄 First 500 chars: {result_text[:500]}")
+                        
+                        # MARKDOWN TABLE FORMAT (most common from MCP)
+                        # | GOC-10809 | Alert Modification for MAR 2026 | In Progress | Amisha Kabra |
+                        markdown_pattern = r'\|\s*([A-Z]+-\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|'
+                        markdown_matches = list(re.finditer(markdown_pattern, result_text, re.MULTILINE))
+                        
+                        print(f"🔍 Found {len(markdown_matches)} markdown table rows")
+                        
+                        if markdown_matches:
+                            # Skip header row (usually first match)
+                            for match in markdown_matches[1:]:  # Skip first row (headers)
+                                ticket_id = match.group(1).strip()
+                                summary = match.group(2).strip()
+                                status = match.group(3).strip()
+                                assignee = match.group(4).strip()
+                                
+                                # Skip separator rows (---)
+                                if '---' in ticket_id or 'Key' in ticket_id:
+                                    continue
+                                
+                                jira_tickets.append({
+                                    'id': ticket_id,
+                                    'summary': summary,
+                                    'status': status if status else 'Unknown',
+                                    'assignee': assignee if assignee else 'Unassigned'
+                                })
+                                print(f"  ✓ {ticket_id}: {summary[:60]}... [{status}]")
+                        
+                        else:
+                            # FALLBACK: Try other formats
+                            # Pattern 1: Standard format "Key: XXX-123"
+                            pattern1 = r'(?:Key|ID|Ticket):\s*([A-Z]+-\d+)[\s\S]{0,500}?Summary:\s*([^\n]+)'
+                            # Pattern 2: Just ticket ID at start of line
+                            pattern2 = r'^([A-Z]+-\d+)\s*[-:]\s*([^\n]+)'
+                            
+                            all_matches = []
+                            all_matches.extend(list(re.finditer(pattern1, result_text, re.IGNORECASE | re.MULTILINE)))
+                            all_matches.extend(list(re.finditer(pattern2, result_text, re.MULTILINE)))
+                            
+                            print(f"🔍 Fallback: Found {len(all_matches)} non-markdown matches")
+                            
+                            seen_ids = set()
+                            for match in all_matches:
+                                ticket_id = match.group(1).strip()
+                                if ticket_id in seen_ids:
+                                    continue
+                                seen_ids.add(ticket_id)
+                                
+                                summary = match.group(2).strip() if len(match.groups()) >= 2 else 'No summary'
+                                
+                                # Extract status and assignee from context
+                                ticket_context = result_text[match.start():match.start()+400]
+                                status_match = re.search(r'Status:\s*([^\n]+)', ticket_context, re.IGNORECASE)
+                                assignee_match = re.search(r'Assignee:\s*([^\n]+)', ticket_context, re.IGNORECASE)
+                                
+                                jira_tickets.append({
+                                    'id': ticket_id,
+                                    'summary': summary,
+                                    'status': status_match.group(1).strip() if status_match else 'Unknown',
+                                    'assignee': assignee_match.group(1).strip() if assignee_match else 'Unassigned'
+                                })
+                                print(f"  ✓ {ticket_id}: {summary[:60]}...")
+                
+                print(f"✅ Extracted {len(jira_tickets)} unique Jira tickets from MCP results")
+                
+                # Build Jira table HTML (Python-generated, guaranteed complete)
+                jira_table_html = ""
+                if jira_tickets:
+                    jira_table_html = f"""
+<div style='background: white; padding: 28px; border-radius: 16px; margin-top: 28px; border: 1px solid #e5e7eb;'>
+    <h2 style='font-size: 22px; margin: 0 0 20px 0; color: #0f172a;'>🎫 Jira Tickets — GOC Project ({len(jira_tickets)} tickets)</h2>
+    <table style='width: 100%; border-collapse: collapse; border: 2px solid #f1f5f9;'>
+        <thead>
+            <tr style='background: #1e293b;'>
+                <th style='padding: 14px; text-align: center; font-size: 12px; color: white; font-weight: 700; width: 60px;'>#</th>
+                <th style='padding: 14px; text-align: left; font-size: 12px; color: white; font-weight: 700; width: 140px;'>TICKET</th>
+                <th style='padding: 14px; text-align: left; font-size: 12px; color: white; font-weight: 700;'>SUMMARY</th>
+                <th style='padding: 14px; text-align: center; font-size: 12px; color: white; font-weight: 700; width: 140px;'>STATUS</th>
+                <th style='padding: 14px; text-align: left; font-size: 12px; color: white; font-weight: 700; width: 180px;'>ASSIGNEE</th>
+            </tr>
+        </thead>
+        <tbody>
+"""
+                    
+                    for idx, ticket in enumerate(jira_tickets, 1):
+                        # Determine status badge color
+                        status_upper = ticket['status'].upper()
+                        if any(kw in status_upper for kw in ['DONE', 'CLOSED', 'RESOLVED', 'COMPLETE']):
+                            badge_bg = '#dcfce7'
+                            badge_color = '#166534'
+                        elif any(kw in status_upper for kw in ['PROGRESS', 'REVIEW', 'PENDING']):
+                            badge_bg = '#dbeafe'
+                            badge_color = '#1e40af'
+                        else:  # NEW/OPEN
+                            badge_bg = '#fef3c7'
+                            badge_color = '#92400e'
+                        
+                        jira_table_html += f"""
+            <tr style='border-bottom: 1px solid #f1f5f9;'>
+                <td style='padding: 14px; text-align: center; color: #94a3b8; font-weight: 600;'>{idx}</td>
+                <td style='padding: 14px;'><a href='https://verisure.atlassian.net/browse/{ticket['id']}' target='_blank' style='color: #6366f1; font-weight: 700; text-decoration: none;'>{ticket['id']}</a></td>
+                <td style='padding: 14px; color: #334155; font-size: 14px;'>{html.escape(ticket['summary'])}</td>
+                <td style='padding: 14px; text-align: center;'><span style='padding: 5px 12px; background: {badge_bg}; color: {badge_color}; border-radius: 12px; font-size: 11px; font-weight: 700;'>{html.escape(ticket['status'].upper())}</span></td>
+                <td style='padding: 14px; color: #64748b;'>{html.escape(ticket['assignee'])}</td>
+            </tr>
+"""
+                    
+                    jira_table_html += """
+        </tbody>
+    </table>
+</div>
+"""
+                
+                # Build final HTML: Bedrock analysis + Python-generated Jira table (no suggestions)
+                final_html = f"""
+        <div style='background-color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 6px; margin-bottom: 16px;'>
+                <h2 style='margin: 0; color: white; font-size: 16px;'>
+                    🤖 GocBedrock Response (via MCP SDK + Bedrock)
+                </h2>
+            </div>
+            <div style='background-color: #f7fafc; padding: 16px; border-radius: 4px;'>
+                {response_html}
+            </div>
+            {jira_table_html}
+        </div>
+"""
+                
+                return final_html
+        
+    except Exception as e:
+        error_msg = str(e)
+        error_type = type(e).__name__
+        
+        print(f"❌ Error ({error_type}): {error_msg[:200]}")
+        import traceback
+        traceback.print_exc()
+        
+        return f"""
+        <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #c53030;'>
+                ❌ <strong>Error:</strong> {html.escape(str(e))}<br><br>
+                Make sure AWS Bedrock is configured and you are connected to Arlo VPN for MCP access.
+            </p>
+        </div>
+        """
+
+
+def ask_arlo_with_bedrock_intelligence(question: str = "", context_from_other_tools: Optional[Dict[str, str]] = None) -> str:
+    """
+    Sync wrapper for ask_arlo_with_bedrock_intelligence_async.
+    
+    Args:
+        question: The user's question/prompt (full text)
+        context_from_other_tools: Optional dict with results from other tools
+    """
+    return asyncio.run(ask_arlo_with_bedrock_intelligence_async(question, context_from_other_tools))
+
+
+def ask_arlo_sync_legacy(question: str = "") -> str:
+    """
+    LEGACY: Ask GocBedrock via MCP using HTTP with Gemini (fallback when SDK not available).
+    Uses Gemini for analysis. This is kept for backwards compatibility.
     
     Args:
         question: The user's question/prompt (full text)
@@ -1733,7 +2820,7 @@ def ask_arlo_sync(question: str = "") -> str:
         HTML formatted tool results
     """
     print("=" * 80)
-    print("🤖 ArloChat MCP - Direct Mode (HTTP Fallback)")
+    print("🤖 GocBedrock MCP - Direct Mode (HTTP Fallback - Gemini)")
     print(f"📝 Question: '{question}'")
     print(f"🌐 MCP Server: {MCP_SERVER_URL}")
     
@@ -1742,11 +2829,12 @@ def ask_arlo_sync(question: str = "") -> str:
         <div style='background-color: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 4px; margin: 8px 0;'>
             <p style='margin: 0; color: #856404;'>
                 ⚠️ <strong>No question provided.</strong><br>
-                Please enter a question to ask ArloChat.
+                Please enter a question to ask GocBedrock.
             </p>
         </div>
         """
     
+    mcp_client = None
     try:
         # Configure Gemini
         api_key = os.getenv("GEMINI_API_KEY")
@@ -1779,7 +2867,7 @@ def ask_arlo_sync(question: str = "") -> str:
         
         # Step 1: Ask Gemini to select relevant tools
         print("\n🧠 Step 1: Asking Gemini to analyze question and select tools...")
-        analysis_prompt = f"""You are ArloChat, an AI assistant that helps with Arlo infrastructure questions.
+        analysis_prompt = f"""You are GocBedrock, an AI assistant that helps with Arlo infrastructure questions.
 
 {tools_description}
 
@@ -1882,7 +2970,7 @@ Guidelines:
             for tr in tool_results:
                 context += f"**{tr['tool']}** (called because: {tr['reason']}):\n{tr['result']}\n\n"
             
-            response_prompt = f"""You are ArloChat, a helpful AI assistant for Arlo infrastructure.
+            response_prompt = f"""You are GocBedrock, a helpful AI assistant for Arlo infrastructure.
 
 User question: "{question}"
 
@@ -1902,7 +2990,7 @@ Guidelines:
 Respond in plain text with markdown formatting (NOT HTML)."""
         else:
             # No tools needed - direct answer
-            response_prompt = f"""You are ArloChat, a helpful AI assistant for Arlo infrastructure.
+            response_prompt = f"""You are GocBedrock, a helpful AI assistant for Arlo infrastructure.
 
 User question: "{question}"
 
@@ -1922,18 +3010,15 @@ Respond in plain text with markdown formatting (NOT HTML)."""
         
         print(f"✅ Generated response: {len(response_text)} characters")
         
-        # Close MCP client
-        mcp_client.close()
-        
         # Convert markdown to HTML for display
         response_html = markdown_to_html(response_text)
         
-        # Wrap in ArloChat styled container
+        # Wrap in GocBedrock styled container
         final_html = f"""
         <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                     padding: 12px; border-radius: 6px; margin: 8px 0; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
             <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>
-                🤖 ArloChat Response
+                🤖 GocBedrock Response
             </h2>
             <p style='margin: 0; font-size: 12px; opacity: 0.95;'>
                 Conversational Mode • {len(tool_results)} tool(s) used
@@ -1958,6 +3043,13 @@ Respond in plain text with markdown formatting (NOT HTML)."""
             </p>
         </div>
         """
+    finally:
+        # Always close MCP client to cleanup SSE connection
+        if mcp_client:
+            try:
+                mcp_client.close()
+            except:
+                pass
 
 
 def markdown_to_html(markdown_text: str) -> str:
@@ -2047,25 +3139,21 @@ def format_inline_markdown(text: str) -> str:
     return text
 
 
-def ask_arlo(question: str = "") -> str:
+def ask_arlo(question: str = "", context_from_other_tools: Optional[Dict[str, str]] = None) -> str:
     """
-    Ask ArloChat via MCP - automatically chooses best available method.
+    Ask GocBedrock via MCP - uses Bedrock for intelligent tool selection and execution.
     
-    If MCP SDK is available (Python 3.10+), uses async SDK mode.
-    Otherwise, falls back to HTTP mode (Python 3.9+ compatible).
+    This function:
+    1. Connects to MCP server to get available tools
+    2. Uses Bedrock to analyze the question and select appropriate MCP tools
+    3. Executes the selected MCP tools
+    4. Uses Bedrock to generate a conversational response with the results
     
     Args:
         question: The user's question/prompt (full text)
+        context_from_other_tools: Optional dict with results from other tools (e.g., DD_Red_Metrics, DD_Search)
     Returns:
         HTML formatted conversational response
     """
-    if MCP_SDK_AVAILABLE:
-        # Use async SDK mode (better performance, native MCP support)
-        try:
-            return asyncio.run(ask_arlo_async(question))
-        except Exception as e:
-            print(f"⚠️  Async SDK failed, falling back to HTTP mode: {e}")
-            return ask_arlo_sync(question)
-    else:
-        # Use HTTP fallback mode (compatible with Python 3.9+)
-        return ask_arlo_sync(question)
+    # Use Bedrock-powered intelligent MCP interaction
+    return ask_arlo_with_bedrock_intelligence(question, context_from_other_tools)

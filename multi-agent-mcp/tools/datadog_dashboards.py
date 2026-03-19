@@ -11,6 +11,21 @@ from functools import lru_cache
 
 load_dotenv()
 
+__all__ = [
+    'read_datadog_dashboards',
+    'read_datadog_errors_only',
+    'read_datadog_adt',
+    'read_datadog_adt_errors_only',
+    'read_datadog_samsung',
+    'read_datadog_samsung_errors_only',
+    'read_datadog_redmetrics_us',
+    'read_datadog_all_errors',
+    'read_datadog_failed_pods',
+    'read_datadog_403_errors',
+    'search_datadog_dashboards',
+    'search_datadog_services'
+]
+
 def format_timerange(hours: int) -> str:
     """Format timerange hours into readable text"""
     if hours == 1:
@@ -3009,6 +3024,793 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
         return f"<p>❌ Error reading ADT errors: {html.escape(str(e))}</p>"
 
 
+def read_datadog_samsung(query: str, timerange_hours: int = 4) -> str:
+    """
+    Shows the RED - Metrics - Samsung dashboard with embedded graphs.
+    If a service name is provided, filters widgets for that specific service.
+    Args:
+        query: Service name to filter or dashboard ID
+        timerange_hours: Number of hours to look back (default: 4)
+    """
+    print("=" * 80)
+    print("🔎 Reading Datadog Samsung Dashboard")
+    print(f"📝 Query received: '{query}'")
+    print(f"📝 Time range: {timerange_hours} hours")
+    
+    # Get Datadog credentials from environment
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "datadoghq.com")
+    
+    # Samsung dashboard ID from the provided URL
+    default_samsung_dashboard_id = "wnz-fqh-z4f"  # RED Metrics - Samsung
+    service_filter = None
+    
+    # If query provided, use it as service filter
+    if query and query.strip():
+        service_filter = query.strip()
+        print(f"🔍 Filtering Samsung dashboard for service: {service_filter}")
+    else:
+        print("📊 Showing RED - Metrics - Samsung dashboard")
+    
+    if not dd_api_key or not dd_app_key:
+        return "<p>❌ Datadog API keys not configured. Please set DATADOG_API_KEY and DATADOG_APP_KEY in your .env file.</p>"
+    
+    output = ""
+    
+    try:
+        # Calculate time range
+        current_time = int(time.time())
+        from_time = current_time - (timerange_hours * 3600)  # Convert hours to seconds
+        
+        # Get dashboard details
+        print(f"📊 Fetching Samsung dashboard: {default_samsung_dashboard_id}")
+        details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, default_samsung_dashboard_id)
+        
+        if not details or 'widgets' not in details:
+            return "<p>❌ Could not fetch Samsung dashboard details. Please verify the dashboard ID.</p>"
+        
+        dash_id = default_samsung_dashboard_id
+        dash_title = details.get('title', 'RED - Metrics - Samsung')
+        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        
+        # Generate timestamp range display
+        timestamp_range_html = format_timestamp_range(from_time, current_time)
+        
+        # Dashboard header (purple/blue gradient for Samsung)
+        output += f"""
+        <div style='background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); 
+                    padding: 12px; 
+                    border-radius: 6px; 
+                    margin: 0 0 8px 0;
+                    color: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📱 {html.escape(dash_title)}</h2>
+            <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
+                Real-time Samsung network metrics from Datadog
+            </p>
+            <p style='margin: 0 0 8px 0;'>
+                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
+                    Open Interactive Dashboard →
+                </a>
+            </p>
+            {timestamp_range_html}
+        </div>
+        """
+        
+        if service_filter:
+            output += f"""
+            <div style='margin: 8px 0; padding: 6px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
+                <p style='margin: 0; font-size: 12px; color: #856404;'>
+                    🔍 <strong>Filtering for service:</strong> {html.escape(service_filter)}
+                </p>
+            </div>
+            """
+        
+        # Extract and expand widgets
+        widgets = details.get('widgets', [])
+        expanded_widgets = []
+        
+        for widget in widgets:
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', 'unknown')
+            
+            # Expand group widgets
+            if widget_type == 'group':
+                group_widgets = widget_def.get('widgets', [])
+                for group_widget in group_widgets:
+                    expanded_widgets.append(group_widget)
+            else:
+                expanded_widgets.append(widget)
+        
+        # Filter widgets if service filter provided
+        if service_filter:
+            filtered_widgets = []
+            for widget in expanded_widgets:
+                widget_def = widget.get('definition', {})
+                widget_title = widget_def.get('title', '').lower()
+                
+                # Check if service name appears in widget title
+                if service_filter.lower() in widget_title:
+                    filtered_widgets.append(widget)
+            
+            widgets_to_show = filtered_widgets
+            print(f"Found {len(filtered_widgets)} Samsung widgets matching '{service_filter}'")
+        else:
+            widgets_to_show = expanded_widgets
+        
+        if len(widgets_to_show) == 0:
+            return f"<p>⚠️ No widgets found{' for service: ' + service_filter if service_filter else ''}</p>"
+        
+        # Similar widget rendering as read_datadog_dashboards
+        output += f"""
+        <div style='background-color: #ffffff; padding: 6px; border-radius: 4px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.06);'>
+            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #3b82f6;'>
+                <h3 style='margin: 0; color: #3b82f6; font-size: 14px;'>📱 Samsung Dashboard Widgets ({len(widgets_to_show)})</h3>
+                <div style='text-align: right;'>
+                    <div style='font-size: 11px; color: #666;'>{time.strftime('%H:%M:%S')}</div>
+                </div>
+            </div>
+            <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;'>
+        """
+        
+        # OPTIMIZATION: Three-phase processing for parallel API calls
+        widget_count = 0
+        chart_scripts = []
+        
+        # Phase 1: Collect all queries
+        print(f"🚀 Samsung Phase 1: Collecting metric queries...")
+        all_queries = {}
+        widget_metadata = []
+        
+        for widget in widgets_to_show:
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', 'unknown')
+            
+            if widget_type != 'trace_service':
+                widget_metadata.append({'widget': widget, 'queries_keys': None})
+                continue
+            
+            service = widget_def.get('service', 'Unknown')
+            env = widget_def.get('env', 'production')
+            show_hits = widget_def.get('show_hits', True)
+            show_errors = widget_def.get('show_errors', True)
+            show_latency = widget_def.get('show_latency', True)
+            
+            queries_keys = {
+                'requests': f"{service}_{env}_requests",
+                'errors': f"{service}_{env}_errors",
+                'latency_avg': f"{service}_{env}_latency_avg",
+                'latency_min': f"{service}_{env}_latency_min",
+                'latency_max': f"{service}_{env}_latency_max"
+            }
+            
+            if show_hits:
+                all_queries[queries_keys['requests']] = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
+            if show_errors:
+                all_queries[queries_keys['errors']] = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
+            if show_latency:
+                all_queries[queries_keys['latency_avg']] = f"avg:trace.servlet.request.duration{{service:{service},env:{env}}}"
+                all_queries[queries_keys['latency_min']] = f"min:trace.servlet.request.duration{{service:{service},env:{env}}}"
+                all_queries[queries_keys['latency_max']] = f"max:trace.servlet.request.duration{{service:{service},env:{env}}}"
+            
+            widget_metadata.append({'widget': widget, 'queries_keys': queries_keys})
+        
+        # Phase 2: Execute all queries in parallel
+        print(f"🚀 Samsung Phase 2: Executing {len(all_queries)} queries in parallel...")
+        parallel_start = time.time()
+        all_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, all_queries, from_time, current_time, max_workers=15)
+        print(f"✅ Samsung parallel execution: {time.time() - parallel_start:.2f}s")
+        
+        # Phase 3: Render widgets with pre-fetched data
+        print(f"🚀 Samsung Phase 3: Rendering widgets...")
+        
+        for meta in widget_metadata:
+            widget = meta['widget']
+            queries_keys = meta['queries_keys']
+            
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', 'unknown')
+            widget_title = widget_def.get('title', 'Untitled Widget')
+            
+            if widget_type in ['note', 'free_text', 'iframe']:
+                continue
+            
+            widget_count += 1
+            
+            service_info = None
+            if widget_type == 'trace_service':
+                service_info = {
+                    'service': widget_def.get('service', 'Unknown'),
+                    'env': widget_def.get('env', 'production'),
+                    'span_name': widget_def.get('span_name', 'N/A'),
+                    'show_hits': widget_def.get('show_hits', True),
+                    'show_errors': widget_def.get('show_errors', True),
+                    'show_latency': widget_def.get('show_latency', True),
+                    'show_breakdown': widget_def.get('show_breakdown', True),
+                    'show_distribution': widget_def.get('show_distribution', True),
+                    'show_resource_list': widget_def.get('show_resource_list', False),
+                }
+            
+            if service_info and queries_keys:
+                service = service_info['service']
+                env = service_info['env']
+                
+                metrics_data = {}
+                chart_data = {'requests': {}, 'errors': {}, 'latency': {}}
+                
+                # Get requests data from pre-fetched results
+                if service_info['show_hits'] and queries_keys['requests'] in all_results:
+                    requests_data = all_results[queries_keys['requests']]
+                    
+                    if requests_data and 'series' in requests_data and len(requests_data['series']) > 0:
+                        series = requests_data['series'][0]
+                        if 'pointlist' in series and len(series['pointlist']) > 0:
+                            chart_data['requests']['labels'] = [int(p[0]) for p in series['pointlist']]
+                            chart_data['requests']['values'] = [p[1] if len(p) > 1 else 0 for p in series['pointlist']]
+                            total_requests = series['pointlist'][-1][1] if len(series['pointlist'][-1]) > 1 else 0
+                            metrics_data['requests'] = f"{total_requests:.1f} req/s"
+                        else:
+                            metrics_data['requests'] = "0 req/s"
+                    else:
+                        metrics_data['requests'] = "0 req/s"
+                
+                # Get errors data from pre-fetched results
+                if service_info['show_errors'] and queries_keys['errors'] in all_results:
+                    errors_data = all_results[queries_keys['errors']]
+                    error_count = 0
+                    
+                    if errors_data and 'series' in errors_data and len(errors_data['series']) > 0:
+                        series = errors_data['series'][0]
+                        if 'pointlist' in series and len(series['pointlist']) > 0:
+                            error_count = series['pointlist'][-1][1] if len(series['pointlist'][-1]) > 1 else 0
+                            chart_data['errors'] = {
+                                'labels': [int(p[0]) for p in series['pointlist']],
+                                'values': [p[1] if len(p) > 1 else 0 for p in series['pointlist']]
+                            }
+                    
+                    # Calculate error percentage
+                    total_requests = 0
+                    if chart_data.get('requests', {}).get('values'):
+                        total_requests = sum(chart_data['requests']['values'])
+                    
+                    error_percentage = 0
+                    if total_requests > 0 and error_count > 0:
+                        error_percentage = (error_count / total_requests) * 100
+                    
+                    error_class = "error-high" if error_count > 0 else "error-none"
+                    metrics_data['errors'] = f"<span class='{error_class}'>{error_count:.1f} errors ({error_percentage:.2f}%)</span>"
+                
+                # Get latency data from pre-fetched results
+                if service_info['show_latency']:
+                    latency_values = []
+                    if queries_keys['latency_avg'] in all_results:
+                        latency_data = all_results[queries_keys['latency_avg']]
+                        if latency_data and 'series' in latency_data and len(latency_data['series']) > 0:
+                            series = latency_data['series'][0]
+                            if 'pointlist' in series and len(series['pointlist']) > 0:
+                                latency_values = [p[1] * 1000 for p in series['pointlist'] if len(p) > 1]
+                                chart_data['latency'] = {
+                                    'labels': [int(p[0]) for p in series['pointlist']],
+                                    'values': latency_values
+                                }
+                    
+                    if latency_values:
+                        avg_latency = sum(latency_values) / len(latency_values)
+                        min_latency = min(latency_values)
+                        max_latency = max(latency_values)
+                        metrics_data['latency'] = f"{avg_latency:.0f}ms (min: {min_latency:.0f}, max: {max_latency:.0f})"
+                    else:
+                        metrics_data['latency'] = "N/A"
+                
+                # Render service card with charts
+                chart_id_base = f"samsung_chart_{widget_count}"
+                
+                output += f"""
+                <div style='background-color: #f9fafb; padding: 10px; border-radius: 4px; border: 1px solid #e5e7eb; transition: all 0.2s;' 
+                     onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 2px 8px rgba(59,130,246,0.2)';" 
+                     onmouseout="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none';">
+                    <div style='margin-bottom: 6px;'>
+                        <div style='font-weight: bold; color: #1f2937; font-size: 13px; margin-bottom: 2px;'>
+                            📱 {html.escape(service)} 
+                            <span style='background-color: #dbeafe; color: #1e40af; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 4px;'>
+                                {html.escape(env)}
+                            </span>
+                        </div>
+                        <div style='font-size: 10px; color: #6b7280;'>Samsung Network</div>
+                    </div>
+                    
+                    <div style='display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 8px;'>
+                """
+                
+                if 'requests' in metrics_data:
+                    output += f"<div style='font-size: 11px;'><strong>📊 Requests:</strong> {metrics_data['requests']}</div>"
+                if 'errors' in metrics_data:
+                    output += f"<div style='font-size: 11px;'><strong>❌ Errors:</strong> {metrics_data['errors']}</div>"
+                if 'latency' in metrics_data:
+                    output += f"<div style='font-size: 11px;'><strong>⏱️ Latency:</strong> {metrics_data['latency']}</div>"
+                
+                output += "</div>"
+                
+                # Render charts
+                if chart_data.get('requests', {}).get('values'):
+                    output += f"""
+                    <div style='margin-bottom: 6px;'>
+                        <canvas id='{chart_id_base}_requests' width='400' height='150' style='max-width: 100%;'></canvas>
+                    </div>
+                    """
+                    chart_scripts.append(f"""
+                        createLineChart('{chart_id_base}_requests', 
+                            {json.dumps(chart_data['requests']['labels'])}, 
+                            {json.dumps(chart_data['requests']['values'])}, 
+                            'Requests', 
+                            'rgb(59, 130, 246)');
+                    """)
+                
+                if chart_data.get('errors', {}).get('values'):
+                    output += f"""
+                    <div style='margin-bottom: 6px;'>
+                        <canvas id='{chart_id_base}_errors' width='400' height='120' style='max-width: 100%;'></canvas>
+                    </div>
+                    """
+                    chart_scripts.append(f"""
+                        createLineChart('{chart_id_base}_errors', 
+                            {json.dumps(chart_data['errors']['labels'])}, 
+                            {json.dumps(chart_data['errors']['values'])}, 
+                            'Errors', 
+                            'rgb(239, 68, 68)');
+                    """)
+                
+                if chart_data.get('latency', {}).get('values'):
+                    output += f"""
+                    <div>
+                        <canvas id='{chart_id_base}_latency' width='400' height='120' style='max-width: 100%;'></canvas>
+                    </div>
+                    """
+                    chart_scripts.append(f"""
+                        createLineChart('{chart_id_base}_latency', 
+                            {json.dumps(chart_data['latency']['labels'])}, 
+                            {json.dumps(chart_data['latency']['values'])}, 
+                            'Latency (ms)', 
+                            'rgb(251, 191, 36)');
+                    """)
+                
+                output += "</div>"
+        
+        output += """
+            </div>
+        </div>
+        """
+        
+        # Add Chart.js rendering script
+        if chart_scripts:
+            output += """
+            <script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'></script>
+            <script>
+            function createLineChart(canvasId, labels, data, label, color) {
+                const ctx = document.getElementById(canvasId);
+                if (!ctx) return;
+                
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels.map(ts => new Date(ts).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})),
+                        datasets: [{
+                            label: label,
+                            data: data,
+                            borderColor: color,
+                            backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: { display: true, grid: { display: false } },
+                            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
+                        }
+                    }
+                });
+            }
+            """
+            for script in chart_scripts:
+                output += script
+            output += "</script>"
+        
+        print(f"✅ Samsung dashboard: rendered {widget_count} widgets")
+        return output
+        
+    except Exception as e:
+        print(f"❌ Error reading Samsung dashboard: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"<p>❌ Error reading Samsung dashboard: {html.escape(str(e))}</p>"
+
+
+def read_datadog_samsung_errors_only(query: str = "", timerange_hours: int = 4) -> str:
+    """
+    Shows only services from RED Metrics - Samsung dashboard with errors > 0.
+    If a service name is provided, filters widgets for that specific service.
+    Args:
+        query: Service name to filter
+        timerange_hours: Number of hours to look back (default: 4)
+    """
+    print("=" * 80)
+    print("🚨 Reading Datadog Samsung Errors Only")
+    print(f"📝 Query received: '{query}'")
+    print(f"📝 Time range: {timerange_hours} hours")
+    
+    # Get Datadog credentials from environment
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "datadoghq.com")
+    
+    # Samsung dashboard ID
+    default_samsung_dashboard_id = "wnz-fqh-z4f"  # RED Metrics - Samsung
+    service_filter = None
+    
+    # If query provided, use it as service filter
+    if query and query.strip():
+        service_filter = query.strip()
+        print(f"🔍 Filtering Samsung errors for service: {service_filter}")
+    else:
+        print(f"🚨 Showing all Samsung services with errors > 0 (last {timerange_hours} hours)")
+    
+    if not dd_api_key or not dd_app_key:
+        return "<p>❌ Datadog API keys not configured. Please set DATADOG_API_KEY and DATADOG_APP_KEY in your .env file.</p>"
+    
+    output = ""
+    
+    try:
+        # Get dashboard details
+        details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, default_samsung_dashboard_id)
+        
+        if not details or 'widgets' not in details:
+            return "<p>❌ Could not fetch Samsung dashboard details</p>"
+        
+        dash_id = default_samsung_dashboard_id
+        dash_title = details.get('title', 'RED - Metrics - Samsung')
+        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        
+        # Calculate timestamps for display
+        import time
+        current_time = int(time.time())
+        from_time = current_time - (timerange_hours * 3600)
+        timestamp_range_html = format_timestamp_range(from_time, current_time)
+        
+        # Dashboard header
+        output += f"""
+        <div style='background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); 
+                    padding: 12px; 
+                    border-radius: 6px; 
+                    margin: 0 0 8px 0;
+                    color: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>🚨 Samsung Services with Errors</h2>
+            <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
+                Samsung network services with active errors
+            </p>
+            <p style='margin: 0 0 8px 0;'>
+                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
+                    Open Interactive Dashboard →
+                </a>
+            </p>
+            {timestamp_range_html}
+        </div>
+        """
+        
+        if service_filter:
+            output += f"""
+            <div style='margin: 8px 0; padding: 6px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
+                <p style='margin: 0; font-size: 12px; color: #856404;'>
+                    🔍 <strong>Filtering for service:</strong> {html.escape(service_filter)}
+                </p>
+            </div>
+            """
+        
+        timerange_text = format_timerange(timerange_hours)
+        output += f"""
+        <div style='margin: 8px 0; padding: 6px; background-color: #fee2e2; border-left: 3px solid #dc2626; border-radius: 4px;'>
+            <h4 style='margin: 0 0 4px 0; color: #991b1b; font-size: 14px;'>🚨 Samsung Error Widgets</h4>
+            <p style='margin: 0; font-size: 11px; color: #666;'>
+                Showing only Samsung widgets with <strong>errors > 0</strong> from the {timerange_text}.
+            </p>
+        </div>
+        """
+        
+        # Extract widgets
+        widgets = details.get('widgets', [])
+        expanded_widgets = []
+        for widget in widgets:
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', '')
+            
+            if widget_type == 'group':
+                group_widgets = widget_def.get('widgets', [])
+                for group_widget in group_widgets:
+                    expanded_widgets.append(group_widget)
+            else:
+                expanded_widgets.append(widget)
+        
+        # Filter for trace_service widgets
+        trace_widgets = [w for w in expanded_widgets if w.get('definition', {}).get('type') == 'trace_service']
+        
+        # Filter by service name if provided
+        if service_filter:
+            trace_widgets = [w for w in trace_widgets 
+                           if service_filter.lower() in w.get('definition', {}).get('title', '').lower()]
+        
+        if len(trace_widgets) == 0:
+            return f"<p>⚠️ No Samsung trace service widgets found{' for service: ' + service_filter if service_filter else ''}</p>"
+        
+        # Phase 1: Collect error queries
+        print(f"🚀 Samsung Errors Phase 1: Collecting queries for {len(trace_widgets)} widgets...")
+        error_queries = {}
+        widget_metadata = []
+        
+        for widget in trace_widgets:
+            widget_def = widget.get('definition', {})
+            service = widget_def.get('service', 'Unknown')
+            env = widget_def.get('env', 'production')
+            
+            query_key = f"{service}_{env}_errors"
+            error_queries[query_key] = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
+            widget_metadata.append({'widget': widget, 'query_key': query_key})
+        
+        # Phase 2: Execute all error queries in parallel
+        print(f"🚀 Samsung Errors Phase 2: Executing {len(error_queries)} queries in parallel...")
+        parallel_start = time.time()
+        all_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, error_queries, from_time, current_time, max_workers=15)
+        print(f"✅ Samsung errors parallel execution: {time.time() - parallel_start:.2f}s")
+        
+        # Phase 3: Filter and render widgets with errors > 0
+        print(f"🚀 Samsung Errors Phase 3: Filtering and rendering...")
+        services_with_errors = []
+        
+        for meta in widget_metadata:
+            widget = meta['widget']
+            query_key = meta['query_key']
+            
+            widget_def = widget.get('definition', {})
+            service = widget_def.get('service', 'Unknown')
+            env = widget_def.get('env', 'production')
+            
+            # Check if this service has errors
+            has_errors = False
+            error_count = 0
+            
+            if query_key in all_results:
+                errors_data = all_results[query_key]
+                if errors_data and 'series' in errors_data and len(errors_data['series']) > 0:
+                    series = errors_data['series'][0]
+                    if 'pointlist' in series and len(series['pointlist']) > 0:
+                        # Sum total errors
+                        error_count = sum(p[1] for p in series['pointlist'] if len(p) > 1)
+                        has_errors = error_count > 0
+            
+            if has_errors:
+                services_with_errors.append({
+                    'service': service,
+                    'env': env,
+                    'error_count': error_count,
+                    'widget': widget
+                })
+        
+        print(f"✅ Found {len(services_with_errors)} Samsung services with errors")
+        
+        if len(services_with_errors) == 0:
+            output += """
+            <div style='background-color: #d1fae5; padding: 12px; border-radius: 6px; border: 1px solid #10b981; margin: 8px 0;'>
+                <p style='margin: 0; color: #065f46; font-size: 13px;'>
+                    ✅ <strong>No Samsung services with errors found!</strong>
+                </p>
+                <p style='margin: 4px 0 0 0; font-size: 11px; color: #047857;'>
+                    All Samsung network services are running without errors in the selected time range.
+                </p>
+            </div>
+            """
+            return output
+        
+        # Render services with errors
+        output += f"""
+        <div style='background-color: #ffffff; padding: 6px; border-radius: 4px; margin: 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.06);'>
+            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #dc2626;'>
+                <h3 style='margin: 0; color: #dc2626; font-size: 14px;'>🚨 Samsung Services with Errors ({len(services_with_errors)})</h3>
+                <div style='text-align: right;'>
+                    <div style='font-size: 11px; color: #666;'>{time.strftime('%H:%M:%S')}</div>
+                </div>
+            </div>
+            <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;'>
+        """
+        
+        # Sort by error count descending
+        services_with_errors.sort(key=lambda x: x['error_count'], reverse=True)
+        
+        # Re-fetch full metrics for error services
+        error_service_queries = {}
+        for svc in services_with_errors:
+            service = svc['service']
+            env = svc['env']
+            error_service_queries[f"{service}_{env}_requests"] = f"trace.servlet.request.hits{{service:{service},env:{env}}}.as_count()"
+            error_service_queries[f"{service}_{env}_errors"] = f"trace.servlet.request.errors{{service:{service},env:{env}}}.as_count()"
+            error_service_queries[f"{service}_{env}_latency"] = f"avg:trace.servlet.request.duration{{service:{service},env:{env}}}"
+        
+        full_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, error_service_queries, from_time, current_time, max_workers=15)
+        
+        chart_scripts = []
+        widget_count = 0
+        
+        for svc in services_with_errors:
+            widget_count += 1
+            service = svc['service']
+            env = svc['env']
+            
+            chart_data = {'requests': {}, 'errors': {}, 'latency': {}}
+            metrics_data = {}
+            
+            # Get requests
+            req_key = f"{service}_{env}_requests"
+            if req_key in full_results:
+                requests_data = full_results[req_key]
+                if requests_data and 'series' in requests_data and len(requests_data['series']) > 0:
+                    series = requests_data['series'][0]
+                    if 'pointlist' in series and len(series['pointlist']) > 0:
+                        chart_data['requests']['labels'] = [int(p[0]) for p in series['pointlist']]
+                        chart_data['requests']['values'] = [p[1] if len(p) > 1 else 0 for p in series['pointlist']]
+                        total_requests = sum(chart_data['requests']['values'])
+                        metrics_data['requests'] = f"{total_requests:.0f} total"
+            
+            # Get errors
+            err_key = f"{service}_{env}_errors"
+            if err_key in full_results:
+                errors_data = full_results[err_key]
+                if errors_data and 'series' in errors_data and len(errors_data['series']) > 0:
+                    series = errors_data['series'][0]
+                    if 'pointlist' in series and len(series['pointlist']) > 0:
+                        chart_data['errors']['labels'] = [int(p[0]) for p in series['pointlist']]
+                        chart_data['errors']['values'] = [p[1] if len(p) > 1 else 0 for p in series['pointlist']]
+                        total_errors = sum(chart_data['errors']['values'])
+                        
+                        total_requests = sum(chart_data['requests']['values']) if chart_data.get('requests', {}).get('values') else 0
+                        error_percentage = (total_errors / total_requests * 100) if total_requests > 0 else 0
+                        metrics_data['errors'] = f"{total_errors:.0f} errors ({error_percentage:.2f}%)"
+            
+            # Get latency
+            lat_key = f"{service}_{env}_latency"
+            if lat_key in full_results:
+                latency_data = full_results[lat_key]
+                if latency_data and 'series' in latency_data and len(latency_data['series']) > 0:
+                    series = latency_data['series'][0]
+                    if 'pointlist' in series and len(series['pointlist']) > 0:
+                        latency_values = [p[1] * 1000 for p in series['pointlist'] if len(p) > 1]
+                        chart_data['latency']['labels'] = [int(p[0]) for p in series['pointlist']]
+                        chart_data['latency']['values'] = latency_values
+                        avg_latency = sum(latency_values) / len(latency_values) if latency_values else 0
+                        metrics_data['latency'] = f"{avg_latency:.0f}ms avg"
+            
+            # Render service card
+            chart_id_base = f"samsung_err_chart_{widget_count}"
+            
+            output += f"""
+            <div style='background-color: #fef2f2; padding: 10px; border-radius: 4px; border: 1px solid #fca5a5; transition: all 0.2s;' 
+                 onmouseover="this.style.borderColor='#dc2626'; this.style.boxShadow='0 2px 8px rgba(220,38,38,0.2)';" 
+                 onmouseout="this.style.borderColor='#fca5a5'; this.style.boxShadow='none';">
+                <div style='margin-bottom: 6px;'>
+                    <div style='font-weight: bold; color: #991b1b; font-size: 13px; margin-bottom: 2px;'>
+                        📱 {html.escape(service)} 
+                        <span style='background-color: #dbeafe; color: #1e40af; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 4px;'>
+                            {html.escape(env)}
+                        </span>
+                    </div>
+                    <div style='font-size: 10px; color: #6b7280;'>Samsung Network - HAS ERRORS</div>
+                </div>
+                
+                <div style='display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 8px;'>
+            """
+            
+            if 'requests' in metrics_data:
+                output += f"<div style='font-size: 11px;'><strong>📊 Requests:</strong> {metrics_data['requests']}</div>"
+            if 'errors' in metrics_data:
+                output += f"<div style='font-size: 11px; color: #dc2626;'><strong>❌ Errors:</strong> {metrics_data['errors']}</div>"
+            if 'latency' in metrics_data:
+                output += f"<div style='font-size: 11px;'><strong>⏱️ Latency:</strong> {metrics_data['latency']}</div>"
+            
+            output += "</div>"
+            
+            # Render error chart (priority)
+            if chart_data.get('errors', {}).get('values'):
+                output += f"""
+                <div style='margin-bottom: 6px;'>
+                    <canvas id='{chart_id_base}_errors' width='400' height='120' style='max-width: 100%;'></canvas>
+                </div>
+                """
+                chart_scripts.append(f"""
+                    createLineChart('{chart_id_base}_errors', 
+                        {json.dumps(chart_data['errors']['labels'])}, 
+                        {json.dumps(chart_data['errors']['values'])}, 
+                        'Errors', 
+                        'rgb(239, 68, 68)');
+                """)
+            
+            # Render requests chart
+            if chart_data.get('requests', {}).get('values'):
+                output += f"""
+                <div style='margin-bottom: 6px;'>
+                    <canvas id='{chart_id_base}_requests' width='400' height='100' style='max-width: 100%;'></canvas>
+                </div>
+                """
+                chart_scripts.append(f"""
+                    createLineChart('{chart_id_base}_requests', 
+                        {json.dumps(chart_data['requests']['labels'])}, 
+                        {json.dumps(chart_data['requests']['values'])}, 
+                        'Requests', 
+                        'rgb(59, 130, 246)');
+                """)
+            
+            output += "</div>"
+        
+        output += """
+            </div>
+        </div>
+        """
+        
+        # Add Chart.js rendering script
+        if chart_scripts:
+            output += """
+            <script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'></script>
+            <script>
+            function createLineChart(canvasId, labels, data, label, color) {
+                const ctx = document.getElementById(canvasId);
+                if (!ctx) return;
+                
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels.map(ts => new Date(ts).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})),
+                        datasets: [{
+                            label: label,
+                            data: data,
+                            borderColor: color,
+                            backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: { display: true, grid: { display: false } },
+                            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
+                        }
+                    }
+                });
+            }
+            """
+            for script in chart_scripts:
+                output += script
+            output += "</script>"
+        
+        print(f"✅ Samsung errors: rendered {len(services_with_errors)} services with errors")
+        return output
+        
+    except Exception as e:
+        print(f"❌ Error reading Samsung errors: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"<p>❌ Error reading Samsung errors: {html.escape(str(e))}</p>"
+
+
 def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
     """
     Shows services with errors > 0 from BOTH RED Metrics and RED Metrics - ADT dashboards.
@@ -3144,7 +3946,7 @@ def read_datadog_all_errors(query: str = "", timerange_hours: int = 4) -> str:
 def read_datadog_failed_pods(query: str = "", timerange_hours: int = 4) -> str:
     """
     Get Kubernetes pods with failures (ImagePullBackOff, CrashLoopBackOff, etc.)
-    that could be causing 4xx errors
+    that could be causing 4xx and 5xx errors
     """
     print("=" * 80)
     print("🚨 Datadog Failed Pods Monitor")
@@ -3552,3 +4354,1419 @@ def read_datadog_403_errors(query: str = "", timerange_hours: int = 4) -> str:
             </p>
         </div>
         """
+
+
+def search_datadog_dashboards(query: str = "", timerange: int = 4) -> str:
+    """
+    Search for Datadog dashboards by name/query
+    Lists all dashboards that match the search query with links to open them
+    
+    Args:
+        query: Search term to filter dashboards
+        timerange: Time range for dashboard links in hours (default: 4)
+    
+    Returns:
+        HTML formatted list of matching dashboards
+    """
+    timerange_hours = timerange  # Normalize parameter name
+    
+    print("=" * 80)
+    print("🔍 Searching Datadog Dashboards")
+    print(f"📝 Query: '{query}'")
+    print(f"📝 Time range: {timerange_hours} hours")
+    
+    # Get Datadog credentials from environment
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+    
+    if not dd_api_key or not dd_app_key:
+        return """
+        <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #c53030;'>
+                ❌ <strong>Datadog API keys not configured</strong><br>
+                Please set the following in your .env file:
+            </p>
+            <ul style='margin: 8px 0; padding-left: 20px; color: #c53030;'>
+                <li>DATADOG_API_KEY</li>
+                <li>DATADOG_APP_KEY</li>
+                <li>DATADOG_SITE (optional)</li>
+            </ul>
+        </div>
+        """
+    
+    # Calculate time range for dashboard URLs
+    current_time = int(time.time())
+    from_time = current_time - (timerange_hours * 3600)
+    timestamp_range_html = format_timestamp_range(from_time, current_time)
+    
+    output = f"""
+    <div style='background: linear-gradient(135deg, #632ca6 0%, #a855f7 100%); padding: 16px; border-radius: 8px; margin: 12px 0; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+        <h2 style='margin: 0 0 8px 0; color: white; font-size: 18px; font-weight: bold;'>
+            🔍 Datadog Dashboard Search
+        </h2>
+        <p style='margin: 0; font-size: 13px; opacity: 0.95;'>
+            {f"Searching for: <strong>{html.escape(query)}</strong>" if query else "Listing all available dashboards"}
+        </p>
+        {timestamp_range_html}
+    </div>
+    """
+    
+    try:
+        # Fetch all dashboards from Datadog
+        headers = {
+            "DD-API-KEY": dd_api_key,
+            "DD-APPLICATION-KEY": dd_app_key
+        }
+        
+        dashboards_url = f"https://{dd_site}/api/v1/dashboard"
+        print(f"📡 Fetching dashboards from: {dashboards_url}")
+        
+        response = requests.get(dashboards_url, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            return output + f"""
+            <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
+                <p style='margin: 0; color: #c53030;'>
+                    ❌ <strong>Error fetching dashboards</strong><br>
+                    HTTP {response.status_code}: {html.escape(response.text[:200])}
+                </p>
+            </div>
+            """
+        
+        data = response.json()
+        dashboards = data.get("dashboards", [])
+        
+        print(f"✅ Found {len(dashboards)} total dashboards")
+        
+        # Filter dashboards by query
+        if query:
+            query_lower = query.lower()
+            filtered_dashboards = []
+            for d in dashboards:
+                title = (d.get("title") or "").lower()
+                dash_id = (d.get("id") or "").lower()
+                desc = (d.get("description") or "").lower()
+                
+                if query_lower in title or query_lower in dash_id or query_lower in desc:
+                    filtered_dashboards.append(d)
+            
+            print(f"📊 Filtered to {len(filtered_dashboards)} matching dashboards")
+        else:
+            filtered_dashboards = dashboards[:50]  # Show first 50 if no query
+            print(f"📊 Showing first 50 dashboards (no query provided)")
+        
+        if len(filtered_dashboards) == 0:
+            output += f"""
+            <div style='background-color: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 4px; margin: 8px 0;'>
+                <p style='margin: 0; color: #856404;'>
+                    ⚠️ <strong>No dashboards found</strong> matching: "{html.escape(query)}"
+                </p>
+            </div>
+            """
+            return output
+        
+        # Group dashboards by type
+        timeboard_dashboards = [d for d in filtered_dashboards if d.get("type") == "custom_timeboard"]
+        screenboard_dashboards = [d for d in filtered_dashboards if d.get("type") == "custom_screenboard"]
+        
+        output += f"""
+        <div style='background-color: #f7fafc; padding: 16px; margin: 8px 0; border-radius: 6px;'>
+            <div style='margin-bottom: 12px;'>
+                <span style='font-size: 14px; font-weight: bold; color: #2d3748;'>
+                    📊 Found {len(filtered_dashboards)} dashboard{'s' if len(filtered_dashboards) != 1 else ''}
+                </span>
+                <span style='font-size: 12px; color: #4a5568; margin-left: 8px;'>
+                    ({len(timeboard_dashboards)} timeboard{'s' if len(timeboard_dashboards) != 1 else ''}, 
+                     {len(screenboard_dashboards)} screenboard{'s' if len(screenboard_dashboards) != 1 else ''})
+                </span>
+            </div>
+        """
+        
+        # Sort dashboards by modified date (most recent first)
+        filtered_dashboards.sort(key=lambda d: d.get("modified_at", ""), reverse=True)
+        
+        # Display dashboards
+        for idx, dashboard in enumerate(filtered_dashboards):
+            dashboard_id = dashboard.get("id", "")
+            dashboard_title = dashboard.get("title", "Untitled Dashboard")
+            dashboard_type = dashboard.get("type", "unknown")
+            dashboard_url = dashboard.get("url", "")
+            description = dashboard.get("description", "")
+            author_handle = dashboard.get("author_handle", "Unknown")
+            modified_at = dashboard.get("modified_at", "")
+            
+            # Build full dashboard URL with time range
+            if dashboard_url:
+                full_url = f"https://{dd_site}{dashboard_url}"
+                # Add time range parameters
+                full_url += f"?from_ts={from_time * 1000}&to_ts={current_time * 1000}&live=true"
+            else:
+                full_url = f"https://{dd_site}/dashboard/{dashboard_id}"
+            
+            # Format modified date
+            try:
+                if modified_at:
+                    from datetime import datetime
+                    modified_dt = datetime.fromisoformat(modified_at.replace("Z", "+00:00"))
+                    modified_str = modified_dt.strftime("%Y-%m-%d %H:%M")
+                else:
+                    modified_str = "Unknown"
+            except:
+                modified_str = "Unknown"
+            
+            # Dashboard type icon and color
+            if dashboard_type == "custom_timeboard":
+                type_icon = "📈"
+                type_color = "#4e79a7"
+                type_label = "Timeboard"
+            elif dashboard_type == "custom_screenboard":
+                type_icon = "📊"
+                type_color = "#f28e2c"
+                type_label = "Screenboard"
+            else:
+                type_icon = "📋"
+                type_color = "#6b7280"
+                type_label = dashboard_type
+            
+            output += f"""
+            <div style='background: white; padding: 14px; margin-bottom: 10px; border-radius: 6px; border-left: 4px solid {type_color}; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s;' onmouseover='this.style.transform="translateY(-2px)"; this.style.boxShadow="0 4px 8px rgba(0,0,0,0.15)"' onmouseout='this.style.transform="translateY(0)"; this.style.boxShadow="0 1px 3px rgba(0,0,0,0.1)"'>
+                <div style='display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;'>
+                    <div style='flex: 1;'>
+                        <div style='display: flex; align-items: center; gap: 8px; margin-bottom: 4px;'>
+                            <span style='font-size: 18px;'>{type_icon}</span>
+                            <h3 style='margin: 0; color: #2d3748; font-size: 16px; font-weight: bold;'>
+                                {html.escape(dashboard_title)}
+                            </h3>
+                        </div>
+                        {f"<p style='margin: 4px 0 0 26px; color: #4a5568; font-size: 13px;'>{html.escape(description)}</p>" if description else ""}
+                    </div>
+                    <span style='background-color: {type_color}20; color: {type_color}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; white-space: nowrap;'>
+                        {type_label}
+                    </span>
+                </div>
+                
+                <div style='margin: 8px 0; padding: 8px; background-color: #f7fafc; border-radius: 4px; font-size: 12px; color: #4a5568;'>
+                    <div style='display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;'>
+                        <span><strong>ID:</strong> <code style='background: #e2e8f0; padding: 2px 6px; border-radius: 3px;'>{html.escape(dashboard_id)}</code></span>
+                        <span><strong>Author:</strong> {html.escape(author_handle)}</span>
+                        <span><strong>Modified:</strong> {modified_str}</span>
+                    </div>
+                </div>
+                
+                <a href='{full_url}' target='_blank' style='text-decoration: none;'>
+                    <button style='
+                        background: linear-gradient(135deg, {type_color} 0%, {type_color}dd 100%);
+                        color: white;
+                        border: none;
+                        padding: 10px 16px;
+                        font-size: 13px;
+                        font-weight: bold;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        width: 100%;
+                        transition: opacity 0.2s;
+                    ' onmouseover='this.style.opacity="0.9"' onmouseout='this.style.opacity="1"'>
+                        🔗 Open Dashboard in Datadog
+                    </button>
+                </a>
+            </div>
+            """
+        
+        output += "</div>"
+        
+        # Summary footer
+        output += f"""
+        <div style='background-color: #e6fffa; padding: 12px; border-radius: 4px; border-left: 3px solid #38b2ac; margin-top: 12px;'>
+            <p style='margin: 0; color: #234e52; font-size: 13px;'>
+                <strong>💡 Tip:</strong> Click any dashboard button to open it in Datadog with the selected time range ({format_timerange(timerange_hours)}).
+            </p>
+        </div>
+        """
+        
+        print(f"✅ Dashboard search completed: {len(filtered_dashboards)} results")
+        return output
+        
+    except requests.exceptions.Timeout:
+        return output + """
+        <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #c53030;'>
+                ⏱️ <strong>Request Timeout</strong><br>
+                The request to Datadog API took too long. Please try again.
+            </p>
+        </div>
+        """
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return output + f"""
+        <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #c53030;'>
+                ❌ <strong>Error searching Datadog dashboards:</strong><br>
+                {html.escape(str(e))}
+            </p>
+        </div>
+        """
+
+
+def search_datadog_services(query: str = "", timerange: int = 4) -> str:
+    """
+    Search for Datadog APM services and display real metrics with charts
+    Shows requests, errors, and key metrics in 3 columns (one per environment)
+    
+    Args:
+        query: Service name to search (e.g., 'hmsmatter', 'payment', 'streaming')
+        timerange: Time range for metrics in hours (default: 4)
+    
+    Returns:
+        HTML with real APM metrics and charts
+    """
+    timerange_hours = timerange
+    
+    print("=" * 80)
+    print("🔍 Searching Datadog APM Services with Real Metrics")
+    print(f"📝 Query: '{query}'")
+    print(f"📝 Time range: {timerange_hours} hours")
+    
+    # Get Datadog credentials
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+    
+    if not dd_api_key or not dd_app_key:
+        return """
+        <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #c53030;'>
+                ❌ <strong>Datadog API keys not configured</strong><br>
+                Please set DATADOG_API_KEY and DATADOG_APP_KEY in .env
+            </p>
+        </div>
+        """
+    
+    # Calculate time range
+    current_time = int(time.time())
+    from_time = current_time - (timerange_hours * 3600)
+    start_ms = from_time * 1000
+    end_ms = current_time * 1000
+    
+    timestamp_range_html = format_timestamp_range(from_time, current_time)
+    
+    # Clean service query
+    service_query = query.strip().lower()
+    for prefix in ['backend-', 'api-', 'service-']:
+        if service_query.startswith(prefix):
+            service_query = service_query[len(prefix):]
+    
+    if not query:
+        return """
+        <div style='background-color: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 4px; margin: 8px 0;'>
+            <p style='margin: 0; color: #856404;'>
+                ⚠️ <strong>Please provide a service name</strong><br>
+                Example: "hmsmatter", "payment", "streaming"
+            </p>
+        </div>
+        """
+    
+    # Try common service prefixes
+    service_prefixes = ['backend-', 'api-', '']
+    
+    output = f"""
+    <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 16px; border-radius: 8px; margin: 12px 0; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+        <h2 style='margin: 0 0 8px 0; color: white; font-size: 18px; font-weight: bold;'>
+            📊 Datadog APM Service Metrics
+        </h2>
+        <p style='margin: 0; font-size: 13px; opacity: 0.95;'>
+            Service: <strong>{html.escape(query)}</strong>
+        </p>
+        {timestamp_range_html}
+    </div>
+    """
+    
+    # Environments to query
+    environments = [
+        {'name': 'goldendev', 'icon': '🟡', 'color': '#f59e0b', 'bg': '#fef3c7'},
+        {'name': 'goldenqa', 'icon': '🟢', 'color': '#10b981', 'bg': '#d1fae5'},
+    ]
+    
+    # Generate all service variants
+    service_variants = []
+    for prefix in service_prefixes:
+        variant = f"{prefix}{service_query}" if prefix else service_query
+        if variant:
+            service_variants.append(variant)
+    
+    print(f"📊 Will check {len(service_variants)} service variants: {service_variants}")
+    
+    # Fetch metrics for ALL service variants
+    all_services_data = {}
+    
+    for service_name in service_variants:
+        print(f"\n📡 Fetching metrics for: {service_name}")
+        service_metrics = {}
+        
+        for env in environments:
+            env_name = env['name']
+            print(f"  - Environment: {env_name}")
+            
+            # Try multiple latency metric patterns (Datadog has several variants)
+            # Common patterns: duration.by.service.XXp, duration.by.resource_service.XXp, or just duration
+            latency_patterns = [
+                ('trace.servlet.request.duration.by.service.95p', 'by.service'),
+                ('trace.servlet.request.duration.by.resource_service.95p', 'by.resource_service'),
+                ('p95:trace.servlet.request{{service:{service_name},env:{env_name}}}', 'p95 aggregation'),
+            ]
+            
+            # Try all patterns
+            queries = {
+                'requests': f"sum:trace.servlet.request.hits{{service:{service_name},env:{env_name}}}.as_count()",
+                'errors': f"sum:trace.servlet.request.errors{{service:{service_name},env:{env_name}}}.as_count()",
+                'latency_p50': f"avg:trace.servlet.request.duration.by.service.50p{{service:{service_name},env:{env_name}}}",
+                'latency_p95': f"avg:trace.servlet.request.duration.by.service.95p{{service:{service_name},env:{env_name}}}",
+                'latency_p99': f"avg:trace.servlet.request.duration.by.service.99p{{service:{service_name},env:{env_name}}}",
+                # Alternative patterns
+                'latency_p95_alt1': f"avg:trace.servlet.request.duration.by.resource_service.95p{{service:{service_name},env:{env_name}}}",
+                'latency_p95_alt2': f"p95:trace.servlet.request{{service:{service_name},env:{env_name}}}",
+            }
+            
+            env_metrics = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, queries, from_time, current_time, max_workers=5)
+            
+            # Debug: Check which latency metrics have data
+            lat_p95_data = env_metrics.get('latency_p95', {}).get('series', [])
+            lat_p95_alt1_data = env_metrics.get('latency_p95_alt1', {}).get('series', [])
+            lat_p95_alt2_data = env_metrics.get('latency_p95_alt2', {}).get('series', [])
+            
+            print(f"    🔍 Latency metric check for {service_name}/{env_name}:")
+            print(f"       - duration.by.service.95p: {'✅ Has data' if lat_p95_data else '❌ No data'}")
+            print(f"       - duration.by.resource_service.95p: {'✅ Has data' if lat_p95_alt1_data else '❌ No data'}")
+            print(f"       - p95:trace.servlet.request: {'✅ Has data' if lat_p95_alt2_data else '❌ No data'}")
+            
+            # Use alternative latency metric if primary doesn't have data
+            if not lat_p95_data and lat_p95_alt1_data:
+                print(f"    ↪️  Using alternative pattern: by.resource_service")
+                env_metrics['latency_p95'] = env_metrics['latency_p95_alt1']
+                env_metrics['latency_p50'] = env_metrics.get('latency_p50_alt1', {})
+                env_metrics['latency_p99'] = env_metrics.get('latency_p99_alt1', {})
+            elif not lat_p95_data and lat_p95_alt2_data:
+                print(f"    ↪️  Using alternative pattern: p95 aggregation")
+                env_metrics['latency_p95'] = env_metrics['latency_p95_alt2']
+            
+            service_metrics[env_name] = env_metrics
+            
+            # Check if we got any data
+            has_data = any([
+                env_metrics.get(k) and 
+                env_metrics[k].get('series') and 
+                len(env_metrics[k].get('series', [])) > 0
+                for k in ['requests', 'errors', 'latency_p95']  # Check key metrics only
+            ])
+            print(f"    {'✅ Has data' if has_data else '⚠️  No data'}")
+        
+        all_services_data[service_name] = service_metrics
+    
+    # Filter out service variants with NO traffic across ALL environments
+    services_with_traffic = []
+    for service_name in service_variants:
+        service_metrics = all_services_data.get(service_name, {})
+        
+        # Check if ANY environment has traffic
+        has_traffic = False
+        for env in environments:
+            env_name = env['name']
+            metrics = service_metrics.get(env_name, {})
+            requests_metric = metrics.get('requests') or {}
+            
+            # Extract total requests
+            series = requests_metric.get('series', [])
+            if series and len(series) > 0:
+                pointlist = series[0].get('pointlist', [])
+                total_requests = sum([float(p[1]) if len(p) > 1 and p[1] is not None else 0 for p in pointlist])
+                if total_requests > 0:
+                    has_traffic = True
+                    break
+        
+        if has_traffic:
+            services_with_traffic.append(service_name)
+            print(f"   ✅ {service_name}: Has traffic - will display")
+        else:
+            print(f"   ⏭️  {service_name}: No traffic in any environment - skipping")
+    
+    # If NO services have traffic, show a message
+    if not services_with_traffic:
+        output += f"""
+        <div style='padding: 16px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; margin: 12px 0;'>
+            <p style='margin: 0; color: #856404; font-size: 13px;'>
+                ⚠️ <strong>No active services found for "{html.escape(query)}"</strong><br>
+                None of the service variants (backend-, api-, or direct name) have any traffic in the monitored environments.
+            </p>
+        </div>
+        """
+        print(f"⚠️ No services with traffic found for query: {query}")
+        return output
+    
+    print(f"📊 Displaying {len(services_with_traffic)} service(s) with traffic (filtered out {len(service_variants) - len(services_with_traffic)} zero-traffic variants)")
+    
+    # Generate unique chart IDs
+    import random
+    
+    # Display each service variant that has traffic
+    for service_name in services_with_traffic:
+        service_url = f"https://{dd_site}/apm/entity/service%3A{service_name}"
+        chart_base_id = f"apm_{random.randint(1000, 9999)}"
+        
+        output += f"""
+        <div style='background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 12px 0;'>
+            <div style='display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e5e7eb;'>
+                <span style='font-size: 24px;'>🎯</span>
+                <h2 style='margin: 0; color: #2d3748; font-size: 20px; font-weight: bold;'>
+                    {html.escape(service_name)}
+                </h2>
+            </div>
+            
+            <!-- 2-Column Layout (goldendev & goldenqa) -->
+            <div style='display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px;'>
+        """
+        
+        # Get metrics for this service
+        service_metrics = all_services_data.get(service_name, {})
+        
+        # Create a column for each environment
+        for env in environments:
+            env_name = env['name']
+            env_icon = env['icon']
+            env_color = env['color']
+            env_bg = env['bg']
+            
+            metrics = service_metrics.get(env_name, {})
+            requests_metric = metrics.get('requests') or {}
+            errors_metric = metrics.get('errors') or {}
+            latency_p50_metric = metrics.get('latency_p50') or {}
+            latency_p95_metric = metrics.get('latency_p95') or {}
+            latency_p99_metric = metrics.get('latency_p99') or {}
+            
+            # Extract pointlist from series (format: [[timestamp_ms, value], ...])
+            def extract_pointlist(metric_dict):
+                series = metric_dict.get('series', [])
+                if series and len(series) > 0:
+                    return series[0].get('pointlist', [])
+                return []
+            
+            requests_points = extract_pointlist(requests_metric)
+            errors_points = extract_pointlist(errors_metric)
+            latency_p50_points = extract_pointlist(latency_p50_metric)
+            latency_p95_points = extract_pointlist(latency_p95_metric)
+            latency_p99_points = extract_pointlist(latency_p99_metric)
+            
+            # Calculate totals
+            total_requests = sum([float(p[1]) if len(p) > 1 and p[1] is not None else 0 for p in requests_points])
+            total_errors = sum([float(p[1]) if len(p) > 1 and p[1] is not None else 0 for p in errors_points])
+            error_rate = (total_errors / total_requests * 100) if total_requests > 0 else 0
+            
+            valid_latency_p95 = [float(p[1]) for p in latency_p95_points if len(p) > 1 and p[1] is not None and p[1] > 0]
+            
+            # Auto-detect units and convert appropriately
+            if valid_latency_p95:
+                avg_before_conversion = sum(valid_latency_p95) / len(valid_latency_p95)
+                
+                # Datadog duration.by.service returns in SECONDS
+                # Only skip conversion if value > 100 (unrealistic as seconds, likely already ms)
+                if avg_before_conversion > 100:
+                    avg_latency_p95 = avg_before_conversion  # Already in ms
+                    unit_note = "already ms"
+                else:
+                    avg_latency_p95 = avg_before_conversion * 1000  # Convert seconds to ms
+                    unit_note = f"converted ({avg_before_conversion:.3f}s)"
+            else:
+                avg_latency_p95 = 0
+                unit_note = "no data"
+            
+            # Debug logging
+            print(f"    📊 {service_name}/{env_name}: Requests={int(total_requests):,}, Errors={int(total_errors):,}, Latency={avg_latency_p95:.0f}ms [{unit_note}, {len(valid_latency_p95)} pts]")
+            
+            # Environment column (MUST be inside the environment loop!)
+            output += f"""
+            <div style='background: {env_bg}; padding: 14px; border-radius: 8px; border: 2px solid {env_color}40;'>
+                <div style='text-align: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid {env_color}40;'>
+                    <div style='font-size: 20px; margin-bottom: 4px;'>{env_icon}</div>
+                    <h3 style='margin: 0; color: {env_color}; font-size: 16px; font-weight: bold; text-transform: uppercase;'>
+                        {env_name}
+                    </h3>
+                </div>
+                
+                <!-- Key Metrics -->
+                <div style='background: white; padding: 10px; border-radius: 6px; margin-bottom: 12px;'>
+                    <div style='margin-bottom: 8px;'>
+                        <div style='font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: bold;'>Total Requests</div>
+                        <div style='font-size: 22px; font-weight: bold; color: #2d3748;'>{int(total_requests):,}</div>
+                    </div>
+                    <div style='margin-bottom: 8px;'>
+                        <div style='font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: bold;'>Errors</div>
+                        <div style='font-size: 22px; font-weight: bold; color: {env_color};'>{int(total_errors):,}</div>
+                    </div>
+                    <div style='margin-bottom: 8px;'>
+                        <div style='font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: bold;'>Error Rate</div>
+                        <div style='font-size: 22px; font-weight: bold; color: {"#dc2626" if error_rate > 1 else "#10b981"};'>{error_rate:.2f}%</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: bold;'>Latency P95</div>
+                        <div style='font-size: 22px; font-weight: bold; color: #2d3748;'>{avg_latency_p95:.0f}ms</div>
+                    </div>
+                </div>
+                
+            <!-- Request Chart -->
+            <div style='background: white; padding: 10px; border-radius: 6px; margin-bottom: 10px;'>
+                <div style='font-size: 12px; font-weight: bold; color: #2d3748; margin-bottom: 8px; text-align: center;'>
+                    📈 Requests Over Time
+                </div>
+                <div style='height: 120px; position: relative;'>
+                    <canvas id='{chart_base_id}_req_{env_name}'></canvas>
+                </div>
+            </div>
+            
+            <!-- Error Chart -->
+            <div style='background: white; padding: 10px; border-radius: 6px; margin-bottom: 10px;'>
+                <div style='font-size: 12px; font-weight: bold; color: #2d3748; margin-bottom: 8px; text-align: center;'>
+                    ❌ Errors Over Time
+                </div>
+                <div style='height: 120px; position: relative;'>
+                    <canvas id='{chart_base_id}_err_{env_name}'></canvas>
+                </div>
+            </div>
+            
+            <!-- Latency Chart -->
+            <div style='background: white; padding: 10px; border-radius: 6px;'>
+                <div style='font-size: 12px; font-weight: bold; color: #2d3748; margin-bottom: 8px; text-align: center;'>
+                    ⏱️ Latency (P50/P95/P99)
+                </div>
+                <div style='height: 120px; position: relative;'>
+                    <canvas id='{chart_base_id}_lat_{env_name}'></canvas>
+                </div>
+            </div>
+                
+                <!-- Link to full APM page -->
+                <a href='{service_url}?env={env_name}&start={start_ms}&end={end_ms}&paused=false' target='_blank' style='display: block; text-align: center; margin-top: 10px; padding: 8px; background: {env_color}20; color: {env_color}; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 12px; transition: all 0.2s;' onmouseover='this.style.backgroundColor="{env_color}30"' onmouseout='this.style.backgroundColor="{env_color}20"'>
+                    🔗 Open Full APM
+                </a>
+            </div>
+            """
+        
+        output += """
+            </div> <!-- End 2-column grid -->
+        </div> <!-- End white container -->
+        """
+        
+        # Generate Chart.js scripts for this service's charts
+        output += "<script>"
+        
+        for env in environments:
+            env_name = env['name']
+            env_color = env['color']
+            
+            metrics = service_metrics.get(env_name, {})
+            requests_metric = metrics.get('requests') or {}
+            errors_metric = metrics.get('errors') or {}
+            latency_p50_metric = metrics.get('latency_p50') or {}
+            latency_p95_metric = metrics.get('latency_p95') or {}
+            latency_p99_metric = metrics.get('latency_p99') or {}
+            
+            # Extract pointlist from each metric
+            def extract_pointlist(metric_dict):
+                series = metric_dict.get('series', [])
+                if series and len(series) > 0:
+                    return series[0].get('pointlist', [])
+                return []
+            
+            requests_points = extract_pointlist(requests_metric)
+            errors_points = extract_pointlist(errors_metric)
+            latency_p50_points = extract_pointlist(latency_p50_metric)
+            latency_p95_points = extract_pointlist(latency_p95_metric)
+            latency_p99_points = extract_pointlist(latency_p99_metric)
+            
+            # Prepare data for Chart.js from pointlist [[timestamp_ms, value], ...]
+            req_labels = [datetime.fromtimestamp(p[0]/1000).strftime('%H:%M') for p in requests_points if len(p) > 1]
+            req_values = [float(p[1]) if p[1] is not None else 0 for p in requests_points if len(p) > 1]
+            
+            err_labels = [datetime.fromtimestamp(p[0]/1000).strftime('%H:%M') for p in errors_points if len(p) > 1]
+            err_values = [float(p[1]) if p[1] is not None else 0 for p in errors_points if len(p) > 1]
+            
+            lat_labels = [datetime.fromtimestamp(p[0]/1000).strftime('%H:%M') for p in latency_p95_points if len(p) > 1]
+            
+            # Datadog duration.by.service metrics return in SECONDS - always convert
+            # Only skip conversion if value > 100 (likely already in ms, e.g. from a different metric type)
+            def convert_latency(value):
+                if value is None or value == 0:
+                    return 0
+                # If value > 100, likely already in milliseconds (100+ seconds = 100,000ms is unrealistic)
+                # If value <= 100, in seconds - convert to milliseconds
+                return value if value > 100 else (value * 1000)
+            
+            lat_p50_values = [convert_latency(float(p[1])) if p[1] is not None else 0 for p in latency_p50_points if len(p) > 1]
+            lat_p95_values = [convert_latency(float(p[1])) if p[1] is not None else 0 for p in latency_p95_points if len(p) > 1]
+            lat_p99_values = [convert_latency(float(p[1])) if p[1] is not None else 0 for p in latency_p99_points if len(p) > 1]
+        
+            # Request Chart
+            output += f"""
+            // Destroy previous chart instance if exists
+            if (window.chart_{chart_base_id}_req_{env_name}) {{
+                window.chart_{chart_base_id}_req_{env_name}.destroy();
+            }}
+            window.chart_{chart_base_id}_req_{env_name} = new Chart(document.getElementById('{chart_base_id}_req_{env_name}'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(req_labels)},
+                    datasets: [{{
+                        label: 'Requests',
+                        data: {json.dumps(req_values)},
+                        borderColor: '{env_color}',
+                        backgroundColor: '{env_color}20',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{ display: false }},
+                        tooltip: {{ mode: 'index', intersect: false }}
+                    }},
+                    scales: {{
+                        y: {{ 
+                            beginAtZero: true,
+                            ticks: {{ font: {{ size: 10 }} }}
+                        }},
+                        x: {{ 
+                            ticks: {{ font: {{ size: 9 }}, maxRotation: 45 }}
+                        }}
+                    }}
+                }}
+            }});
+            """
+            
+            # Error Chart
+            output += f"""
+            // Destroy previous chart instance if exists
+            if (window.chart_{chart_base_id}_err_{env_name}) {{
+                window.chart_{chart_base_id}_err_{env_name}.destroy();
+            }}
+            window.chart_{chart_base_id}_err_{env_name} = new Chart(document.getElementById('{chart_base_id}_err_{env_name}'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(err_labels)},
+                    datasets: [{{
+                        label: 'Errors',
+                        data: {json.dumps(err_values)},
+                        backgroundColor: '#dc2626',
+                        borderColor: '#dc2626',
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{ display: false }},
+                        tooltip: {{ mode: 'index', intersect: false }}
+                    }},
+                    scales: {{
+                        y: {{ 
+                            beginAtZero: true,
+                            ticks: {{ font: {{ size: 10 }} }}
+                        }},
+                        x: {{ 
+                            ticks: {{ font: {{ size: 9 }}, maxRotation: 45 }}
+                        }}
+                    }}
+                }}
+            }});
+            """
+            
+            # Latency Chart
+            output += f"""
+            // Destroy previous chart instance if exists
+            if (window.chart_{chart_base_id}_lat_{env_name}) {{
+                window.chart_{chart_base_id}_lat_{env_name}.destroy();
+            }}
+            window.chart_{chart_base_id}_lat_{env_name} = new Chart(document.getElementById('{chart_base_id}_lat_{env_name}'), {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(lat_labels)},
+                    datasets: [
+                        {{
+                            label: 'P50',
+                            data: {json.dumps(lat_p50_values)},
+                            borderColor: '#10b981',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointRadius: 2
+                        }},
+                        {{
+                            label: 'P95',
+                            data: {json.dumps(lat_p95_values)},
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointRadius: 2
+                        }},
+                        {{
+                            label: 'P99',
+                            data: {json.dumps(lat_p99_values)},
+                            borderColor: '#dc2626',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointRadius: 2
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{ 
+                            display: true,
+                            position: 'top',
+                            labels: {{ font: {{ size: 9 }} }}
+                        }},
+                        tooltip: {{ mode: 'index', intersect: false }}
+                    }},
+                    scales: {{
+                        y: {{ 
+                            beginAtZero: true,
+                            ticks: {{ font: {{ size: 10 }} }}
+                        }},
+                        x: {{ 
+                            ticks: {{ font: {{ size: 9 }}, maxRotation: 45 }}
+                        }}
+                    }}
+                }}
+            }});
+            """
+        
+        output += "</script>"
+    
+    # Summary footer (after all services)
+    output += f"""
+    <div style='background-color: #d1fae5; padding: 12px; border-radius: 4px; border-left: 3px solid #10b981; margin-top: 12px;'>
+        <p style='margin: 0; color: #065f46; font-size: 13px;'>
+            <strong>💡 Info:</strong> Showing real-time APM metrics for {len(service_variants)} service variant{'s' if len(service_variants) > 1 else ''}. Click "Open Full APM" for detailed traces.
+        </p>
+    </div>
+    """
+    
+    print(f"✅ Service metrics completed for {len(service_variants)} variants")
+    return output
+
+
+def read_datadog_redmetrics_us(query: str, timerange_hours: int = 4) -> str:
+    """
+    Shows the RED Metrics - US dashboard (qiz-7xc-fqr) with embedded graphs.
+    Uses the same advanced rendering logic as DD_Red_ADT and DD_Red_Samsung.
+    If a service name is provided, filters widgets for that specific service.
+    Args:
+        query: Service name to filter
+        timerange_hours: Number of hours to look back (default: 4)
+    """
+    print("=" * 80)
+    print("🔎 Reading Datadog RED Metrics US Dashboard")
+    print(f"📝 Query received: '{query}'")
+    print(f"📝 Time range: {timerange_hours} hours")
+    
+    # Get Datadog credentials from environment
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "datadoghq.com")
+    
+    # RED Metrics US dashboard ID
+    default_dashboard_id = "qiz-7xc-fqr"  # RED Metrics - US
+    service_filter = None
+    
+    # If query provided, use it as service filter
+    if query and query.strip():
+        service_filter = query.strip()
+        print(f"🔍 Filtering RED Metrics US dashboard for service: {service_filter}")
+    else:
+        print("📊 Showing RED Metrics - US dashboard (all services)")
+    
+    if not dd_api_key or not dd_app_key:
+        return "<p>❌ Datadog API keys not configured. Please set DATADOG_API_KEY and DATADOG_APP_KEY in your .env file.</p>"
+    
+    output = ""
+    
+    try:
+        # Calculate time range
+        current_time = int(time.time())
+        from_time = current_time - (timerange_hours * 3600)
+        
+        # Get dashboard details
+        print(f"📊 Fetching RED Metrics US dashboard: {default_dashboard_id}")
+        details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, default_dashboard_id)
+        
+        if not details or 'widgets' not in details:
+            return "<p>❌ Could not fetch RED Metrics US dashboard details. Please verify the dashboard ID.</p>"
+        
+        dash_id = default_dashboard_id
+        dash_title = details.get('title', 'RED Metrics - US')
+        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        
+        # Generate timestamp range display
+        timestamp_range_html = format_timestamp_range(from_time, current_time)
+        
+        # Dashboard header (green gradient for US)
+        output += f"""
+        <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+                    padding: 12px; 
+                    border-radius: 6px; 
+                    margin: 0 0 8px 0;
+                    color: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>🇺🇸 {html.escape(dash_title)}</h2>
+            <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
+                Real-time US region metrics from Datadog
+            </p>
+            <p style='margin: 0 0 8px 0;'>
+                <a href='{html.escape(dash_url)}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
+                    Open Interactive Dashboard →
+                </a>
+            </p>
+            {timestamp_range_html}
+        </div>
+        """
+        
+        if service_filter:
+            output += f"""
+            <div style='margin: 8px 0; padding: 6px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
+                <p style='margin: 0; font-size: 12px; color: #856404;'>
+                    🔍 <strong>Filtering for service:</strong> {html.escape(service_filter)}
+                </p>
+            </div>
+            """
+        
+        # Extract widgets BUT PRESERVE GROUPS (don't expand yet)
+        widgets = details.get('widgets', [])
+        groups = []  # Store groups with their titles
+        
+        for widget in widgets:
+            widget_def = widget.get('definition', {})
+            widget_type = widget_def.get('type', 'unknown')
+            
+            # Keep group widgets separate to maintain organization
+            if widget_type == 'group':
+                group_title = widget_def.get('title', 'Services')
+                group_widgets = widget_def.get('widgets', [])
+                groups.append({
+                    'title': group_title,
+                    'widgets': group_widgets
+                })
+                print(f"📦 Found group: {group_title} with {len(group_widgets)} widgets")
+        
+        print(f"📊 Found {len(groups)} groups in dashboard")
+        
+        # Process each group separately
+        processed_groups = []
+        
+        for group in groups:
+            group_title = group['title']
+            group_widgets = group['widgets']
+            
+            # Filter widgets in this group if service filter provided
+            filtered_group_widgets = []
+            if service_filter:
+                service_lower = service_filter.lower()
+                
+                for widget in group_widgets:
+                    widget_def = widget.get('definition', {})
+                    widget_title = widget_def.get('title', '').lower()
+                    
+                    # Match service name in title (e.g., "backend-hmsguard -> Requests")
+                    if service_lower in widget_title:
+                        filtered_group_widgets.append(widget)
+                
+                if filtered_group_widgets:
+                    print(f"   🔍 Group '{group_title}': {len(filtered_group_widgets)} widgets match filter '{service_filter}'")
+            else:
+                filtered_group_widgets = group_widgets
+            
+            # Collect services from this group
+            group_services = {}  # {service_name: [widgets]}
+            
+            for widget in filtered_group_widgets:
+                widget_def = widget.get('definition', {})
+                widget_title = widget_def.get('title', '')
+                
+                # Extract service name from title (e.g., "backend-hmsguard -> Requests")
+                if widget_title and '->' in widget_title:
+                    import re
+                    title_match = re.match(r'^([a-zA-Z0-9\-_]+)\s*->', widget_title)
+                    if title_match:
+                        service_name = title_match.group(1)
+                        if service_name not in group_services:
+                            group_services[service_name] = []
+                        group_services[service_name].append(widget)
+            
+            if group_services:
+                processed_groups.append({
+                    'title': group_title,
+                    'services': group_services
+                })
+                print(f"   📦 Group '{group_title}': {len(group_services)} services")
+        
+        if not processed_groups:
+            output += """
+            <div style='background-color: #fef3c7; padding: 12px; border-radius: 4px; border-left: 3px solid #f59e0b; margin: 8px 0;'>
+                <p style='margin: 0; color: #92400e; font-size: 12px;'>
+                    ℹ️ No services found in this dashboard.
+                </p>
+            </div>
+            """
+            return output
+        
+        print(f"📊 Total groups to display: {len(processed_groups)}")
+        
+        # Phase 2: Prepare all metric queries for parallel execution
+        print(f"🚀 US Phase 2: Preparing parallel metric queries...")
+        all_queries = {}
+        service_metadata = {}  # {service_name: {env, widgets, group}}
+        
+        for group in processed_groups:
+            for service_name, widgets in group['services'].items():
+                env = 'production'
+                service_metadata[service_name] = {
+                    'env': env,
+                    'widgets': widgets,
+                    'group': group['title']
+                }
+                
+                # Prepare queries for this service
+                queries_keys = {
+                    'requests': f"{service_name}_{env}_requests",
+                    'errors': f"{service_name}_{env}_errors",
+                    'latency': f"{service_name}_{env}_latency"
+                }
+                
+                # Build metric queries
+                all_queries[queries_keys['requests']] = f"trace.servlet.request.hits{{service:{service_name},env:{env}}} by {{service}}.as_count()"
+                all_queries[queries_keys['errors']] = f"trace.servlet.request.errors{{service:{service_name},env:{env}}} by {{service}}.as_count()"
+                all_queries[queries_keys['latency']] = f"avg:trace.servlet.request.duration{{service:{service_name},env:{env}}}"
+                
+                service_metadata[service_name]['queries_keys'] = queries_keys
+        
+        print(f"📊 Prepared {len(all_queries)} metric queries for {len(service_metadata)} services")
+        
+        # Execute all queries in parallel
+        print(f"🚀 US Phase 2b: Executing {len(all_queries)} queries in parallel...")
+        parallel_start = time.time()
+        all_results = get_metrics_parallel(dd_api_key, dd_app_key, dd_site, all_queries, from_time, current_time, max_workers=20)
+        print(f"✅ US parallel execution: {time.time() - parallel_start:.2f}s")
+        
+        # Phase 3: Render widgets grouped by section (EXACT format as DD_Red_ADT)
+        print(f"🚀 US Phase 3: Rendering services by group (3-column format with graphs)...")
+        
+        chart_scripts = []  # Accumulate all chart scripts
+        total_services = 0
+        
+        # Render each group
+        for group in processed_groups:
+            group_title = group['title']
+            services_in_group = group['services']
+            
+            # Group header
+            output += f"""
+            <div style='background-color: #ffffff; padding: 6px; border-radius: 4px; margin: 12px 0 6px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.06);'>
+                <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #10b981;'>
+                    <h3 style='margin: 0; color: #10b981; font-size: 14px;'>📦 {html.escape(group_title)} ({len(services_in_group)})</h3>
+                    <div style='text-align: right;'>
+                        <div style='font-size: 11px; color: #666;'>{time.strftime('%H:%M:%S')}</div>
+                    </div>
+                </div>
+                <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;'>
+            """
+            
+            # Render each service (EXACT format as DD_Red_ADT)
+            for service_name, widgets in sorted(services_in_group.items()):
+                total_services += 1
+                meta = service_metadata[service_name]
+                env = meta['env']
+                queries_keys = meta['queries_keys']
+                
+                # Extract metrics and chart data from pre-fetched results
+                metrics_data = {}
+                chart_data = {'requests': {}, 'errors': {}, 'latency': {}}
+                
+                # Requests
+                if queries_keys['requests'] in all_results:
+                    requests_data = all_results[queries_keys['requests']]
+                    if requests_data and 'series' in requests_data and len(requests_data['series']) > 0:
+                        series = requests_data['series'][0]
+                        if 'pointlist' in series and len(series['pointlist']) > 0:
+                            chart_data['requests']['labels'] = [int(p[0]) for p in series['pointlist']]
+                            chart_data['requests']['values'] = [p[1] if len(p) > 1 and p[1] is not None else 0 for p in series['pointlist']]
+                            total_requests = series['pointlist'][-1][1] if len(series['pointlist'][-1]) > 1 else 0
+                            metrics_data['requests'] = f"{total_requests:.1f} req/s"
+                        else:
+                            metrics_data['requests'] = "0 req/s"
+                    else:
+                        metrics_data['requests'] = "0 req/s"
+                
+                # Errors
+                if queries_keys['errors'] in all_results:
+                    errors_data = all_results[queries_keys['errors']]
+                    error_count = 0
+                    
+                    if errors_data and 'series' in errors_data and len(errors_data['series']) > 0:
+                        series = errors_data['series'][0]
+                        if 'pointlist' in series and len(series['pointlist']) > 0:
+                            error_count = series['pointlist'][-1][1] if len(series['pointlist'][-1]) > 1 else 0
+                            chart_data['errors'] = {
+                                'labels': [int(p[0]) for p in series['pointlist']],
+                                'values': [p[1] if len(p) > 1 else 0 for p in series['pointlist']]
+                            }
+                    
+                    # Calculate error percentage
+                    total_requests = 0
+                    if chart_data.get('requests', {}).get('values'):
+                        total_requests = sum(chart_data['requests']['values'])
+                    
+                    if total_requests > 0 and error_count > 0:
+                        error_percentage = (error_count / total_requests) * 100
+                        if error_percentage < 0.1:
+                            metrics_data['errors'] = f"{error_count:.0f} (< 0.1%)"
+                        else:
+                            metrics_data['errors'] = f"{error_count:.0f} ({error_percentage:.1f}%)"
+                    elif error_count > 0:
+                        metrics_data['errors'] = f"{error_count:.0f}"
+                    else:
+                        metrics_data['errors'] = "0 (0%)"
+                
+                # Latency
+                latency_val = 0
+                if queries_keys['latency'] in all_results:
+                    latency_data = all_results[queries_keys['latency']]
+                    if latency_data and 'series' in latency_data and len(latency_data['series']) > 0:
+                        series = latency_data['series'][0]
+                        if 'pointlist' in series and len(series['pointlist']) > 0:
+                            chart_data['latency']['labels'] = [int(p[0]) for p in series['pointlist']]
+                            chart_data['latency']['values'] = []
+                            for p in series['pointlist']:
+                                if len(p) > 1 and p[1] is not None:
+                                    val = p[1]
+                                    # Convert to ms if needed
+                                    if val < 10:
+                                        val = val * 1000
+                                    chart_data['latency']['values'].append(val)
+                                    latency_val = val
+                                else:
+                                    chart_data['latency']['values'].append(0)
+                
+                if latency_val > 0:
+                    metrics_data['latency'] = f"{latency_val:.1f}ms avg"
+                else:
+                    metrics_data['latency'] = "0ms avg"
+                
+                # Generate chart IDs (SAME as DD_Red_ADT)
+                chart_id = f"us_chart_{service_name.replace('-', '_')}_{total_services}"
+                
+                print(f"🔍 DEBUG: Rendering service '{service_name}' (env: {env})")
+                print(f"   - Requests: {metrics_data.get('requests', 'N/A')}")
+                print(f"   - Errors: {metrics_data.get('errors', 'N/A')}")
+                print(f"   - Latency: {metrics_data.get('latency', 'N/A')}")
+                
+                # Service container (SAME structure as DD_Red_ADT line 1574-1589)
+                output += f"""
+                <div style='background-color: #f9fafb; 
+                            padding: 6px; 
+                            border-radius: 3px; 
+                            border-left: 3px solid #10b981;
+                            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+                            margin-bottom: 4px;
+                            max-width: 100%;'>
+                    <div style='margin-bottom: 6px; padding: 4px; background-color: #ffffff; border-radius: 2px;'>
+                        <span style='font-size: 14px; font-weight: bold; color: #10b981;'>
+                            🔹 {html.escape(service_name)}
+                        </span>
+                        <span style='font-size: 11px; color: #718096; margin-left: 4px; font-weight: 600;'>
+                            #{html.escape(env)}
+                        </span>
+                    </div>
+                    <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;'>
+                """
+                
+                # Requests widget
+                value = metrics_data.get('requests', 'N/A')
+                chart_requests_id = f"{chart_id}_requests"
+                output += f"""
+                <div style='background: white; padding: 2px; border-radius: 2px; border: 1px solid #e5e7eb;'>
+                    <div style='margin-bottom: 1px;'>
+                        <div style='font-size: 10px; color: #6b7280;'>Requests</div>
+                        <div style='font-size: 13px; font-weight: bold; color: #1890ff;'>{html.escape(value)}</div>
+                    </div>
+                    <div style='height: 110px; position: relative; background: #f9f9f9;'>
+                        <canvas id='{chart_requests_id}' width='100' height='110'></canvas>
+                    </div>
+                </div>
+                """
+                
+                # Requests chart script
+                requests_data = chart_data.get('requests', {'labels': [], 'values': []})
+                if not requests_data.get('labels'):
+                    requests_data = {'labels': [''], 'values': [0]}
+                
+                chart_scripts.append(f"""
+                    (function() {{
+                        const ctx = document.getElementById('{chart_requests_id}');
+                        if (!ctx) return;
+                        const data = {json.dumps(requests_data)};
+                        try {{
+                            const chartLabels = data.labels.length > 0 && data.labels[0] !== '' 
+                                ? data.labels.map(t => new Date(t).toLocaleTimeString('en-US', {{hour: '2-digit', minute: '2-digit'}}))
+                                : [''];
+                            new Chart(ctx, {{
+                                type: 'bar',
+                                data: {{
+                                    labels: chartLabels,
+                                    datasets: [{{
+                                        label: 'Hits',
+                                        data: data.values,
+                                        backgroundColor: 'rgba(24, 144, 255, 0.7)',
+                                        borderColor: '#1890ff',
+                                        borderWidth: 1
+                                    }}]
+                                }},
+                                options: {{
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {{ 
+                                        legend: {{ 
+                                            display: true,
+                                            position: 'bottom',
+                                            labels: {{
+                                                boxWidth: 10,
+                                                font: {{ size: 8 }},
+                                                padding: 4
+                                            }}
+                                        }} 
+                                    }},
+                                    scales: {{
+                                        x: {{ display: false }},
+                                        y: {{ 
+                                            beginAtZero: true, 
+                                            display: true,
+                                            ticks: {{ 
+                                                font: {{ size: 8 }}
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }});
+                        }} catch(e) {{
+                            console.error('Chart error:', e.message);
+                        }}
+                    }})();
+                """)
+                
+                # Errors widget
+                value = metrics_data.get('errors', 'N/A')
+                chart_errors_id = f"{chart_id}_errors"
+                output += f"""
+                <div style='background: white; padding: 2px; border-radius: 2px; border: 1px solid #e5e7eb;'>
+                    <div style='margin-bottom: 1px;'>
+                        <div style='font-size: 10px; color: #6b7280;'>Errors</div>
+                        <div style='font-size: 13px; font-weight: bold; color: #ff4d4f;'>{html.escape(value)}</div>
+                    </div>
+                    <div style='height: 110px; position: relative; background: #f9f9f9;'>
+                        <canvas id='{chart_errors_id}' width='100' height='110'></canvas>
+                    </div>
+                </div>
+                """
+                
+                # Errors chart script
+                errors_data = chart_data.get('errors', {'labels': [], 'values': []})
+                if not errors_data.get('labels'):
+                    errors_data = {'labels': [''], 'values': [0]}
+                
+                chart_scripts.append(f"""
+                    (function() {{
+                        const ctx = document.getElementById('{chart_errors_id}');
+                        if (!ctx) return;
+                        const data = {json.dumps(errors_data)};
+                        try {{
+                            const chartLabels = data.labels.length > 0 && data.labels[0] !== '' 
+                                ? data.labels.map(t => new Date(t).toLocaleTimeString('en-US', {{hour: '2-digit', minute: '2-digit'}}))
+                                : [''];
+                            new Chart(ctx, {{
+                                type: 'bar',
+                                data: {{
+                                    labels: chartLabels,
+                                    datasets: [{{
+                                        label: 'Errors',
+                                        data: data.values,
+                                        backgroundColor: 'rgba(255, 77, 79, 0.7)',
+                                        borderColor: '#ff4d4f',
+                                        borderWidth: 1
+                                    }}]
+                                }},
+                                options: {{
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {{ 
+                                        legend: {{ 
+                                            display: true,
+                                            position: 'bottom',
+                                            labels: {{
+                                                boxWidth: 10,
+                                                font: {{ size: 8 }},
+                                                padding: 4
+                                            }}
+                                        }} 
+                                    }},
+                                    scales: {{
+                                        x: {{ display: false }},
+                                        y: {{ 
+                                            beginAtZero: true, 
+                                            display: true,
+                                            ticks: {{ 
+                                                font: {{ size: 8 }}
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }});
+                        }} catch(e) {{
+                            console.error('Chart error:', e.message);
+                        }}
+                    }})();
+                """)
+                
+                # Latency widget
+                value = metrics_data.get('latency', 'N/A')
+                chart_latency_id = f"{chart_id}_latency"
+                output += f"""
+                <div style='background: white; padding: 2px; border-radius: 2px; border: 1px solid #e5e7eb;'>
+                    <div style='margin-bottom: 1px;'>
+                        <div style='font-size: 10px; color: #6b7280;'>Latency</div>
+                        <div style='font-size: 13px; font-weight: bold; color: #52c41a;'>{html.escape(value)}</div>
+                    </div>
+                    <div style='height: 110px; position: relative; background: #f9f9f9;'>
+                        <canvas id='{chart_latency_id}' width='100' height='110'></canvas>
+                    </div>
+                </div>
+                """
+                
+                # Latency chart script
+                latency_data_chart = chart_data.get('latency', {'labels': [], 'values': []})
+                if not latency_data_chart.get('labels'):
+                    latency_data_chart = {'labels': [''], 'values': [0]}
+                
+                chart_scripts.append(f"""
+                    (function() {{
+                        const ctx = document.getElementById('{chart_latency_id}');
+                        if (!ctx) return;
+                        const data = {json.dumps(latency_data_chart)};
+                        try {{
+                            const chartLabels = data.labels.length > 0 && data.labels[0] !== '' 
+                                ? data.labels.map(t => new Date(t).toLocaleTimeString('en-US', {{hour: '2-digit', minute: '2-digit'}}))
+                                : [''];
+                            new Chart(ctx, {{
+                                type: 'line',
+                                data: {{
+                                    labels: chartLabels,
+                                    datasets: [{{
+                                        label: 'Latency',
+                                        data: data.values,
+                                        backgroundColor: 'rgba(82, 196, 26, 0.2)',
+                                        borderColor: '#52c41a',
+                                        borderWidth: 2,
+                                        fill: true,
+                                        tension: 0.4
+                                    }}]
+                                }},
+                                options: {{
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {{ 
+                                        legend: {{ 
+                                            display: true,
+                                            position: 'bottom',
+                                            labels: {{
+                                                boxWidth: 10,
+                                                font: {{ size: 8 }},
+                                                padding: 4
+                                            }}
+                                        }} 
+                                    }},
+                                    scales: {{
+                                        x: {{ display: false }},
+                                        y: {{ 
+                                            beginAtZero: true, 
+                                            display: true,
+                                            ticks: {{ 
+                                                font: {{ size: 8 }},
+                                                callback: function(value) {{
+                                                    return value.toFixed(0) + 'ms';
+                                                }}
+                                            }} 
+                                        }}
+                                    }}
+                                }}
+                            }});
+                        }} catch(e) {{
+                            console.error('Latency chart error:', e.message);
+                        }}
+                    }})();
+                """)
+                
+                # Close service container and inner grid
+                output += f"""
+                    </div>
+                    <div style='text-align: center; margin-top: 2px; padding-top: 2px; border-top: 1px solid #e5e7eb;'>
+                        <a href='https://{dd_site}/apm/service/{html.escape(service_name)}?env={html.escape(env)}' target='_blank' 
+                           style='display: inline-block; padding: 3px 6px; background-color: #10b981; color: white; 
+                                  text-decoration: none; border-radius: 2px; font-size: 11px; font-weight: 600;'>
+                            View →
+                        </a>
+                    </div>
+                </div>
+                """
+            
+            # Close group grid
+            output += """
+                </div>
+            </div>
+            """
+        
+        # Add all chart scripts at the end (SAME as DD_Red_Metrics/ADT)
+        if chart_scripts:
+            output += """
+            <script>
+            // Wait for DOM to be fully ready after innerHTML insertion
+            setTimeout(function() {
+                if (typeof Chart === 'undefined') {
+                    console.error('Chart.js not found');
+                    return;
+                }
+            """
+            for script in chart_scripts:
+                output += script
+            output += """
+            }, 100);
+            </script>
+            """
+        
+        # Summary footer
+        output += f"""
+        <div style='background-color: #d1fae5; padding: 12px; border-radius: 4px; border-left: 3px solid #10b981; margin-top: 12px;'>
+            <p style='margin: 0; color: #065f46; font-size: 13px;'>
+                <strong>💡 Info:</strong> Showing real-time APM metrics for {total_services} US region services across {len(processed_groups)} groups with interactive charts.
+            </p>
+        </div>
+        """
+        
+        print(f"✅ RED Metrics US completed: {total_services} services across {len(processed_groups)} groups with {len(chart_scripts)} charts")
+        return output
+        
+    except Exception as e:
+        error_msg = f"❌ Error reading RED Metrics US dashboard: {str(e)}"
+        print(error_msg)
+        import traceback
+        traceback.print_exc()
+        return f"<p style='color: #dc2626;'>{error_msg}</p>"

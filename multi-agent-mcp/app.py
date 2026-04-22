@@ -346,6 +346,12 @@ def statusmonitor_goldenqa_page():
     return render_template('statusmonitor.html', environment='goldenqa')
 
 
+@flask_app.route('/statusmonitor/qa')
+def statusmonitor_qa_page():
+    """Serve the status monitor dashboard for env:qa (cluster/platform list)"""
+    return render_template('statusmonitor.html', environment='qa')
+
+
 @flask_app.route('/statusmonitor/samsung')
 def statusmonitor_samsung_page():
     """Serve the status monitor dashboard page for Samsung network services only"""
@@ -374,6 +380,50 @@ def statuswall_page():
 def statuswall_preview_page():
     """Static mock of the status wall layout (no Datadog/PagerDuty)."""
     return render_template('statuswall_preview.html')
+
+
+@flask_app.route('/apm-services')
+def apm_services_page():
+    """
+    APM Status Wall: APM + PagerDuty for a chosen APM `env` tag
+    (production, goldendev, goldenqa, adt_prod, qa, samsung_prod: bundled lists). ?dd_env= or APM_STATUS_WALL_DD_ENV.
+    See SOFTWARE_CATALOG_* and lists/*_apm_services.txt.
+    """
+    from tools.status_monitor import normalize_software_catalog_wall_dd_env
+    import re
+
+    q = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "").strip()
+    wall_dd_env = normalize_software_catalog_wall_dd_env(q or "production")
+    dd_base = (os.environ.get("DATADOG_APM_SOFTWARE_BASE") or "").strip()
+    if not dd_base:
+        datadog_software_href = (
+            f"https://arlo.datadoghq.com/software?env={wall_dd_env}&fromUser=true"
+        )
+    else:
+        if re.search(r"[?&]env=", dd_base):
+            datadog_software_href = re.sub(
+                r"env=[^&]*", f"env={wall_dd_env}", dd_base, count=1
+            )
+        else:
+            sep = "&" if "?" in dd_base else "?"
+            datadog_software_href = f"{dd_base}{sep}env={wall_dd_env}"
+            if "fromUser" not in datadog_software_href:
+                qm = "?" if "?" not in datadog_software_href else "&"
+                datadog_software_href = f"{datadog_software_href}{qm}fromUser=true"
+    _slack = (
+        f"APM Status Wall — {wall_dd_env}" if wall_dd_env != "production" else
+        "APM Status Wall — production"
+    )
+    return render_template(
+        "statuswall.html",
+        wall_title="APM Status Wall",
+        wall_api="/api/statusmonitor/software-catalog-wall",
+        wall_nav="apm_wall",
+        wall_slack_title=_slack,
+        wall_show_apm_env=True,
+        wall_dd_env=wall_dd_env,
+        datadog_software_href=datadog_software_href,
+    )
 
 
 @flask_app.route('/api/statusmonitor', methods=['POST'])
@@ -437,6 +487,40 @@ def api_statusmonitor_wall():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@flask_app.route("/api/statusmonitor/software-catalog-wall", methods=["POST"])
+def api_statusmonitor_software_catalog_wall():
+    """
+    JSON for /apm-services: APM Status Wall × env:production|goldendev|goldenqa|adt_prod|qa|samsung_prod; same
+    APM+PD rules as the main status wall. Body: dd_env (optional, default production).
+    """
+    try:
+        from tools.status_monitor import (
+            normalize_software_catalog_wall_dd_env,
+            status_monitor_software_catalog_wall_data,
+        )
+
+        data = request.get_json() or {}
+        timerange = int(data.get("timerange", 1))
+        force_refresh = bool(
+            data.get("force_refresh") or data.get("forceRefresh")
+        )
+        raw_dd = data.get("dd_env") or data.get("ddEnv")
+        dd_e = normalize_software_catalog_wall_dd_env(
+            (raw_dd if raw_dd is not None else "production")
+        )
+        return jsonify(
+            status_monitor_software_catalog_wall_data(
+                timerange=timerange, force_refresh=force_refresh, dd_env=dd_e
+            )
+        )
+    except Exception as e:
+        logging.error(f"Error in software catalog wall: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ========================================

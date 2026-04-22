@@ -232,15 +232,19 @@
         }
         function wallReasonFallback(s) {
             if (s.status_reason) return s.status_reason;
+            const ddcR = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
             const bits = [];
+            if (ddcR === 1) bits.push('1 Datadog monitor in Alert');
+            else if (ddcR > 1) bits.push(ddcR + ' Datadog monitors in Alert');
             if (s.pd_incident) bits.push('PagerDuty');
             if (s.high_latency) bits.push('High latency');
             if (s.traffic_drop) bits.push('Traffic drop vs 7d');
             const st = s.status || '';
             if (st === 'inactive') return 'No APM traffic in window';
             if (st === 'unknown') return 'No data / query issue';
-            if (st === 'healthy') return 'Healthy';
-            return bits.length ? bits.join(' · ') : (st || '—');
+            if (st === 'healthy' && !(ddcR > 0)) return 'Healthy';
+            if (bits.length) return bits.join(' · ');
+            return st || '—';
         }
         function buildTileTip(s) {
             const root = document.createElement('div');
@@ -357,7 +361,35 @@
                 c.textContent = 'Traffic ' + Math.round(Number(s.traffic_variance)) + '% vs 7d';
                 chips.appendChild(c);
             }
+            const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
+            if (wddc > 0) {
+                if (s.dd_monitors_url) {
+                    const cdd = document.createElement('a');
+                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    cdd.href = s.dd_monitors_url;
+                    cdd.target = '_blank';
+                    cdd.rel = 'noopener noreferrer';
+                    cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
+                    chips.appendChild(cdd);
+                } else {
+                    const cdd = document.createElement('span');
+                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
+                    chips.appendChild(cdd);
+                }
+            }
             if (chips.children.length) inner.appendChild(chips);
+            if (wddc > 0) {
+                const dnames = Array.isArray(s.dd_monitor_alerts) ? s.dd_monitor_alerts.filter(Boolean) : [];
+                if (dnames.length) {
+                    const dnl = document.createElement('div');
+                    dnl.className = 'sm-hover-tip-why';
+                    dnl.style.fontSize = '10px';
+                    dnl.style.lineHeight = '1.4';
+                    dnl.textContent = 'Monitors: ' + dnames.join(' · ');
+                    inner.appendChild(dnl);
+                }
+            }
             const why = document.createElement('div');
             why.className = 'sm-hover-tip-why';
             why.textContent = 'Why: ' + wallReasonFallback(s);
@@ -376,6 +408,8 @@
             const clusters = Array.isArray(s.eks_clusters) ? s.eks_clusters.filter(Boolean) : [];
             if (clusters.length) lines.push('Clusters: ' + clusters.join(', '));
             lines.push('ERR ' + fmtErr(s.error_rate) + '% · ' + req + ' req');
+            const dna = Array.isArray(s.dd_monitor_alerts) ? s.dd_monitor_alerts.filter(Boolean) : [];
+            if (dna.length) lines.push('DD (Alert): ' + dna.join(' · '));
             lines.push(wallReasonFallback(s));
             return lines.join('\n');
         }

@@ -1,0 +1,9 @@
+# APM `service` names for env tag from SAMSUNG_DD_ENV (default samsung_prod).
+# Alineado con tools/status_monitor_service_lists.SAMSUNG_MONITOR_SERVICES; el hub
+# puede añadir servicios desde dashboard wnz-fqh-z4f — edita si tu org difiere.
+backend-pp-samsung-prod
+backend-pp-samsung-qa
+backend-pp-samsung-dev
+hmsguard-samsung-prod
+hmsguard-samsung-qa
+hmsguard-samsung-dev

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Status wall — all environments</title>
+    <title>{{ wall_title|default('Status wall') }} — OneView</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -92,6 +92,21 @@
             color: #7dd3fc;
             border-color: #475569;
         }
+        .sw-nav-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        a.sw-nav-hub--active,
+        a.sw-nav-hub[aria-current="page"] {
+            color: #f0f9ff;
+            background: #1e3a5f;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.35);
+            pointer-events: none;
+        }
+        a.sw-nav-hub--active:hover { color: #f0f9ff; }
         .sw-main { padding: 8px 12px 16px; }
         .sw-group {
             margin-bottom: 12px;
@@ -411,6 +426,30 @@
             color: #f1f5f9;
             text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
+        /* Inactive/unknown (Software catalog wall) — same tile layout, green emphasis */
+        .sw-tile--low-signal {
+            border: 1px solid #4ade80;
+            background: linear-gradient(168deg, #d1fae5 0%, #a7f3d0 45%, #6ee7b7 100%);
+            box-shadow: 0 2px 8px rgba(20, 83, 45, 0.18);
+        }
+        .sw-tile--low-signal .sw-tile-icon {
+            color: #166534;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+        }
+        .sw-tile--low-signal .sw-tile-name-compact {
+            color: #14532d;
+        }
+        .sw-low-signal-block {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #334155;
+        }
+        .sw-low-signal-legend {
+            font-size: 12px;
+            color: #86efac;
+            font-weight: 700;
+            margin: 0 0 8px 2px;
+        }
         .sw-tile-icon {
             font-size: 13px;
             line-height: 1;
@@ -450,9 +489,16 @@
             <a href="/" class="sw-logo" title="Arlo">
                 <img src="/static/images/arlo-logo.png" alt="Arlo">
             </a>
-            <h1>Status wall</h1>
+            <h1>{{ wall_title|default('Status wall') }}</h1>
         </div>
-        <a href="/statusmonitor" class="sw-nav-hub">Status monitor hub</a>
+        <nav class="sw-nav-group" aria-label="OneView views">
+            <a href="/statusmonitor" class="sw-nav-hub">Status monitor hub</a>
+            <a href="/statuswall" class="sw-nav-hub{% if (wall_nav|default('wall')) == 'wall' %} sw-nav-hub--active{% endif %}"{% if (wall_nav|default('wall')) == 'wall' %} aria-current="page"{% endif %}>Status wall</a>
+            <a href="/apm-services" class="sw-nav-hub{% if (wall_nav|default('wall')) == 'apm_wall' %} sw-nav-hub--active{% endif %}"{% if (wall_nav|default('wall')) == 'apm_wall' %} aria-current="page"{% endif %}>APM Status Wall</a>
+        </nav>
+        {% if datadog_software_href is defined and datadog_software_href %}
+        <a href="{{ datadog_software_href }}" id="sw-datadog-software-link" class="sw-nav-hub" target="_blank" rel="noopener noreferrer" title="Open APM / Software list in Datadog (optional)">Datadog UI ↗</a>
+        {% endif %}
         <button type="button" id="sw-slack" class="sw-slack-btn" title="Resumen Bedrock del wall → Slack">📤 Slack</button>
         <div>
             <label for="sw-timerange">Time range</label>
@@ -464,6 +510,17 @@
                 <option value="12">Last 12 hours</option>
                 <option value="24">Last 24 hours</option>
             </select>
+            {% if wall_show_apm_env|default(false) %}
+            <label for="sw-apm-dd-env" style="margin-left:10px">APM env</label>
+            <select id="sw-apm-dd-env" title="Datadog APM env tag">
+                <option value="production"{% if (wall_dd_env|default('production')) == 'production' %} selected{% endif %}>production</option>
+                <option value="goldendev"{% if (wall_dd_env|default('production')) == 'goldendev' %} selected{% endif %}>goldendev</option>
+                <option value="goldenqa"{% if (wall_dd_env|default('production')) == 'goldenqa' %} selected{% endif %}>goldenqa</option>
+                <option value="adt_prod"{% if (wall_dd_env|default('production')) == 'adt_prod' %} selected{% endif %}>ADT (adt_prod)</option>
+                <option value="qa"{% if (wall_dd_env|default('production')) == 'qa' %} selected{% endif %}>qa</option>
+                <option value="samsung_prod"{% if (wall_dd_env|default('production')) == 'samsung_prod' %} selected{% endif %}>Samsung (samsung_prod)</option>
+            </select>
+            {% endif %}
             <button type="button" id="sw-refresh">Refresh</button>
         </div>
         <span class="sw-meta" id="sw-status">Loading…</span>
@@ -597,15 +654,19 @@
 
         function wallReasonFallback(s) {
             if (s.status_reason) return s.status_reason;
+            const ddcR = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
             const bits = [];
+            if (ddcR === 1) bits.push('1 Datadog monitor in Alert');
+            else if (ddcR > 1) bits.push(ddcR + ' Datadog monitors in Alert');
             if (s.pd_incident) bits.push('PagerDuty');
             if (s.high_latency) bits.push('High latency');
             if (s.traffic_drop) bits.push('Traffic drop vs 7d');
             const st = s.status || '';
             if (st === 'inactive') return 'No APM traffic in window';
             if (st === 'unknown') return 'No data / query issue';
-            if (st === 'healthy') return 'Healthy';
-            return bits.length ? bits.join(' · ') : (st || '—');
+            if (st === 'healthy' && !(ddcR > 0)) return 'Healthy';
+            if (bits.length) return bits.join(' · ');
+            return st || '—';
         }
 
         function buildTileTip(s) {
@@ -723,7 +784,35 @@
                 c.textContent = 'Traffic ' + Math.round(Number(s.traffic_variance)) + '% vs 7d';
                 chips.appendChild(c);
             }
+            const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
+            if (wddc > 0) {
+                if (s.dd_monitors_url) {
+                    const cdd = document.createElement('a');
+                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    cdd.href = s.dd_monitors_url;
+                    cdd.target = '_blank';
+                    cdd.rel = 'noopener noreferrer';
+                    cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
+                    chips.appendChild(cdd);
+                } else {
+                    const cdd = document.createElement('span');
+                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
+                    chips.appendChild(cdd);
+                }
+            }
             if (chips.children.length) inner.appendChild(chips);
+            if (wddc > 0) {
+                const dnames = Array.isArray(s.dd_monitor_alerts) ? s.dd_monitor_alerts.filter(Boolean) : [];
+                if (dnames.length) {
+                    const dnl = document.createElement('div');
+                    dnl.className = 'sm-hover-tip-why';
+                    dnl.style.fontSize = '10px';
+                    dnl.style.lineHeight = '1.4';
+                    dnl.textContent = 'Monitors: ' + dnames.join(' · ');
+                    inner.appendChild(dnl);
+                }
+            }
             const why = document.createElement('div');
             why.className = 'sm-hover-tip-why';
             why.textContent = 'Why: ' + wallReasonFallback(s);
@@ -747,6 +836,8 @@
             const clusters = Array.isArray(s.eks_clusters) ? s.eks_clusters.filter(Boolean) : [];
             if (clusters.length) lines.push('Clusters: ' + clusters.join(', '));
             lines.push('ERR ' + fmtErr(s.error_rate) + '% · ' + req + ' req');
+            const dna = Array.isArray(s.dd_monitor_alerts) ? s.dd_monitor_alerts.filter(Boolean) : [];
+            if (dna.length) lines.push('DD (Alert): ' + dna.join(' · '));
             lines.push(wallReasonFallback(s));
             return lines.join('\n');
         }
@@ -820,7 +911,9 @@
             head.appendChild(cluster);
         }
 
-        function appendTilesToGrid(grid, svcs) {
+        function appendTilesToGrid(grid, svcs, opts) {
+            opts = opts || {};
+            const lowSignal = opts.lowSignal === true;
             if (!svcs || !svcs.length) {
                 const empty = document.createElement('div');
                 empty.className = 'sw-meta';
@@ -840,7 +933,9 @@
                 el.rel = 'noopener';
                 el.setAttribute('title', nativeTitleSummary(s));
                 el.className = 'sw-tile';
-                if (st === 'critical') {
+                if (lowSignal) {
+                    el.classList.add('sw-tile--low-signal');
+                } else if (st === 'critical') {
                     el.classList.add('sw-tile--crit', 'sw-tile--alert');
                 } else if (st === 'warning') {
                     el.classList.add('sw-tile--warn', 'sw-tile--alert');
@@ -852,7 +947,9 @@
 
                 const icon = document.createElement('div');
                 icon.className = 'sw-tile-icon';
-                if (st === 'critical') icon.textContent = '✕';
+                if (lowSignal) {
+                    icon.textContent = (st === 'unknown') ? '?' : '○';
+                } else if (st === 'critical') icon.textContent = '✕';
                 else if (st === 'warning') icon.textContent = '⚠';
                 else if (st === 'healthy') icon.textContent = '✓';
                 else if (st === 'inactive') icon.textContent = '○';
@@ -922,13 +1019,21 @@
                 regionWrap.className = 'sw-region-grid';
                 const allSvcs = g.services || [];
                 const hasAny = allSvcs.length > 0;
-                if (!hasAny) {
+                const lowCols = g.low_signal_region_columns || null;
+                let hasLow = false;
+                if (lowCols) {
+                    for (const c of lowCols) {
+                        if ((c.services || []).length) { hasLow = true; break; }
+                    }
+                }
+                if (!hasAny && !hasLow) {
                     const empty = document.createElement('div');
                     empty.className = 'sw-meta';
                     empty.style.gridColumn = '1 / -1';
-                    empty.textContent = 'No services with APM signal in this window (inactive/unknown are hidden on the wall).';
+                    empty.textContent = 'No services to display for this range.';
                     regionWrap.appendChild(empty);
                 } else {
+                    if (hasAny) {
                     let columns = g.region_columns;
                     if (!columns || !columns.length) {
                         columns = buildRegionColumnsFromServices(allSvcs);
@@ -953,6 +1058,46 @@
                         colEl.appendChild(grid);
                         regionWrap.appendChild(colEl);
                     }
+                    } else {
+                        const note = document.createElement('div');
+                        note.className = 'sw-meta';
+                        note.style.cssText = 'grid-column: 1 / -1; margin-bottom: 6px;';
+                        note.textContent = 'No services with healthy / warning / critical in this window — only low-signal (green) tiles below.';
+                        regionWrap.appendChild(note);
+                    }
+                    if (hasLow) {
+                        const sub = document.createElement('div');
+                        sub.className = 'sw-low-signal-block';
+                        sub.style.cssText = 'grid-column: 1 / -1; width: 100%;';
+                        const leg = document.createElement('p');
+                        leg.className = 'sw-low-signal-legend';
+                        leg.textContent = 'Inactive / unknown in this time range (green tiles, still linked to APM):';
+                        sub.appendChild(leg);
+                        const lowGridWrap = document.createElement('div');
+                        lowGridWrap.className = 'sw-region-grid';
+                        for (const col of (lowCols || [])) {
+                            const colEl = document.createElement('div');
+                            colEl.className = 'sw-region-col';
+                            const hrow = document.createElement('div');
+                            hrow.className = 'sw-region-col-head';
+                            const ct = document.createElement('div');
+                            ct.className = 'sw-region-col-title';
+                            ct.textContent = col.label || '';
+                            const ch = document.createElement('span');
+                            ch.className = 'sw-region-col-hint';
+                            ch.textContent = col.subtitle || '';
+                            hrow.appendChild(ct);
+                            hrow.appendChild(ch);
+                            colEl.appendChild(hrow);
+                            const grid = document.createElement('div');
+                            grid.className = 'sw-tiles sw-tiles--region';
+                            appendTilesToGrid(grid, col.services || [], { lowSignal: true });
+                            colEl.appendChild(grid);
+                            lowGridWrap.appendChild(colEl);
+                        }
+                        sub.appendChild(lowGridWrap);
+                        regionWrap.appendChild(sub);
+                    }
                 }
                 section.appendChild(regionWrap);
                 root.appendChild(section);
@@ -960,24 +1105,55 @@
             bindWallTipGlobalHandlersOnce();
         }
 
+        const WALL_DATA_URL = {{ (wall_api|default('/api/statusmonitor/wall'))|tojson }};
+
+        function swApmUpdateDatadogLink() {
+            var a = document.getElementById('sw-datadog-software-link');
+            var sel = document.getElementById('sw-apm-dd-env');
+            if (!a || !sel) return;
+            var s = String(a.href || a.getAttribute('href') || '');
+            if (!s) return;
+            a.href = /env=/i.test(s) ? s.replace(
+                /env=[^&]*/i, 'env=' + encodeURIComponent(sel.value)
+            ) : s;
+        }
+
         async function loadWall(options) {
             const forceRefresh = options && options.forceRefresh === true;
             const trEl = document.getElementById('sw-timerange');
             const timerange = trEl ? parseInt(trEl.value, 10) : 1;
+            const ddEl = document.getElementById('sw-apm-dd-env');
+            const body = { timerange, force_refresh: forceRefresh };
+            if (ddEl) {
+                body.dd_env = ddEl.value;
+            }
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
             statusEl.textContent = 'Loading…';
             try {
-                const res = await fetch('/api/statusmonitor/wall', {
+                const res = await fetch(WALL_DATA_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ timerange, force_refresh: forceRefresh }),
+                    body: JSON.stringify(body),
                 });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || 'Request failed');
                 renderWall(data);
                 const t = new Date().toLocaleTimeString();
-                statusEl.textContent = 'Updated ' + t + ' · range ' + (data.timerange || timerange) + 'h · auto-refresh 3 min';
+                let line = 'Updated ' + t + ' · range ' + (data.timerange || timerange) + 'h';
+                if (data.source && (data.source.services_in_scope != null)) {
+                    line += ' · ' + data.source.services_in_scope + ' services in scope';
+                    if (data.source.tiles_shown != null) {
+                        line += ' · ' + data.source.tiles_shown + ' primary tiles';
+                    }
+                    if (data.source.low_signal_tiles != null && data.source.low_signal_tiles > 0) {
+                        line += ' · ' + data.source.low_signal_tiles + ' green (inactive/unknown)';
+                    }
+                }
+                if (ddEl && (data.dd_env != null) && (data.success !== false)) {
+                    line += ' · env ' + data.dd_env;
+                }
+                statusEl.textContent = line + ' · auto-refresh 3 min';
                 if (typeof loadSamsungStatusWidget === 'function') {
                     loadSamsungStatusWidget(false);
                 }
@@ -993,6 +1169,23 @@
         document.getElementById('sw-refresh').addEventListener('click', function() {
             loadWall({ forceRefresh: true });
         });
+        const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
+
+        var _swApmEnv = document.getElementById('sw-apm-dd-env');
+        if (_swApmEnv) {
+            _swApmEnv.addEventListener('change', function() {
+                swApmUpdateDatadogLink();
+                var u = new URL(window.location.href);
+                u.searchParams.set('dd_env', _swApmEnv.value);
+                if (u.searchParams.get('dd_env') === 'production') {
+                    u.searchParams.delete('dd_env');
+                }
+                var qs = u.search || '';
+                history.replaceState(null, '', u.pathname + qs);
+                loadWall({ forceRefresh: true });
+            });
+        }
+
         document.getElementById('sw-slack').addEventListener('click', function() {
             if (typeof SlackShare === 'undefined') {
                 alert('Slack: no se pudo cargar slack_share.js');
@@ -1000,13 +1193,16 @@
             }
             var st = document.getElementById('sw-status');
             var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
-            var title = 'Status wall — all environments';
+            var title = WALL_SLACK_TITLE;
             if (line) title += ' · ' + line;
             SlackShare.sendFromSelector('#sw-root', {
                 page_title: title,
             });
         });
         document.getElementById('sw-timerange').addEventListener('change', loadWall);
+        if (document.getElementById('sw-apm-dd-env')) {
+            swApmUpdateDatadogLink();
+        }
         loadWall();
         setInterval(loadWall, WALL_REFRESH_MS);
     </script>

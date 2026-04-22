@@ -36,7 +36,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 IMAGE_NAME="oneview-goc-ai"
-VERSION="3.2.7-mcp"
+VERSION="3.2.10-mcp"
 TAR_FILE="${IMAGE_NAME}_v${VERSION}.tar"
 
 echo -e "${BLUE}========================================${NC}"

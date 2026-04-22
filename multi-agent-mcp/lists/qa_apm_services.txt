@@ -1,0 +1,15 @@
+# APM `service` names for env:qa (cluster / platform). Nombres ampliados desde el
+# screenshot; valida con Datadog y ajusta 1:1 si el `service` difiere.
+ack-applicationautoscaling-controller
+ack-sagemaker-controller
+agent
+aws-load-balancer-controller
+cluster-agent
+cluster-autoscaler
+coredns
+k8s-dns-node-cache
+livenessprobe
+nops-prometheus
+nops-vpa-recommender
+nops-vpa-updater
+operator

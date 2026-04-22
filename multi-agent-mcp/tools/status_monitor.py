@@ -30,6 +30,7 @@ from tools.status_monitor_service_lists import (
     ADT_MONITOR_SERVICES,
     GENERAL_MONITOR_SERVICES,
     SAMSUNG_MONITOR_SERVICES,
+    SOFTWARE_CATALOG_TREEMAP_EXTRAS,
 )
 
 
@@ -67,7 +68,12 @@ def _sm_infer_service_region(svc: dict, *, page_environment: str | None = None) 
     For ADT and Samsung pages/wall sections, every service is US-West (Oregon); unknown signal
     (e.g. HMSWEB with no cluster hint) defaults to Oregon instead of Ireland.
     """
-    oregon_default = page_environment in ("adt", "samsung")
+    oregon_default = page_environment in (
+        "adt",
+        "adt_prod",
+        "samsung",
+        "samsung_prod",
+    )
 
     def _default_unknown() -> str:
         return "Oregon" if oregon_default else "Ireland"
@@ -124,6 +130,8 @@ def _sm_status_shows_issue_links(svc: dict) -> bool:
     st = svc.get("status")
     if st in ("critical", "warning"):
         return True
+    if int(svc.get("dd_monitor_alert_count") or 0) > 0:
+        return True
     if svc.get("pd_incident"):
         return True
     if svc.get("traffic_drop"):
@@ -131,6 +139,56 @@ def _sm_status_shows_issue_links(svc: dict) -> bool:
     if svc.get("high_latency"):
         return True
     return False
+
+
+def _dd_monitors_manage_url(service_name: str, environment: str, dd_site: str) -> str:
+    """
+    Monitors / Manage page, scoped like the UI: service + env, state Alert only
+    (same family as the org filter: …/monitors/manage?q=… status:alert).
+    """
+    sn = (service_name or "").strip()
+    if not sn:
+        return ""
+    env = (environment or "").strip() or "production"
+    q = f'service:"{sn}" env:{env} status:alert'
+    return f"{datadog_ui_origin(dd_site)}/monitors/manage?q={quote(q, safe='')}"
+
+
+def _sm_rank_for_status(st: str | None) -> int:
+    s = (st or "").strip().lower()
+    if s in ("unknown", "inactive"):
+        return 0
+    if s == "healthy":
+        return 1
+    if s == "warning":
+        return 2
+    if s == "critical":
+        return 3
+    return 0
+
+
+def _sm_status_from_rank(r: int) -> str:
+    if r >= 3:
+        return "critical"
+    if r >= 2:
+        return "warning"
+    if r >= 1:
+        return "healthy"
+    return "unknown"
+
+
+def _sm_merge_status_with_dd_alerts(current: str, alert_name_count: int) -> str:
+    """1 firing monitor → at least warning; 2+ → at least critical. Takes max with APM-derived status."""
+    n = int(alert_name_count or 0)
+    if n <= 0:
+        return current
+    r_dd = 2 if n == 1 else 3
+    return _sm_status_from_rank(max(_sm_rank_for_status(current), r_dd))
+
+
+def _sm_dd_monitor_alerts_enabled() -> bool:
+    v = (os.getenv("STATUS_MONITOR_DD_MONITOR_ALERTS") or "1").strip().lower()
+    return v not in ("0", "false", "no", "off")
 
 
 def _sm_splunk_service_search_url(service_name: str, timerange_hours: int = 24) -> str:
@@ -156,6 +214,17 @@ def _sm_hover_service_payload(svc: dict, env: str, page_environment: str | None 
         su = _sm_splunk_service_search_url(str(svc.get("service") or ""), spl_h)
         spl_url = su if su else None
     pd_u = (svc.get("pd_incident_url") or "").strip()
+    dda = list(svc.get("dd_monitor_alerts") or [])
+    if not isinstance(dda, list):
+        dda = []
+    dda = dda[:32]
+    dd_n = int(svc.get("dd_monitor_alert_count") or len(dda) or 0)
+    ddm = (svc.get("dd_monitors_url") or "").strip()
+    if not ddm and svc.get("service") and env:
+        ddm = _dd_monitors_manage_url(
+            str(svc.get("service") or ""), str(env or ""), os.getenv("DD_SITE", "datadoghq.com")
+        )
+    ddm = ddm if ddm else None
     return {
         "type": "service",
         "service": svc.get("service"),
@@ -174,6 +243,9 @@ def _sm_hover_service_payload(svc: dict, env: str, page_environment: str | None 
         "traffic_drop": bool(svc.get("traffic_drop")),
         "traffic_variance": svc.get("traffic_variance"),
         "high_latency": bool(svc.get("high_latency")),
+        "dd_monitor_alerts": dda,
+        "dd_monitor_alert_count": dd_n,
+        "dd_monitors_url": ddm,
     }
 
 
@@ -181,6 +253,7 @@ def _sm_hover_service_payload(svc: dict, env: str, page_environment: str | None 
 _status_cache = {}
 _hub_summary_cache = {}
 _wall_data_cache = {}
+_software_catalog_wall_cache = {}
 # When each in-memory cache entry was stored (for force_refresh grace window)
 _mem_cache_saved_at = {}
 # Longer default TTL + env override reduces repeated full DD fan-out (CPU + rate limits)
@@ -198,6 +271,48 @@ STATUS_MONITOR_DD_MIN_WORKERS = _status_monitor_int_env("STATUS_MONITOR_DD_MIN_W
 # Hub: parallel tasks (1 batch main-3 + samsung + adt + red-us = 4 jobs). Higher = faster if DD allows.
 STATUS_MONITOR_HUB_PARALLEL_ENVS = _status_monitor_int_env("STATUS_MONITOR_HUB_PARALLEL_ENVS", 4, 1, 6)
 STATUS_MONITOR_EKS_MAX_WORKERS = _status_monitor_int_env("STATUS_MONITOR_EKS_MAX_WORKERS", 6, 1, 24)
+# APM Status Wall: longer in-memory bucket + optional skip EKS (EKS = many extra Datadog calls per tile)
+def _apm_status_wall_cache_bucket_secs() -> int:
+    return _status_monitor_int_env("APM_STATUS_WALL_CACHE_SECS", 300, 60, 1200)
+
+
+def _apm_status_wall_attach_eks() -> bool:
+    """Default on: EKS names feed region split (Oregon / Ireland). Set APM_STATUS_WALL_ATTACH_EKS=0 to skip (faster)."""
+    v = (os.getenv("APM_STATUS_WALL_ATTACH_EKS") or "1").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    return v in ("1", "true", "yes", "on", "")
+
+
+def _apm_status_wall_header_light() -> bool:
+    """If true (default), APM /apm-services uses one PD call + skips Splunk + Samsung/ADT board PagerDuty fetches."""
+    v = (os.getenv("APM_STATUS_WALL_HEADER_LIGHT") or "1").strip().lower()
+    return v in ("1", "true", "yes", "on", "")
+
+
+def _wall_apm_header_badges_reuse_pd(pd_counts: dict, pd_api_key: str | None) -> dict:
+    """Pills for APM page without extra PagerDuty/Splunk; reuses org-wide PagerDuty counts from correlation fetch."""
+    if pd_api_key:
+        pd_badge = _wall_pd_badge(pd_counts)
+    else:
+        pd_badge = {
+            "label": "PagerDuty",
+            "status": "unknown",
+            "short": "—",
+            "detail": "PAGERDUTY_API_TOKEN not set",
+        }
+    omitted = {
+        "label": "—",
+        "status": "ok",
+        "short": "—",
+        "detail": "Omitted for fast APM load (set APM_STATUS_WALL_HEADER_LIGHT=0 for Splunk + board pills).",
+    }
+    return {
+        "pagerduty": pd_badge,
+        "splunk": omitted,
+        "samsung": omitted,
+        "adt": omitted,
+    }
 
 
 def _dd_health_worker_count(num_tasks: int) -> int:
@@ -255,10 +370,11 @@ def _https_get_with_retries(
 
 def clear_status_cache():
     """Clear the status monitor cache - useful after config changes"""
-    global _status_cache, _hub_summary_cache, _wall_data_cache, _mem_cache_saved_at, _DD_MONITOR_SEARCH_CACHE
+    global _status_cache, _hub_summary_cache, _wall_data_cache, _software_catalog_wall_cache, _mem_cache_saved_at, _DD_MONITOR_SEARCH_CACHE
     _status_cache.clear()
     _hub_summary_cache.clear()
     _wall_data_cache.clear()
+    _software_catalog_wall_cache.clear()
     _mem_cache_saved_at.clear()
     with _DD_MONITOR_SEARCH_LOCK:
         _DD_MONITOR_SEARCH_CACHE.clear()
@@ -622,16 +738,18 @@ def _sm_dd_monitor_error_override_enabled() -> bool:
     return v not in ("0", "false", "no", "off")
 
 
-def _dd_monitor_states_allow_override(service_name, environment, dd_api_key, dd_app_key, dd_site):
+def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, dd_site):
     """
-    Query Datadog monitor search (same facets as UI: service + env tags).
-    Returns True if every matching monitor is OK-ish (no Alert/Warn).
-    Returns False if any monitor is Alert or Warn.
-    Returns None if no monitors match or the API fails — caller keeps error-rate status.
+    Query Datadog monitor search (service + env tags, same as UI facets).
+
+    Returns a dict, or None on total API failure (same as legacy “uncached failed”):
+      allow_error_override: bool | None — None = no matches / no usable states (keep APM);
+        True = all non-problem; False = any Alert/Warn
+      alert_names: list[str] — unique monitor names with overall_state Alert (Manage UI: status:alert)
     """
     import requests
 
-    cache_key = (service_name, environment, dd_site)
+    cache_key = (service_name, environment, dd_site, "msearch_v2")
     now = time.time()
     with _DD_MONITOR_SEARCH_LOCK:
         hit = _DD_MONITOR_SEARCH_CACHE.get(cache_key)
@@ -645,6 +763,7 @@ def _dd_monitor_states_allow_override(service_name, environment, dd_api_key, dd_
     # Hyphenated service names: quoted per Datadog search reserved characters
     query_str = f'service:"{service_name}" env:{environment}'
     collected = []
+    alert_keyed: dict[str, str] = {}
     page = 0
     per_page = 100
 
@@ -677,8 +796,15 @@ def _dd_monitor_states_allow_override(service_name, environment, dd_api_key, dd_
                 st = m.get("overall_state")
                 if st is None and isinstance(m.get("status"), str):
                     st = m["status"]
-                if isinstance(st, str):
-                    collected.append(st.strip())
+                st = (st or "").strip() if isinstance(st, str) else ""
+                if st:
+                    collected.append(st)
+                if st == "Alert":
+                    mid = m.get("id")
+                    key = f"id:{mid}" if mid is not None else f"n:{m.get('name') or ''}"
+                    name = (m.get("name") or "").strip() or (f"monitor {mid}" if mid is not None else "monitor")
+                    if key not in alert_keyed:
+                        alert_keyed[key] = name
             if not monitors or len(monitors) < per_page:
                 break
             page += 1
@@ -688,16 +814,19 @@ def _dd_monitor_states_allow_override(service_name, environment, dd_api_key, dd_
         return None
 
     if not collected:
-        _store(None)
-        return None
+        out = {"allow_error_override": None, "alert_names": []}
+        _store(out)
+        return out
     if any(s in bad_states for s in collected):
-        _store(False)
-        return False
-    if all(s in ok_states for s in collected):
-        _store(True)
-        return True
-    _store(False)
-    return False
+        allow = False
+    elif all(s in ok_states for s in collected):
+        allow = True
+    else:
+        allow = False
+    alert_names = sorted(alert_keyed.values(), key=str.lower)
+    out = {"allow_error_override": allow, "alert_names": alert_names}
+    _store(out)
+    return out
 
 
 def get_service_health_status(service_name, environment, dd_api_key, dd_app_key, dd_site, from_time, to_time, enable_extended_metrics=False):
@@ -934,22 +1063,41 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
         else:
             status = 'healthy'
 
+        er_critical = status == "critical" and error_rate > 5 and not traffic_drop
+        er_warning = status == "warning" and error_rate > 1 and not high_latency
+        need_dd_for_override = (
+            _sm_dd_monitor_error_override_enabled()
+            and status in ("critical", "warning")
+            and (er_critical or er_warning)
+        )
+        need_dd = need_dd_for_override or _sm_dd_monitor_alerts_enabled()
+        dd_info = None
+        if need_dd:
+            dd_info = _dd_monitor_search_info(
+                service_name, environment, dd_api_key, dd_app_key, dd_site
+            )
+        alert_names: list = []
+        if _sm_dd_monitor_alerts_enabled() and isinstance(dd_info, dict):
+            alert_names = list(dd_info.get("alert_names") or [])
+
         dd_monitor_override = False
-        if _sm_dd_monitor_error_override_enabled() and status in ("critical", "warning"):
-            er_critical = status == "critical" and error_rate > 5 and not traffic_drop
-            er_warning = status == "warning" and error_rate > 1 and not high_latency
-            if er_critical or er_warning:
-                m_all_ok = _dd_monitor_states_allow_override(
-                    service_name, environment, dd_api_key, dd_app_key, dd_site
+        if _sm_dd_monitor_error_override_enabled() and status in ("critical", "warning") and (er_critical or er_warning):
+            m_all_ok = (dd_info or {}).get("allow_error_override")
+            if m_all_ok is True:
+                prev = status
+                dd_monitor_override = True
+                status = "healthy"
+                print(
+                    f"   ✅ {service_name} ({environment}): Datadog monitors all OK — "
+                    f"overriding error-rate {prev} → healthy (ERR {error_rate:.2f}%)"
                 )
-                if m_all_ok is True:
-                    prev = status
-                    dd_monitor_override = True
-                    status = "healthy"
-                    print(
-                        f"   ✅ {service_name} ({environment}): Datadog monitors all OK — "
-                        f"overriding error-rate {prev} → healthy (ERR {error_rate:.2f}%)"
-                    )
+
+        if _sm_dd_monitor_alerts_enabled() and alert_names:
+            status = _sm_merge_status_with_dd_alerts(status, len(alert_names))
+            if status != "healthy":
+                dd_monitor_override = False
+
+        dd_m_url = _dd_monitors_manage_url(service_name, environment, dd_site)
         
         # Calculate traffic variance for context
         traffic_variance = None
@@ -975,6 +1123,9 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
             'baseline_requests': int(baseline_requests),
             'traffic_variance': round(traffic_variance, 1) if traffic_variance is not None else None,
             'dd_monitor_override': dd_monitor_override,
+            'dd_monitor_alerts': alert_names,
+            'dd_monitor_alert_count': len(alert_names),
+            'dd_monitors_url': dd_m_url or None,
         }
         
     except Exception as e:
@@ -992,6 +1143,9 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
             'high_latency': False,
             'baseline_requests': 0,
             'dd_monitor_override': False,
+            'dd_monitor_alerts': [],
+            'dd_monitor_alert_count': 0,
+            'dd_monitors_url': _dd_monitors_manage_url(service_name, environment, dd_site) or None,
         }
 
 
@@ -1362,6 +1516,7 @@ _EKS_ENV_TAG_VARIANTS = {
     "production": ["prod", "production", "samsung_prod"],
     "goldendev": ["goldendev", "dev"],
     "goldenqa": ["goldenqa", "qa"],
+    "qa": ["qa"],
     "samsung_prod": ["samsung_prod", "production", "prod"],
     "adt_prod": ["adt_prod"],
 }
@@ -1493,6 +1648,7 @@ HUB_ENV_ROWS = [
     {"slug": "production", "label": "Production", "href": "/statusmonitor/production", "mode": "production"},
     {"slug": "goldendev", "label": "GoldenDev", "href": "/statusmonitor/goldendev", "mode": "goldendev"},
     {"slug": "goldenqa", "label": "GoldenQA", "href": "/statusmonitor/goldenqa", "mode": "goldenqa"},
+    {"slug": "qa", "label": "QA", "href": "/statusmonitor/qa", "mode": "qa"},
     {"slug": "samsung", "label": "Samsung", "href": "/statusmonitor/samsung", "mode": "samsung"},
     {"slug": "adt", "label": "ADT", "href": "/statusmonitor/adt", "mode": "adt"},
     {"slug": "redmetrics-us", "label": "RED Metrics US", "href": "/statusmonitor/redmetrics-us", "mode": "redmetrics-us"},
@@ -1505,7 +1661,63 @@ WALL_DISPLAY_GROUPS = [
     {"mode": "samsung", "slug": "samsung", "label": "Samsung specific services"},
     {"mode": "goldenqa", "slug": "goldenqa", "label": "GoldenQA"},
     {"mode": "goldendev", "slug": "goldendev", "label": "GoldenDev"},
+    {"mode": "qa", "slug": "qa", "label": "QA"},
 ]
+
+
+def _sm_status_monitor_bundled_lists_enabled() -> bool:
+    """If true (default), /statusmonitor uses the same committed lists/ files as the APM Status Wall."""
+    return os.getenv("STATUS_MONITOR_USE_BUNDLED_LISTS", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
+def _sm_read_service_names_from_bundled_file(path: str) -> list:
+    """Non-comment, non-blank lines from a lists/*.txt file."""
+    out: list = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            for ln in f:
+                s = ln.strip()
+                if s and not s.lstrip().startswith("#"):
+                    out.append(s)
+    except OSError as e:
+        print(f"⚠️ status monitor: could not read bundled list {path!r}: {e}")
+    return out
+
+
+def _sm_bundled_status_monitor_service_list(environment: str) -> list | None:
+    """
+    Same per-environment service names as the APM wall (lists/*). None = use legacy
+    resolution (GENERAL, dashboard, ADT_MONITOR, etc.).
+    """
+    if not _sm_status_monitor_bundled_lists_enabled():
+        return None
+    e = (environment or "").strip().lower()
+    path = None
+    if e == "production":
+        path = _bundled_production_apm_127_path()
+    elif e == "goldendev":
+        path = _bundled_goldendev_apm_path()
+    elif e == "goldenqa":
+        path = _bundled_goldenqa_apm_path()
+    elif e == "adt":
+        path = _bundled_adt_apm_path()
+    elif e == "samsung":
+        path = _bundled_samsung_apm_path()
+    elif e == "qa":
+        path = _bundled_qa_apm_path()
+    else:
+        return None
+    if not path or not os.path.isfile(path):
+        return None
+    names = _sm_read_service_names_from_bundled_file(path)
+    if not names:
+        return None
+    return sorted(set(names), key=str.lower)
 
 
 def _merge_samsung_dashboard_services(dynamic_services: list) -> list:
@@ -1535,10 +1747,27 @@ def _merge_samsung_dashboard_services(dynamic_services: list) -> list:
 def _sm_resolve_services_and_environments(environment):
     """
     Same service list + Datadog env tag(s) as status_monitor_dashboard.
-    environment None => all main envs (production, goldendev, goldenqa).
+    With STATUS_MONITOR_USE_BUNDLED_LISTS=1 (default), uses the same committed lists/
+    files as the APM Status Wall per environment.
+    environment None => all main envs (production, goldendev, goldenqa) for wide queries.
     """
     if environment is None:
         return list(GENERAL_MONITOR_SERVICES), ["production", "goldendev", "goldenqa"]
+    b = _sm_bundled_status_monitor_service_list(environment)
+    if b is not None and environment in (
+        "production",
+        "goldendev",
+        "goldenqa",
+        "qa",
+    ):
+        return b, [environment]
+    if b is not None and environment == "adt":
+        return b, ["adt_prod"]
+    if b is not None and environment == "samsung":
+        samsung_dd_env = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip()
+        if not samsung_dd_env:
+            samsung_dd_env = "samsung_prod"
+        return b, [samsung_dd_env]
     if environment == "samsung":
         # README/APM: Samsung RED services use env tag samsung_prod (not "production").
         samsung_dd_env = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip()
@@ -1557,6 +1786,8 @@ def _sm_resolve_services_and_environments(environment):
         return services, ["production"]
     if environment in ("production", "goldendev", "goldenqa"):
         return list(GENERAL_MONITOR_SERVICES), [environment]
+    if environment == "qa":
+        return list(GENERAL_MONITOR_SERVICES), ["qa"]
     raise ValueError(f"Invalid environment '{environment}'")
 
 
@@ -2070,32 +2301,54 @@ def collect_hub_statuses_aligned_with_dashboard(
 
 def _hub_collect_main_three_envs_batched(timerange: int, pd_incidents_preloaded, force_refresh: bool = False) -> dict:
     """
-    One Datadog wave for production + goldendev + goldenqa (same service list, 3 env tags).
-    Faster than three separate hub passes; same results as three standalone collects.
+    Production + goldendev + goldenqa: one parallel wave each (per-env service list; same
+    as drill-down / bundled lists/ when STATUS_MONITOR_USE_BUNDLED_LISTS=1).
     """
     dd_api_key = os.getenv("DATADOG_API_KEY")
     dd_app_key = os.getenv("DATADOG_APP_KEY")
     dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
     if not dd_api_key or not dd_app_key:
         return {"production": [], "goldendev": [], "goldenqa": []}
-    services = list(GENERAL_MONITOR_SERVICES)
-    environments = ["production", "goldendev", "goldenqa"]
+    sp, ep = _sm_resolve_services_and_environments("production")
+    sg, eg = _sm_resolve_services_and_environments("goldendev")
+    sq, eq = _sm_resolve_services_and_environments("goldenqa")
+    if len(ep) != 1 or len(eg) != 1 or len(eq) != 1:
+        return {"production": [], "goldendev": [], "goldenqa": []}
+    eprod, egdev, egqa = ep[0], eg[0], eq[0]
     current_time = int(time.time())
     from_time = current_time - (timerange * 3600)
-    n_tasks = len(services) * len(environments)
+    n_tasks = len(sp) + len(sg) + len(sq)
     if pd_incidents_preloaded is None:
-        print(f"🧭 Hub batch: main 3 envs — {len(services)} × 3 = {n_tasks} DD tasks, {timerange}h")
-    all_statuses = _sm_fetch_parallel_service_health(
-        services,
-        environments,
-        dd_api_key,
-        dd_app_key,
-        dd_site,
-        from_time,
-        current_time,
-        int(timerange),
-        force_refresh,
-    )
+        print(
+            f"🧭 Hub batch: main 3 envs — {len(sp)}+{len(sg)}+{len(sq)} = {n_tasks} "
+            f"DD tasks, {timerange}h (bundled per env when enabled)"
+        )
+    all_statuses: list = []
+
+    def _one_fetch(svcs, envs):
+        return _sm_fetch_parallel_service_health(
+            svcs,
+            envs,
+            dd_api_key,
+            dd_app_key,
+            dd_site,
+            from_time,
+            current_time,
+            int(timerange),
+            force_refresh,
+        )
+
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f1 = ex.submit(_one_fetch, sp, ep)
+        f2 = ex.submit(_one_fetch, sg, eg)
+        f3 = ex.submit(_one_fetch, sq, eq)
+        for fut in as_completed((f1, f2, f3)):
+            try:
+                all_statuses.extend(fut.result())
+            except Exception as e:
+                print(f"❌ Hub batch partial fetch error: {e}")
+    services_union = list(dict.fromkeys([*sp, *sg, *sq]))
+    envs_for_pd = list(dict.fromkeys([*ep, *eg, *eq]))
     pd_incidents = list(pd_incidents_preloaded) if pd_incidents_preloaded is not None else []
     if pd_incidents_preloaded is None:
         pd_api_key = os.getenv("PAGERDUTY_API_TOKEN")
@@ -2105,7 +2358,7 @@ def _hub_collect_main_three_envs_batched(timerange: int, pd_incidents_preloaded,
             except Exception as e:
                 print(f"⚠️ Hub batch: PagerDuty fetch failed: {e}")
     _sm_apply_pagerduty_correlation(
-        all_statuses, services, environments, None, pd_incidents, silent=pd_incidents_preloaded is not None
+        all_statuses, services_union, envs_for_pd, None, pd_incidents, silent=pd_incidents_preloaded is not None
     )
     out = {"production": [], "goldendev": [], "goldenqa": []}
     for s in all_statuses:
@@ -2162,10 +2415,38 @@ def _hub_build_status_reason_lines(statuses_for_card: list, overall: str, max_li
     if td_count:
         lines.append(f"Traffic drop vs baseline on {td_count} service(s).")
 
+    def _dd_n(x):
+        return int(x.get("dd_monitor_alert_count") or 0) or len(x.get("dd_monitor_alerts") or [])
+
+    dd_one = [s for s in statuses_for_card if _dd_n(s) == 1]
+    dd_mul = [s for s in statuses_for_card if _dd_n(s) > 1]
+    if dd_mul:
+        lines.append(
+            f"Datadog: ≥2 monitors in Alert on {len(dd_mul)} service(s) (see hover for names)."
+        )
+    if dd_one:
+        lines.append(
+            f"Datadog: 1 monitor in Alert on {len(dd_one)} service(s) (see hover for names)."
+        )
+
     if not lines and bad:
         lines.append("Open the environment page for per-service details.")
 
     return lines[:max_lines]
+
+
+def _hub_dd_alerts_rollup(statuses: list) -> tuple[int, int]:
+    """
+    Total Datadog monitor Alert count across services, and how many services have ≥1.
+    """
+    tot = 0
+    n_svcs = 0
+    for s in statuses or []:
+        n = int(s.get("dd_monitor_alert_count") or 0) or len(s.get("dd_monitor_alerts") or [])
+        if n > 0:
+            n_svcs += 1
+        tot += n
+    return int(tot), int(n_svcs)
 
 
 def _hub_collect_statuses_by_mode(
@@ -2227,6 +2508,11 @@ def _hub_collect_statuses_by_mode(
 def _wall_status_reason_plain(s: dict) -> str:
     """Plain-text alert context for status wall tooltip (same signals as command center reasons)."""
     parts = []
+    n_dd = int(s.get("dd_monitor_alert_count") or 0) or len(s.get("dd_monitor_alerts") or [])
+    if n_dd == 1:
+        parts.append("1 Datadog monitor in Alert")
+    elif n_dd > 1:
+        parts.append(f"{n_dd} Datadog monitors in Alert")
     if s.get("pd_incident"):
         parts.append("PagerDuty incident")
     if s.get("traffic_drop"):
@@ -2256,8 +2542,8 @@ def _wall_status_reason_plain(s: dict) -> str:
         else:
             parts.append("—")
     text = " · ".join(parts)
-    if s.get("dd_monitor_override") and "override" not in text.lower():
-        text = text + " · Datadog monitors OK (override)"
+    if s.get("dd_monitor_override") and n_dd == 0 and "override" not in text.lower():
+        text = f"{text} · Datadog monitors OK (override)"
     return text
 
 
@@ -2501,6 +2787,12 @@ def _wall_serialize_status(
         "p95_latency": s.get("p95_latency"),
         "traffic_variance": s.get("traffic_variance"),
         "dd_monitor_override": bool(s.get("dd_monitor_override")),
+        "dd_monitor_alerts": list(s.get("dd_monitor_alerts") or [])[:32],
+        "dd_monitor_alert_count": int(s.get("dd_monitor_alert_count") or 0)
+        or len(s.get("dd_monitor_alerts") or []),
+        "dd_monitors_url": (s.get("dd_monitors_url") or "").strip()
+        or _dd_monitors_manage_url(str(svc), str(env), dd_site)
+        or None,
         "status_reason": _wall_status_reason_plain(s),
         "eks_clusters": list(s.get("eks_clusters") or []),
         "p99_latency": s.get("p99_latency"),
@@ -2520,7 +2812,7 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
     unknown are omitted so the screen stays focused on live APM signal + issues.
     """
     global _wall_data_cache
-    cache_version = "wall_v14_pd_semaphore_align"
+    cache_version = "wall_v16_dd_monitor_alerts"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_wall_data_cache, cache_key, force_refresh)
     if hit is not None:
@@ -2535,7 +2827,8 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
         mode = g["mode"]
         statuses = list(statuses_by_mode.get(mode) or [])
         if mode == "samsung":
-            canon = set(SAMSUNG_MONITOR_SERVICES)
+            _blw = _sm_bundled_status_monitor_service_list("samsung")
+            canon = set(_blw) if _blw is not None else set(SAMSUNG_MONITOR_SERVICES)
             statuses = [s for s in statuses if s.get("service") in canon]
         statuses = [
             s
@@ -2607,6 +2900,655 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
     return dict(out)
 
 
+def _software_catalog_fallback_service_names() -> list:
+    """
+    When the Software Catalog API is unavailable (403 / keys), use the same service names
+    the monitor already tracks (ADT + general + treemap extras) — parity with ~90 Software Catalog.
+    """
+    merged = set(ADT_MONITOR_SERVICES)
+    merged.update(GENERAL_MONITOR_SERVICES)
+    merged.update(SOFTWARE_CATALOG_TREEMAP_EXTRAS)
+    return sorted(merged, key=str.lower)
+
+
+def _fetch_software_catalog_service_names_from_api(
+    dd_api_key: str,
+    dd_app_key: str,
+    dd_site: str,
+    *,
+    max_entities: int | None = None,
+) -> list | None:
+    """
+    GET /api/v2/catalog/entity (filter[kind]=service, includeDiscovered=true), paginate.
+    Requires Software Catalog read permission on the app key, or set SOFTWARE_CATALOG_USE_API=0.
+    """
+    # Opt-in: catalog API returns many entities; the default wall uses the ADT+GENERAL union (~90).
+    if (os.getenv("SOFTWARE_CATALOG_USE_API") or "0").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        return None
+    if max_entities is None:
+        try:
+            max_entities = int(os.getenv("SOFTWARE_CATALOG_MAX_ENTITIES", "150"))
+        except (TypeError, ValueError):
+            max_entities = 150
+    max_entities = max(10, min(int(max_entities), 500))
+    import requests
+
+    base = f"https://{dd_site}/api/v2/catalog/entity"
+    headers = {
+        "DD-API-KEY": dd_api_key,
+        "DD-APPLICATION-KEY": dd_app_key,
+        "Accept": "application/json",
+    }
+    all_names: list = []
+    offset = 0
+    limit = 100
+    while len(all_names) < max_entities and offset < max_entities * 2:
+        params = {
+            "page[offset]": offset,
+            "page[limit]": limit,
+            "filter[kind]": "service",
+            "includeDiscovered": "true",
+        }
+        try:
+            r = requests.get(base, headers=headers, params=params, timeout=(15, 60))
+        except Exception as e:
+            print(f"⚠️ Software catalog API request failed: {e}")
+            return None
+        if r.status_code == 403:
+            print(
+                "⚠️ Software catalog API 403 (needs catalog read) — use SOFTWARE_CATALOG_USE_API=0 or "
+                "set SOFTWARE_CATALOG_SERVICE_LIST_FILE / SOFTWARE_CATALOG_SERVICE_NAMES"
+            )
+            return None
+        if r.status_code != 200:
+            print(f"⚠️ Software catalog API {r.status_code}: {(r.text or '')[:300]}")
+            return None
+        try:
+            payload = r.json()
+        except Exception:
+            return None
+        rows = payload.get("data") or []
+        if not rows:
+            break
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            attr = item.get("attributes")
+            if not isinstance(attr, dict):
+                continue
+            name = (attr.get("name") or "").strip()
+            if not name:
+                iid = str(item.get("id") or "")
+                if iid and len(iid) < 512:
+                    for token in re.findall(r"(?:[a-z0-9][a-z0-9._-]+)", iid, re.I):
+                        token = re.sub(
+                            r"^service[._]?",
+                            "",
+                            token,
+                            flags=re.I,
+                        )
+                        if 2 < len(token) < 200 and re.match(
+                            r"^[a-z0-9][a-z0-9._-]*$", token, re.I
+                        ):
+                            name = token
+                            break
+            if not name:
+                continue
+            all_names.append(name)
+        if len(rows) < limit:
+            break
+        offset += limit
+    if not all_names:
+        return None
+    return sorted(set(all_names), key=str.lower)
+
+
+def _bundled_production_apm_127_path() -> str:
+    """Path to committed list of 127 APM `service` names for env:production."""
+    return os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "lists", "production_apm_127.txt")
+    )
+
+
+def _bundled_goldendev_apm_path() -> str:
+    """Path to committed list of APM `service` names for env:goldendev (GoldenDev)."""
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "lists", "goldendev_apm_services.txt"
+        )
+    )
+
+
+def _bundled_goldenqa_apm_path() -> str:
+    """Path to committed list of APM `service` names for env:goldenqa (GoldenQA)."""
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "lists", "goldenqa_apm_services.txt"
+        )
+    )
+
+
+def _bundled_adt_apm_path() -> str:
+    """Path to committed list of APM `service` names for env:adt_prod (ADT)."""
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "lists", "adt_apm_services.txt"
+        )
+    )
+
+
+def _bundled_qa_apm_path() -> str:
+    """Path to committed list of APM `service` names for env:qa."""
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "lists", "qa_apm_services.txt"
+        )
+    )
+
+
+def _bundled_samsung_apm_path() -> str:
+    """Path to committed Samsung RED service names (APM env: SAMSUNG_DD_ENV or samsung_prod)."""
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "lists", "samsung_apm_services.txt"
+        )
+    )
+
+
+def normalize_software_catalog_wall_dd_env(raw: str | None) -> str:
+    """
+    APM / Software UI env: production, goldendev, goldenqa, adt_prod, qa, or samsung_prod.
+    Aliases: gqa, adt, env-qa, samsung. Other values fall back to production.
+    """
+    s = (raw or "production").strip().lower()
+    if s in ("", "prod", "production"):
+        return "production"
+    if s in ("gdev", "goldendev", "golden-dev", "golden_dev"):
+        return "goldendev"
+    if s in ("goldenqa", "gqa", "golden-qa", "golden_qa"):
+        return "goldenqa"
+    if s in ("adt", "adt_prod", "adt-prod", "adtprod", "partner-prod", "adt_partner"):
+        return "adt_prod"
+    if s in ("qa", "env-qa", "env_qa"):
+        return "qa"
+    if s in ("samsung", "samsung_prod", "samsung-prod", "samsungprod"):
+        return "samsung_prod"
+    return "production"
+
+
+def resolve_software_catalog_wall_service_names(
+    dd_env: str = "production",
+) -> tuple[list, str]:
+    """
+    Service list for the APM Status Wall, evaluated against APM with the given
+    `env` tag (production, goldendev, goldenqa, adt_prod, qa, or samsung_prod in the UI/API).
+    Precedence: SOFTWARE_CATALOG_SERVICE_NAMES → SOFTWARE_CATALOG_SERVICE_LIST_FILE
+    → bundled lists (…production_apm_127…, goldendev_*, goldenqa_*, adt_*, qa_*, samsung_*);
+    disable with USE_BUNDLED_127, USE_BUNDLED_GOLDENDEV, USE_BUNDLED_GOLDENQA, USE_BUNDLED_ADT,
+    USE_BUNDLED_QA, USE_BUNDLED_SAMSUNG=0
+    → optional catalog API → ADT+GENERAL union.
+    """
+    _dd_env = normalize_software_catalog_wall_dd_env(dd_env)
+
+    raw = (os.getenv("SOFTWARE_CATALOG_SERVICE_NAMES") or "").strip()
+    if raw:
+        names = sorted(
+            {x.strip() for x in raw.split(",") if x.strip()}, key=str.lower
+        )
+        if names:
+            print(
+                f"🧭 Software catalog wall (env={_dd_env}): {len(names)} service(s) from "
+                f"SOFTWARE_CATALOG_SERVICE_NAMES"
+            )
+            return names, "env_csv"
+
+    path = (os.getenv("SOFTWARE_CATALOG_SERVICE_LIST_FILE") or "").strip()
+    if path and os.path.isfile(path):
+        file_names: list = []
+        try:
+            with open(path, encoding="utf-8") as f:
+                file_names = [
+                    ln.strip()
+                    for ln in f
+                    if ln.strip() and not ln.lstrip().startswith("#")
+                ]
+        except OSError as e:
+            print(f"⚠️ SOFTWARE_CATALOG_SERVICE_LIST_FILE: {e}")
+        else:
+            if file_names:
+                print(
+                    f"🧭 Software catalog wall (env={_dd_env}): {len(file_names)} service(s) from file {path!r}"
+                )
+                return sorted(set(file_names), key=str.lower), "file"
+
+    if _dd_env == "production" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_127", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )):
+        bundled = _bundled_production_apm_127_path()
+        if os.path.isfile(bundled):
+            bnames: list = []
+            try:
+                with open(bundled, encoding="utf-8") as f:
+                    bnames = [
+                        ln.strip()
+                        for ln in f
+                        if ln.strip() and not ln.lstrip().startswith("#")
+                    ]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {bundled!r}: {e}")
+            else:
+                if bnames:
+                    print(
+                        f"🧭 Software catalog wall: {len(bnames)} service(s) from "
+                        f"bundled production_apm_127.txt (env=production)"
+                    )
+                    return sorted(set(bnames), key=str.lower), "bundled_127"
+
+    if _dd_env == "goldendev" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_GOLDENDEV", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )):
+        gb = _bundled_goldendev_apm_path()
+        if os.path.isfile(gb):
+            gnames: list = []
+            try:
+                with open(gb, encoding="utf-8") as f:
+                    gnames = [
+                        ln.strip()
+                        for ln in f
+                        if ln.strip() and not ln.lstrip().startswith("#")
+                    ]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {gb!r}: {e}")
+            else:
+                if gnames:
+                    print(
+                        f"🧭 Software catalog wall: {len(gnames)} service(s) from "
+                        f"bundled goldendev_apm_services.txt (env=goldendev)"
+                    )
+                    return sorted(set(gnames), key=str.lower), "bundled_goldendev"
+
+    if _dd_env == "goldenqa" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_GOLDENQA", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )):
+        gq = _bundled_goldenqa_apm_path()
+        if os.path.isfile(gq):
+            gqnames: list = []
+            try:
+                with open(gq, encoding="utf-8") as f:
+                    gqnames = [
+                        ln.strip()
+                        for ln in f
+                        if ln.strip() and not ln.lstrip().startswith("#")
+                    ]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {gq!r}: {e}")
+            else:
+                if gqnames:
+                    print(
+                        f"🧭 Software catalog wall: {len(gqnames)} service(s) from "
+                        f"bundled goldenqa_apm_services.txt (env=goldenqa)"
+                    )
+                    return sorted(set(gqnames), key=str.lower), "bundled_goldenqa"
+
+    if _dd_env == "adt_prod" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_ADT", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )):
+        adt_p = _bundled_adt_apm_path()
+        if os.path.isfile(adt_p):
+            anames: list = []
+            try:
+                with open(adt_p, encoding="utf-8") as f:
+                    anames = [
+                        ln.strip()
+                        for ln in f
+                        if ln.strip() and not ln.lstrip().startswith("#")
+                    ]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {adt_p!r}: {e}")
+            else:
+                if anames:
+                    print(
+                        f"🧭 Software catalog wall: {len(anames)} service(s) from "
+                        f"bundled adt_apm_services.txt (env=adt_prod)"
+                    )
+                    return sorted(set(anames), key=str.lower), "bundled_adt"
+
+    if _dd_env == "qa" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_QA", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )):
+        qpath = _bundled_qa_apm_path()
+        if os.path.isfile(qpath):
+            qnames: list = []
+            try:
+                with open(qpath, encoding="utf-8") as f:
+                    qnames = [
+                        ln.strip()
+                        for ln in f
+                        if ln.strip() and not ln.lstrip().startswith("#")
+                    ]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {qpath!r}: {e}")
+            else:
+                if qnames:
+                    print(
+                        f"🧭 Software catalog wall: {len(qnames)} service(s) from "
+                        f"bundled qa_apm_services.txt (env=qa)"
+                    )
+                    return sorted(set(qnames), key=str.lower), "bundled_qa"
+
+    if _dd_env == "samsung_prod" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_SAMSUNG", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )):
+        s_path = _bundled_samsung_apm_path()
+        if os.path.isfile(s_path):
+            snames: list = []
+            try:
+                with open(s_path, encoding="utf-8") as f:
+                    snames = [
+                        ln.strip()
+                        for ln in f
+                        if ln.strip() and not ln.lstrip().startswith("#")
+                    ]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {s_path!r}: {e}")
+            else:
+                if snames:
+                    print(
+                        f"🧭 Software catalog wall: {len(snames)} service(s) from "
+                        f"bundled samsung_apm_services.txt (Samsung / SAMSUNG_DD_ENV)"
+                    )
+                    return sorted(set(snames), key=str.lower), "bundled_samsung"
+
+    dd_api = os.getenv("DATADOG_API_KEY")
+    dd_app = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+    if dd_api and dd_app:
+        api_list = _fetch_software_catalog_service_names_from_api(
+            dd_api, dd_app, dd_site
+        )
+        if api_list:
+            if (os.getenv("SOFTWARE_CATALOG_API_INTERSECT_FALLBACK") or "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            ):
+                inter = sorted(
+                    set(api_list) & set(_software_catalog_fallback_service_names()),
+                    key=str.lower,
+                )
+                if inter:
+                    print(
+                        f"🧭 Software catalog wall (env={_dd_env}): {len(inter)} service(s) (API ∩ "
+                        f"ADT+GENERAL fallback) — {len(api_list)} from API before intersect"
+                    )
+                    return inter, "catalog_api_intersect_fallback"
+            print(
+                f"🧭 Software catalog wall (env={_dd_env}): {len(api_list)} service(s) from "
+                f"Datadog /api/v2/catalog/entity"
+            )
+            return api_list, "catalog_api"
+
+    fallback = _software_catalog_fallback_service_names()
+    if _dd_env == "goldendev":
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback) — rellena o habilita lists/goldendev_apm_services.txt"
+        )
+    elif _dd_env == "goldenqa":
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback) — rellena o habilita lists/goldenqa_apm_services.txt"
+        )
+    elif _dd_env == "adt_prod":
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback) — rellena o habilita lists/adt_apm_services.txt"
+        )
+    elif _dd_env == "qa":
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback) — rellena o habilita lists/qa_apm_services.txt"
+        )
+    elif _dd_env == "samsung_prod":
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback) — rellena o habilita lists/samsung_apm_services.txt"
+        )
+    else:
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback)"
+        )
+    return fallback, "fallback_union"
+
+
+def status_monitor_software_catalog_wall_data(
+    timerange: int = 1, force_refresh: bool = False, dd_env: str = "production"
+) -> dict:
+    """
+    One wall section: all Software catalog services × env tag (default production;
+    also goldendev / goldenqa / adt_prod / qa / samsung_prod with bundled lists), same APM/PD rules as the main status wall
+    (get_service_health_status + PagerDuty correlation + EKS hints).
+    Inactive/unknown are returned as green \"low signal\" tile rows
+    (same JSON as main wall, separate columns).
+    """
+    global _software_catalog_wall_cache
+    dde = normalize_software_catalog_wall_dd_env(dd_env)
+    cache_version = "sc_wall_v14_dd_monitor_alerts"
+    apm_bucket = _apm_status_wall_cache_bucket_secs()
+    cache_key = f"{cache_version}_{dde}_{timerange}_{int(time.time() // apm_bucket)}"
+    hit = _read_sm_mem_cache(_software_catalog_wall_cache, cache_key, force_refresh)
+    if hit is not None:
+        return dict(hit)
+
+    dd_api_key = os.getenv("DATADOG_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+    if not dd_api_key or not dd_app_key:
+        return {
+            "success": False,
+            "error": "Datadog API keys not configured",
+            "timerange": timerange,
+            "dd_env": dde,
+            "groups": [],
+        }
+
+    services, _source = resolve_software_catalog_wall_service_names(dde)
+    if not services:
+        return {
+            "success": False,
+            "error": "No services resolved for software catalog wall",
+            "timerange": timerange,
+            "dd_env": dde,
+            "groups": [],
+        }
+
+    current_time = int(time.time())
+    from_time = current_time - (timerange * 3600)
+    if dde == "samsung_prod":
+        sam_e = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip() or "samsung_prod"
+        environments = [sam_e]
+    else:
+        environments = [dde]
+    pd_slug = "samsung" if dde == "samsung_prod" else dde
+    wall_mode = "samsung" if dde == "samsung_prod" else dde
+
+    pd_api_key = os.getenv("PAGERDUTY_API_TOKEN")
+    _pd_c = {"triggered": 0, "acknowledged": 0, "resolved": 0}
+    pd_incidents: list = []
+    if pd_api_key:
+        try:
+            _pd_c, pd_incidents = get_pagerduty_status_counts(
+                pd_api_key, force_refresh
+            )
+        except Exception as e:
+            print(f"⚠️ Software catalog wall: PagerDuty fetch failed: {e}")
+
+    all_statuses = _sm_fetch_parallel_service_health(
+        services,
+        environments,
+        dd_api_key,
+        dd_app_key,
+        dd_site,
+        from_time,
+        current_time,
+        int(timerange),
+        force_refresh,
+    )
+    _sm_apply_pagerduty_correlation(
+        all_statuses,
+        services,
+        environments,
+        pd_slug,
+        pd_incidents,
+        silent=False,
+    )
+    n_inactive = sum(1 for s in all_statuses if s.get("status") == "inactive")
+    n_unknown = sum(1 for s in all_statuses if s.get("status") == "unknown")
+    statuses = [
+        s
+        for s in all_statuses
+        if s.get("status") in ("healthy", "warning", "critical")
+    ]
+    statuses.sort(key=_wall_service_sort_key)
+    if _apm_status_wall_attach_eks():
+        eks_wall_cache: dict = {}
+        _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache)
+
+    low_statuses = [
+        s
+        for s in all_statuses
+        if s.get("status") in ("inactive", "unknown")
+    ]
+    low_statuses.sort(key=lambda x: (x.get("service") or "").lower())
+
+    h = sum(1 for s in statuses if s.get("status") == "healthy")
+    w = sum(1 for s in statuses if s.get("status") == "warning")
+    c = sum(1 for s in statuses if s.get("status") == "critical")
+    unk = n_unknown
+    inn = n_inactive
+    if c > 0:
+        overall = "critical"
+    elif w > 0:
+        overall = "warning"
+    else:
+        overall = "healthy"
+
+    dd_site_ser = os.getenv("DD_SITE", "datadoghq.com")
+    ser = [_wall_serialize_status(s, dd_site_ser, wall_mode, timerange) for s in statuses]
+    ag, ar_eu = _wall_split_services_by_region(ser)
+    region_columns = [
+        {
+            "key": "arlo_global",
+            "label": "Arlo Global",
+            "subtitle": "Oregon",
+            "services": ag,
+        },
+        {
+            "key": "arlo_eu",
+            "label": "Arlo EU",
+            "subtitle": "Ireland",
+            "services": ar_eu,
+        },
+    ]
+    low_ser = [
+        _wall_serialize_status(s, dd_site_ser, wall_mode, timerange)
+        for s in low_statuses
+    ]
+    lo_g, lo_eu = _wall_split_services_by_region(low_ser)
+    low_signal_region_columns = [
+        {
+            "key": "lo_global",
+            "label": "Baja señal (verde)",
+            "subtitle": "Oregon · inactive/unknown",
+            "services": lo_g,
+        },
+        {
+            "key": "lo_eu",
+            "label": "Baja señal (verde)",
+            "subtitle": "Ireland · inactive/unknown",
+            "services": lo_eu,
+        },
+    ]
+    if _apm_status_wall_header_light():
+        monitors = _wall_apm_header_badges_reuse_pd(_pd_c, pd_api_key)
+    else:
+        monitors = _wall_fetch_monitor_badges(timerange, force_refresh)
+    _wall_label = (
+        "APM Status Wall (Samsung / samsung_prod)"
+        if dde == "samsung_prod"
+        else (f"APM Status Wall ({dde})" if dde != "production" else "APM Status Wall (production)")
+    )
+    _wall_slug = (
+        f"software-catalog-{dde}" if dde != "production" else "software-catalog-production"
+    )
+    out = {
+        "success": True,
+        "timerange": timerange,
+        "dd_env": dde,
+        "monitors": monitors,
+        "source": {
+            "kind": "apm_status_wall",
+            "service_name_source": _source,
+            "services_in_scope": len(services),
+            "tiles_shown": len(statuses),
+            "low_signal_tiles": len(low_ser),
+            "not_shown": {
+                "inactive": n_inactive,
+                "unknown": n_unknown,
+            },
+            "apm_environment": dde,
+            "header_light": _apm_status_wall_header_light(),
+            "eks_hints": _apm_status_wall_attach_eks(),
+        },
+        "groups": [
+            {
+                "slug": _wall_slug,
+                "label": _wall_label,
+                "mode": dde,
+                "overall": overall,
+                "counts": {
+                    "healthy": h,
+                    "warning": w,
+                    "critical": c,
+                    "unknown": unk,
+                    "inactive": inn,
+                    "total": len(statuses),
+                },
+                "services": ser,
+                "region_columns": region_columns,
+                "low_signal_region_columns": low_signal_region_columns,
+            }
+        ],
+    }
+    _write_sm_mem_cache(_software_catalog_wall_cache, cache_key, out)
+    return dict(out)
+
+
 def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) -> dict:
     """
     JSON summary for the /statusmonitor hub: one card per environment.
@@ -2615,7 +3557,7 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
     (Summary panel), for the same timerange — not aggregate-only queries.
     """
     global _hub_summary_cache
-    cache_version = "hub_v12_status_reason_lines"
+    cache_version = "hub_v15_dd_alerts_rollup"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_hub_summary_cache, cache_key, force_refresh)
     if hit is not None:
@@ -2627,7 +3569,8 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
     for row in HUB_ENV_ROWS:
         statuses = statuses_by_mode.get(row["mode"], [])
         if row["slug"] == "samsung":
-            canon = set(SAMSUNG_MONITOR_SERVICES)
+            _bl = _sm_bundled_status_monitor_service_list("samsung")
+            canon = set(_bl) if _bl is not None else set(SAMSUNG_MONITOR_SERVICES)
             statuses_for_card = [s for s in statuses if s.get("service") in canon]
         else:
             statuses_for_card = statuses
@@ -2646,6 +3589,7 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
             overall = "healthy"
         operational = h + w + c
         configured = len(statuses_for_card)
+        dd_atot, dd_asvcs = _hub_dd_alerts_rollup(statuses_for_card)
         entry = {
             "slug": row["slug"],
             "label": row["label"],
@@ -2659,6 +3603,8 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
             "configured": configured,
             "monitored": configured,
             "overall": overall,
+            "dd_monitor_alerts_total": dd_atot,
+            "dd_monitor_alerts_services": dd_asvcs,
             "status_reason_lines": _hub_build_status_reason_lines(statuses_for_card, overall),
         }
         env_payload.append(entry)
@@ -2757,7 +3703,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     
     Args:
         timerange: Time range in hours (default 1)
-        environment: Specific environment to display ('production', 'goldendev', 'goldenqa', or None for all)
+        environment: Specific environment (production, goldendev, goldenqa, qa, samsung, adt, redmetrics-us) or None for hub
     
     Returns:
         HTML string for the dashboard
@@ -2765,7 +3711,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     global _status_cache
     
     # Check cache first - include version to invalidate cache when logic changes
-    cache_version = "v3.4.14_oregon_adt_samsung_region"  # Change this when logic changes
+    cache_version = "v3.4.15_bundled_status_monitor_lists"  # Change this when logic changes
     cache_key = f"{cache_version}_{timerange}_{environment}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_status_cache, cache_key, force_refresh)
     if hit is not None:
@@ -3288,6 +4234,9 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     elif environment == 'redmetrics-us':
         dashboard_title = "🇺🇸 RED Metrics US"
         dashboard_subtitle = "Real-time health status for US region services"
+    elif environment == 'qa':
+        dashboard_title = "QA"
+        dashboard_subtitle = "Real-time health for env:qa (platform / cluster services)"
     elif environment:
         dashboard_title = f"📊 {environment.upper()} Status Monitor"
         dashboard_subtitle = f"Real-time health status for {environment}"
@@ -4062,6 +5011,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         'production': {'icon': '🔵', 'color': '#3b82f6'},
         'goldendev': {'icon': '🔵', 'color': '#3b82f6'},
         'goldenqa': {'icon': '🔵', 'color': '#3b82f6'},
+        'qa': {'icon': '🔵', 'color': '#3b82f6'},
         'samsung_prod': {'icon': '📱', 'color': '#0ea5e9'},
         'adt_prod': {'icon': '🏠', 'color': '#8b5cf6'},
     }

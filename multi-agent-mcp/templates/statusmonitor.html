@@ -296,11 +296,68 @@
             font-size: 15px;
             font-weight: 800;
             letter-spacing: -0.02em;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
         a.sm-hub-card--healthy .sm-hub-card-title { color: #064e3b; }
         a.sm-hub-card--warning .sm-hub-card-title { color: #713f12; }
         a.sm-hub-card--critical .sm-hub-card-title { color: #fff7ed; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .sm-hub-ambrow {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .sm-hub-sema {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+        .sm-hub-sd {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            opacity: 0.3;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12);
+        }
+        .sm-hub-sd--g { background: #22c55e; }
+        .sm-hub-sd--y { background: #eab308; }
+        .sm-hub-sd--r { background: #ef4444; }
+        .sm-hub-sd.is-on { opacity: 1; box-shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 0 8px rgba(0,0,0,0.2); }
+        a.sm-hub-card--critical .sm-hub-sd.is-on.sm-hub-sd--r { box-shadow: 0 0 0 1px rgba(255,255,255,0.35), 0 0 10px rgba(255, 80, 80, 0.55); }
+        .sm-hub-dd-rollup {
+            text-align: right;
+            min-width: 0;
+        }
+        .sm-hub-dd-rollup__n {
+            font-size: 18px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+        a.sm-hub-card--healthy .sm-hub-dd-rollup__n { color: #047857; }
+        a.sm-hub-card--warning .sm-hub-dd-rollup__n { color: #a16207; }
+        a.sm-hub-card--critical .sm-hub-dd-rollup__n { color: #ffedd5; }
+        .sm-hub-dd-rollup__lbl {
+            display: block;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            line-height: 1.1;
+        }
+        a.sm-hub-card--healthy .sm-hub-dd-rollup__lbl { color: #059669; }
+        a.sm-hub-card--warning .sm-hub-dd-rollup__lbl { color: #92400e; }
+        a.sm-hub-card--critical .sm-hub-dd-rollup__lbl { color: #fed7aa; }
+        .sm-hub-dd-rollup__meta {
+            display: block;
+            font-size: 9px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        a.sm-hub-card--healthy .sm-hub-dd-rollup__meta { color: #047857; }
+        a.sm-hub-card--warning .sm-hub-dd-rollup__meta { color: #92400e; }
+        a.sm-hub-card--critical .sm-hub-dd-rollup__meta { color: #fdba74; }
         .sm-hub-stats {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -570,16 +627,19 @@
                         <li><a href="/statusmonitor/production" class="{{ 'active' if environment == 'production' else '' }}">Production</a></li>
                         <li><a href="/statusmonitor/goldendev" class="{{ 'active' if environment == 'goldendev' else '' }}">GoldenDev</a></li>
                         <li><a href="/statusmonitor/goldenqa" class="{{ 'active' if environment == 'goldenqa' else '' }}">GoldenQA</a></li>
+                        <li><a href="/statusmonitor/qa" class="{{ 'active' if environment == 'qa' else '' }}">QA</a></li>
                         <li><a href="/statusmonitor/samsung" class="{{ 'active' if environment == 'samsung' else '' }}">Samsung</a></li>
                         <li><a href="/statusmonitor/adt" class="{{ 'active' if environment == 'adt' else '' }}">ADT</a></li>
                         <li><a href="/statusmonitor/redmetrics-us" class="{{ 'active' if environment == 'redmetrics-us' else '' }}">RED Metrics US</a></li>
                         <li><a href="/statuswall">Status wall</a></li>
+                        <li><a href="/apm-services">APM Status Wall</a></li>
                     </ul>
                 </nav>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #718096; flex-wrap: wrap;">
                 <button type="button" class="sm-wall-header-btn" onclick="window.sendStatusMonitorToSlack()" title="Resumen Bedrock de la vista → Slack">📤 Slack</button>
                 <a href="/statuswall" class="sm-wall-header-btn">Status wall</a>
+                <a href="/apm-services" class="sm-wall-header-btn" title="APM Status Wall">APM wall</a>
                 <span><span style="font-weight: 600; color: #2d3748;">GOC</span> Status Monitor</span>
             </div>
         </div>
@@ -599,6 +659,7 @@
             <button type="button" onclick="loadHubSummary({ forceRefresh: true })" style="padding: 6px 14px; background: #0095da; color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">Refresh</button>
             <button type="button" class="sm-slack-btn" onclick="window.sendStatusMonitorToSlack()" title="Resumen Bedrock → Slack">📤 Slack</button>
             <a href="/statuswall" class="sm-wall-btn">Open status wall</a>
+            <a href="/apm-services" class="sm-wall-btn" title="APM Status Wall">Open APM Status Wall</a>
         </div>
         <div id="slack-share-root">
         <div id="loading">
@@ -835,8 +896,11 @@
         function smHoverReason(d) {
             if (d.status === 'inactive') return 'No APM traffic in window';
             if (d.status === 'unknown') return 'No data / query issue';
-            if (d.status === 'healthy') return 'Healthy — within APM thresholds';
+            const ddc = d.dd_monitor_alert_count != null ? Number(d.dd_monitor_alert_count) : 0;
+            if (d.status === 'healthy' && !(ddc > 0)) return 'Healthy — within APM thresholds';
             const bits = [];
+            if (ddc === 1) bits.push('1 Datadog monitor in Alert');
+            else if (ddc > 1) bits.push(ddc + ' Datadog monitors in Alert');
             if (d.pd_incident) bits.push('PagerDuty');
             if (d.high_latency) bits.push('High latency');
             if (d.traffic_drop) bits.push('Traffic drop vs 7d');
@@ -866,6 +930,8 @@
                     ['Critical', d.critical],
                     ['Inactive', d.inactive != null ? d.inactive : 0],
                     ['Unknown', d.unknown != null ? d.unknown : 0],
+                    ['Monitors in Alert (Σ)', d.dd_monitor_alerts_total != null ? d.dd_monitor_alerts_total : '—'],
+                    ['Services w/ alert', d.dd_monitor_alerts_services != null ? d.dd_monitor_alerts_services : '—'],
                     ['Operational', d.operational != null ? d.operational : '—'],
                     ['Configured', d.configured != null ? d.configured : '—'],
                 ];
@@ -1008,7 +1074,35 @@
                     c.textContent = 'Traffic ' + Math.round(Number(d.traffic_variance)) + '% vs 7d';
                     chips.appendChild(c);
                 }
+                const ddc2 = d.dd_monitor_alert_count != null ? Number(d.dd_monitor_alert_count) : 0;
+                if (ddc2 > 0) {
+                    if (d.dd_monitors_url) {
+                        const cdd = document.createElement('a');
+                        cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                        cdd.href = d.dd_monitors_url;
+                        cdd.target = '_blank';
+                        cdd.rel = 'noopener noreferrer';
+                        cdd.textContent = ddc2 === 1 ? '1 DD monitor (Alert)' : ddc2 + ' DD monitors (Alert)';
+                        chips.appendChild(cdd);
+                    } else {
+                        const cdd = document.createElement('span');
+                        cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                        cdd.textContent = ddc2 === 1 ? '1 DD monitor (Alert)' : ddc2 + ' DD monitors (Alert)';
+                        chips.appendChild(cdd);
+                    }
+                }
                 if (chips.children.length) inner.appendChild(chips);
+                if (ddc2 > 0) {
+                    const dnames = Array.isArray(d.dd_monitor_alerts) ? d.dd_monitor_alerts.filter(Boolean) : [];
+                    if (dnames.length) {
+                        const dnl = document.createElement('div');
+                        dnl.className = 'sm-hover-tip-why';
+                        dnl.style.fontSize = '10px';
+                        dnl.style.lineHeight = '1.4';
+                        dnl.textContent = 'Monitors: ' + dnames.join(' · ');
+                        inner.appendChild(dnl);
+                    }
+                }
                 const why = document.createElement('div');
                 why.className = 'sm-hover-tip-why';
                 why.textContent = 'Why: ' + smHoverReason(d);
@@ -1275,6 +1369,26 @@
             const envs = data.environments || [];
             const cards = envs.map(function(e) {
                 const cls = e.overall === 'critical' ? 'sm-hub-card--critical' : (e.overall === 'warning' ? 'sm-hub-card--warning' : 'sm-hub-card--healthy');
+                const ov = e.overall || 'healthy';
+                const gOn = ov === 'healthy' ? ' is-on' : '';
+                const yOn = ov === 'warning' ? ' is-on' : '';
+                const rOn = ov === 'critical' ? ' is-on' : '';
+                const ddt = e.dd_monitor_alerts_total != null ? Number(e.dd_monitor_alerts_total) : 0;
+                const dds = e.dd_monitor_alerts_services != null ? Number(e.dd_monitor_alerts_services) : 0;
+                const ddtSafe = Number.isFinite(ddt) ? ddt : 0;
+                const ddsSafe = Number.isFinite(dds) ? dds : 0;
+                const metaS = ddsSafe > 0
+                    ? '<span class="sm-hub-dd-rollup__meta">' + ddsSafe + ' ' + (ddsSafe === 1 ? 'service' : 'services') + '</span>'
+                    : '';
+                const ambRow = '<div class="sm-hub-ambrow">' +
+                    '<div class="sm-hub-sema" role="img" aria-label="Environment status: ' + escHubText(ov) + '">' +
+                    '<span class="sm-hub-sd sm-hub-sd--g' + gOn + '"></span>' +
+                    '<span class="sm-hub-sd sm-hub-sd--y' + yOn + '"></span>' +
+                    '<span class="sm-hub-sd sm-hub-sd--r' + rOn + '"></span></div>' +
+                    '<div class="sm-hub-dd-rollup" title="Datadog monitors in Alert (sum of service+env; same as status tiles)">' +
+                    '<span class="sm-hub-dd-rollup__n">' + ddtSafe + '</span>' +
+                    '<span class="sm-hub-dd-rollup__lbl">monitors in Alert</span>' +
+                    metaS + '</div></div>';
                 let br = '';
                 if (e.service_breakdown && e.service_breakdown.length) {
                     br = '<div class="sm-hub-svc-breakdown">' + e.service_breakdown.map(function(r) {
@@ -1286,6 +1400,7 @@
                 }
                 const cardHtml = '<a class="sm-hub-card ' + cls + '" href="' + escHubText(e.href) + '">' +
                     '<div class="sm-hub-card-title">' + escHubText(e.label) + '</div>' +
+                    ambRow +
                     '<div class="sm-hub-stats">' +
                     '<span>Healthy</span><span class="sm-hub-stat-val">' + e.healthy + '</span>' +
                     '<span>Warning</span><span class="sm-hub-stat-val">' + e.warning + '</span>' +
@@ -1315,6 +1430,8 @@
                     unknown: e.unknown,
                     operational: e.operational != null ? e.operational : ((e.healthy || 0) + (e.warning || 0) + (e.critical || 0)),
                     configured: e.configured != null ? e.configured : e.monitored,
+                    dd_monitor_alerts_total: ddtSafe,
+                    dd_monitor_alerts_services: ddsSafe,
                     reason_lines: e.status_reason_lines || [],
                 };
                 return '<div class="sm-hub-cell sm-tip-wrap" data-sm-hover="' + escDataAttr(hubPayload) + '">' + cardHtml + reasonHtml + '</div>';
@@ -1325,7 +1442,7 @@
                 '<div id="sm-hub-samsung-slot" style="margin-bottom:16px;"></div>' +
                 '<div id="sm-hub-adt-slot" style="margin-bottom:16px;"></div>' +
                 '<h2>Environment status</h2>' +
-                '<div class="sm-hub-sub">Datadog APM by environment (same rules as the full monitor: warning &gt;1% error rate, critical &gt;5%). <strong>Operational</strong> = healthy + warning + critical (matches drill-down Summary “Total listed”). <strong>Configured</strong> = all services in the list.</div>' +
+                '<div class="sm-hub-sub">Datadog APM by environment. Each card: <strong>traffic light</strong> = overall APM status; <strong>monitors in Alert</strong> = total Datadog <code>status:alert</code> (service+env) across listed services. Same rules in drill-down: warning &gt;1% error, critical &gt;5%. <strong>Operational</strong> = healthy + warning + critical. <strong>Configured</strong> = all services in the list.</div>' +
                 '<div class="sm-hub-grid">' + cards + '</div></div>';
             loadSmHubSplunk();
             loadSmHubSamsung();

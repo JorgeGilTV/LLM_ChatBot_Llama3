@@ -1,0 +1,315 @@
+<form version="1.0" theme="dark">
+  <label>Platform cleanup — HMS lib cleanup &amp; daily job</label>
+  <description>index=platform_engr_prod, cleanup, host=arlos3bat1*. Host short name via rex. &quot;Today: all expected hosts&quot; is OK only if every host in bat_lo–bat_hi has a Daily cleanup line with cleanup_day = today (not merely if one host finished). If needed broaden host_pat.</description>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default>
+        <earliest>-7d</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="text" token="idx" searchWhenChanged="true">
+      <label>Index</label>
+      <default>platform_engr_prod</default>
+    </input>
+    <input type="text" token="host_pat" searchWhenChanged="true">
+      <label>Host pattern (Splunk wildcards; FQDN e.g. *.arlocloud.com still matches arlos3bat1*)</label>
+      <default>arlos3bat1*</default>
+    </input>
+    <input type="text" token="base_q" searchWhenChanged="true">
+      <label>Base keywords (e.g. cleanup)</label>
+      <default>cleanup</default>
+    </input>
+    <input type="text" token="maint_q" searchWhenChanged="true">
+      <label>Restart / maintenance search</label>
+      <default>(restart OR maintenance OR "scheduled maintenance" OR systemd)</default>
+    </input>
+    <input type="text" token="csv_q" searchWhenChanged="true">
+      <label>User account CSV refresh (adjust to your log line)</label>
+      <default>("user account" OR users.csv)</default>
+    </input>
+    <input type="text" token="bat_lo" searchWhenChanged="true">
+      <label>Expected s3bat range — start (hostname suffix)</label>
+      <default>100</default>
+    </input>
+    <input type="text" token="bat_hi" searchWhenChanged="true">
+      <label>Expected s3bat range — end (inclusive)</label>
+      <default>120</default>
+    </input>
+  </fieldset>
+
+  <!-- 1) Daily cleanup completed for *today* (uses job time window) -->
+  <row>
+    <panel>
+      <title>Today: all expected hosts completed? (yyyyMMdd in message vs bat range)</title>
+      <single>
+        <search>
+          <query>| makeresults
+| eval bat_end=$bat_hi$ + 1
+| eval n=mvrange($bat_lo$, bat_end)
+| mvexpand n
+| eval expected_host="arlos3bat".n
+| fields expected_host
+| join type=left expected_host [
+  search index=$idx$ host=$host_pat$ $base_q$ "Daily cleanup" "has completed" earliest=$t.earliest$ latest=$t.latest$
+  | rex field=_raw max_match=0 "Daily cleanup of (?&lt;cleanup_day>\d{8}) has completed"
+  | eval today=strftime(now(), "%Y%m%d")
+  | where cleanup_day=today
+  | rex field=host "^(?&lt;expected_host>arlos3bat\d+)"
+  | where isnotnull(expected_host)
+  | stats count as today_done by expected_host
+]
+| fillnull value=0 today_done
+| eval gap=if(today_done&lt;1,1,0)
+| stats sum(gap) as missing_hosts
+| eval status=if(missing_hosts&gt;0, "MISSING — not every host completed for today", "OK — all expected hosts completed for today")</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">status</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Count: &quot;Daily cleanup … has completed&quot;</title>
+      <single>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$ "Daily cleanup" "has completed"
+| stats count as total</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Distinct hosts (any cleanup log in range)</title>
+      <single>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$
+| rex field=host "^(?&lt;host_short>arlos3bat\d+)"
+| eval host_short=coalesce(host_short, host)
+| stats dc(host_short) as hosts</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">hosts</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+
+  <!-- Inventory: expected arlos3bat100–120 vs any cleanup event in range (finds gaps e.g. 108) -->
+  <row>
+    <panel>
+      <title>Missing hosts — expected arlos3bat{bat_lo–bat_hi} with zero cleanup events in this window</title>
+      <single>
+        <search>
+          <query>| makeresults
+| eval bat_end=$bat_hi$ + 1
+| eval n=mvrange($bat_lo$, bat_end)
+| mvexpand n
+| eval expected_host="arlos3bat".n
+| fields expected_host
+| join type=left expected_host [
+  search index=$idx$ host=$host_pat$ $base_q$ earliest=$t.earliest$ latest=$t.latest$
+  | rex field=host "^(?&lt;expected_host>arlos3bat\d+)"
+  | where isnotnull(expected_host)
+  | stats count as event_count by expected_host
+]
+| fillnull value=0 event_count
+| where event_count&lt;1
+| stats count as missing_count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">missing_count</option>
+        <option name="rangeValues">["0","1","2","5"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Expected vs actual — all hosts in range (MISSING = no logs / UF / ACL)</title>
+      <table>
+        <search>
+          <query>| makeresults
+| eval bat_end=$bat_hi$ + 1
+| eval n=mvrange($bat_lo$, bat_end)
+| mvexpand n
+| eval expected_host="arlos3bat".n
+| fields expected_host
+| join type=left expected_host [
+  search index=$idx$ host=$host_pat$ $base_q$ earliest=$t.earliest$ latest=$t.latest$
+  | rex field=host "^(?&lt;expected_host>arlos3bat\d+)"
+  | where isnotnull(expected_host)
+  | stats count as event_count by expected_host
+]
+| fillnull value=0 event_count
+| eval status=if(event_count&lt;1, "MISSING", "ok")
+| table expected_host event_count status
+| sort expected_host</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">64</option>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- 4) Per-day completion + per host last completion -->
+  <row>
+    <panel>
+      <title>Daily cleanup completions by date (from message)</title>
+      <chart>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$ "Daily cleanup" "has completed"
+| rex field=_raw max_match=0 "Daily cleanup of (?&lt;cleanup_day>\d{8}) has completed"
+| where isnotnull(cleanup_day)
+| stats count by cleanup_day
+| sort cleanup_day</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Last &quot;Daily cleanup … completed&quot; per host</title>
+      <table>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$ "Daily cleanup" "has completed"
+| rex field=_raw max_match=0 "Daily cleanup of (?&lt;cleanup_day>\d{8}) has completed"
+| rex field=host "^(?&lt;host_short>arlos3bat\d+)"
+| stats latest(_time) as last_seen latest(cleanup_day) as last_cleanup_day latest(host) as host_raw by host_short
+| eval last_seen=strftime(last_seen, "%Y-%m-%d %H:%M:%S %Z")
+| sort host_short</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="drilldown">row</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- Start / end patterns -->
+  <row>
+    <panel>
+      <title>Cleanup start: &quot;Running library cleanup for&quot;</title>
+      <chart>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$ "Running library cleanup for"
+| timechart span=1h count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Cleanup end: &quot;Daily cleanup&quot; + completed</title>
+      <chart>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$ "Daily cleanup" "has completed"
+| timechart span=1h count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- 2) hmslibcoverage: mention in search; host coverage -->
+  <row>
+    <panel>
+      <title>hmslibcleanup / cleanup — event count by host (ingestion coverage)</title>
+      <chart>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$ (hmslibcleanup OR "library cleanup" OR "Running library cleanup")
+| rex field=host "^(?&lt;host_short>arlos3bat\d+)"
+| stats count by host_short
+| sort host_short</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- 1) Restart / maintenance -->
+  <row>
+    <panel>
+      <title>Restart / maintenance — tune token maint_q + alert on this search</title>
+      <table>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $maint_q$
+| table _time host source _raw
+| sort - _time
+| head 100</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="drilldown">row</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- 3) User CSV — optional token; empty skips meaningful match -->
+  <row>
+    <panel>
+      <title>User account CSV refresh (set token csv_q to your log pattern)</title>
+      <table>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $csv_q$
+| rex field=host "^(?&lt;host_short>arlos3bat\d+)"
+| stats latest(_time) as last_epoch latest(host) as host_raw by host_short
+| eval last_log=strftime(last_epoch, "%Y-%m-%d %H:%M:%S %Z")
+| eval days_since=round((now()-last_epoch)/86400,1)
+| eval stale=if(days_since&gt;7, "older than 7d", "within 7d")
+| sort host_short</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="drilldown">row</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Recent cleanup-related events</title>
+      <table>
+        <search>
+          <query>index=$idx$ host=$host_pat$ $base_q$
+| table _time host source _raw
+| sort - _time
+| head 150</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">150</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

@@ -6,7 +6,30 @@ Exposes all integrated tools (Datadog, PagerDuty, Jira, Splunk, Confluence) as M
 import asyncio
 import json
 import logging
+import os
 from typing import Any, Sequence
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+try:
+    from tools.aws_secrets_env import load_aws_secrets_manager_into_environ
+
+    load_aws_secrets_manager_into_environ()
+except ImportError:
+    pass
+except Exception as e:
+    if (os.getenv("AWS_SECRETS_MANAGER_REQUIRED") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        raise
+    logging.getLogger(__name__).warning("AWS Secrets Manager (optional): %s", e)
 
 from mcp.server import Server
 from mcp.types import Tool, TextContent
@@ -16,6 +39,7 @@ from tools.confluence_tool import confluence_search
 from tools.service_owners import service_owners_search
 from tools.oncall_support import confluence_oncall_today
 from tools.read_versions import read_versions
+from tools.deployed_fw_versions import read_deployed_fw_versions
 from tools.datadog_dashboards import (
     read_datadog_dashboards, 
     read_datadog_errors_only, 
@@ -27,12 +51,16 @@ from tools.datadog_dashboards import (
     search_datadog_dashboards,
     search_datadog_services
 )
-from tools.splunk_tool import read_splunk_p0_dashboard, read_splunk_p0_cvr_dashboard, read_splunk_p0_adt_dashboard
+from tools.splunk_tool import (
+    read_splunk_p0_dashboard,
+    read_splunk_p0_cvr_dashboard,
+    read_splunk_p0_adt_dashboard,
+    read_splunk_p0_us_infra_dashboard,
+)
 from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.pagerduty_tool import get_pagerduty_incidents
 from tools.pagerduty_analytics import get_pagerduty_analytics
 from tools.pagerduty_insights import get_pagerduty_insights
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -81,6 +109,19 @@ TOOL_REGISTRY = {
                 }
             },
             "required": ["query"]
+        }
+    },
+    "deployed_fw_versions": {
+        "description": "Get deployed firmware / version matrix from deployed-fw-versions.arlocloud.com (internal)",
+        "function": read_deployed_fw_versions,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional filter substring to match table rows (e.g. product or FW version)"
+                }
+            }
         }
     },
     "datadog_search": {
@@ -265,6 +306,24 @@ TOOL_REGISTRY = {
             }
         }
     },
+    "splunk_p0_us_infra": {
+        "description": "Get P0 Streaming US infra dashboard data from Splunk (zones z1–z4)",
+        "function": read_splunk_p0_us_infra_dashboard,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional: host filter / search query"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            }
+        }
+    },
     "grafana_dns_mapper": {
         "description": "Monitor DNS Mapper IP usage for HMS/CVR streaming services in Grafana (Zone 4)",
         "function": get_grafana_dns_mapper,
@@ -353,7 +412,7 @@ TOOL_REGISTRY = {
                 }
             }
         }
-    }
+    },
 }
 
 
@@ -396,7 +455,7 @@ async def call_tool(name: str, arguments: dict) -> Sequence[TextContent]:
         
         # Determine which arguments to pass based on function signature
         if name in ["datadog_red_metrics", "datadog_red_adt", "datadog_errors", "datadog_failed_pods", "datadog_403_errors",
-                    "splunk_p0_streaming", "splunk_p0_cvr", "splunk_p0_adt"]:
+                    "splunk_p0_streaming", "splunk_p0_cvr", "splunk_p0_adt", "splunk_p0_us_infra"]:
             # These tools need timerange
             input_text = service if service else query
             result = func(input_text, timerange)

@@ -240,7 +240,7 @@ OneView GOC AI now functions as a **full MCP (Model Context Protocol) Server**, 
 2. Restart Claude Desktop
 3. All OneView tools available in Claude!
 
-**See [MCP_SERVER.md](MCP_SERVER.md) for complete setup instructions.**
+**See [MCP_SERVER.md](old/docs/MCP_SERVER.md) for complete setup instructions.**
 
 ## 🔧 How It Works
 
@@ -418,7 +418,7 @@ docker-compose up -d
 ./docker-run.sh restart  # Restart the application
 ```
 
-For detailed Docker instructions, see [DOCKER_README.md](DOCKER_README.md)
+For detailed Docker instructions, see [DOCKER_README.md](old/docs/DOCKER_README.md)
 
 ## Option 2: Local Installation
 
@@ -695,7 +695,7 @@ PAGERDUTY_API_TOKEN=your_pagerduty_api_token_here
 4. Give it a name (e.g., "OneView_GOC_AI")
 5. Copy the token immediately (it won't be shown again)
 
-📖 For detailed PagerDuty setup instructions, see [PAGERDUTY_SETUP.md](PAGERDUTY_SETUP.md)
+📖 For detailed PagerDuty setup instructions, see [PAGERDUTY_SETUP.md](old/docs/PAGERDUTY_SETUP.md)
 
 #### Slack Configuration (for ArloChat)
 ```bash
@@ -772,7 +772,7 @@ multi-agent-mcp/
 │   └── popup.js
 │
 ├── README.md                  # This documentation
-├── QUICK_START.md            # Quick start guide
+├── old/docs/QUICK_START.md   # Quick start guide
 ├── DOCKER_README.md          # Docker-specific guide
 ├── DATADOG_SETUP.md          # Datadog setup instructions
 └── agent_tool_logs.log       # Application logs
@@ -920,7 +920,7 @@ docker run -d -p 5000:5000 \
   oneview-goc-ai:latest
 ```
 
-For complete API documentation, see **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)**.
+For complete API documentation, see **[API_DOCUMENTATION.md](old/docs/API_DOCUMENTATION.md)**.
 
 ## 📱 Samsung Network Status Monitor (NEW!)
 
@@ -1096,16 +1096,16 @@ The application itself includes:
 
 ## 📚 Additional Documentation
 
-- **[MCP_SERVER.md](MCP_SERVER.md)**: 🆕 Complete MCP Server setup guide for Claude Desktop and Cursor integration
-- **[SQL_CONSOLE_GUIDE.md](SQL_CONSOLE_GUIDE.md)**: 🆕 SQL Console usage guide with examples and best practices
-- **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)**: 🆕 Complete REST API reference
-- **[STATUS_MONITOR_CONFIG.md](STATUS_MONITOR_CONFIG.md)**: 🆕 Status monitoring configuration and thresholds
-- **[CHANGELOG_v3.0.2.md](CHANGELOG_v3.0.2.md)**: 🆕 Latest version changes and bug fixes
-- **[QUICK_START.md](QUICK_START.md)**: Fast setup guide for getting started in minutes
-- **[DOCKER_README.md](DOCKER_README.md)**: Detailed Docker deployment instructions
-- **[DATADOG_SETUP.md](DATADOG_SETUP.md)**: Datadog configuration and API setup guide
-- **[PAGERDUTY_SETUP.md](PAGERDUTY_SETUP.md)**: PagerDuty integration setup and usage guide
-- **[CHANGELOG.md](CHANGELOG.md)**: Version history and release notes
+- **[MCP_SERVER.md](old/docs/MCP_SERVER.md)**: 🆕 Complete MCP Server setup guide for Claude Desktop and Cursor integration
+- **[SQL_CONSOLE_GUIDE.md](old/docs/SQL_CONSOLE_GUIDE.md)**: 🆕 SQL Console usage guide with examples and best practices
+- **[API_DOCUMENTATION.md](old/docs/API_DOCUMENTATION.md)**: 🆕 Complete REST API reference
+- **[STATUS_MONITOR_CONFIG.md](old/docs/STATUS_MONITOR_CONFIG.md)**: 🆕 Status monitoring configuration and thresholds
+- **[CHANGELOG_v3.0.2.md](old/docs/CHANGELOG_v3.0.2.md)**: 🆕 Latest version changes and bug fixes
+- **[QUICK_START.md](old/docs/QUICK_START.md)**: Fast setup guide for getting started in minutes
+- **[DOCKER_README.md](old/docs/DOCKER_README.md)**: Detailed Docker deployment instructions
+- **[DATADOG_SETUP.md](old/docs/DATADOG_SETUP.md)**: Datadog configuration and API setup guide
+- **[PAGERDUTY_SETUP.md](old/docs/PAGERDUTY_SETUP.md)**: PagerDuty integration setup and usage guide
+- **[CHANGELOG.md](old/docs/CHANGELOG.md)**: Version history and release notes
 
 ## 🎨 Interface Layout
 

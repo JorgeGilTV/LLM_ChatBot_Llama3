@@ -1,0 +1,129 @@
+<form version="1.0" theme="dark">
+  <label>Load balancer / kube LB logs — configurable</label>
+  <description>Generic view for kube container load-balancer logs. Set index (environment/cell), sourcetype (service name), and search terms (e.g. port, error string, Redis 6379). Base pattern: index=$idx$ sourcetype=$st$ plus your search text.</description>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default>
+        <earliest>-24h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="text" token="idx" searchWhenChanged="true">
+      <label>Index (environment / cell)</label>
+      <default>pp_cell</default>
+    </input>
+    <input type="text" token="st" searchWhenChanged="true">
+      <label>Sourcetype (LB / service name)</label>
+      <default>kube:container:backend-videoservice-lb</default>
+    </input>
+    <input type="text" token="q" searchWhenChanged="true">
+      <label>Search text</label>
+      <default>6379</default>
+    </input>
+  </fieldset>
+
+  <!-- Shared base: index + sourcetype + user search terms -->
+  <row>
+    <panel>
+      <title>Total matching events</title>
+      <single>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ $q$
+| stats count as total</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="rangeValues">["0","1","100","1000"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Distinct hosts</title>
+      <single>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ $q$
+| stats dc(host) as distinct_hosts</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">distinct_hosts</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Events over time</title>
+      <chart>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ $q$
+| timechart span=15m count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Top hosts (by event count)</title>
+      <chart>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ $q$
+| stats count by host
+| sort - count
+| head 20</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Top sources (by event count)</title>
+      <chart>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ $q$
+| stats count by source
+| sort - count
+| head 20</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Recent events</title>
+      <table>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ $q$
+| table _time host source _raw
+| sort - _time
+| head 200</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">200</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

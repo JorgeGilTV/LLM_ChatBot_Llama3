@@ -56,6 +56,167 @@
     min-width: 120px;
 }
 
+/* Modal: cómo conectar al host / app (botón Check IP) */
+.ip-connect-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 12000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.ip-connect-modal-overlay.ip-connect-modal--open {
+    display: flex;
+}
+
+.ip-connect-modal {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-radius: 14px;
+    max-width: 560px;
+    width: 100%;
+    max-height: min(88vh, 640px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+}
+
+.ip-connect-modal__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.ip-connect-modal__title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.ip-connect-modal__sub {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.ip-connect-modal__close {
+    flex-shrink: 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.ip-connect-modal__close:hover {
+    background: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+.ip-connect-modal__body {
+    padding: 14px 18px 18px;
+    overflow-y: auto;
+}
+
+.ip-connect-kv {
+    margin-bottom: 14px;
+    font-size: 13px;
+}
+
+.ip-connect-kv kbd,
+.ip-connect-kv code {
+    display: block;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    font-size: 12px;
+    word-break: break-all;
+    border: 1px solid var(--border-color);
+}
+
+.ip-connect-kv .label {
+    font-weight: 700;
+    color: var(--accent-primary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ip-connect-row {
+    margin-bottom: 12px;
+}
+
+.ip-connect-row .row-label {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.ip-connect-cmd {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.ip-connect-cmd pre {
+    flex: 1;
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    font-size: 11px;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ip-connect-copy {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.ip-connect-copy:hover {
+    background: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+.ip-connect-note {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-top: 8px;
+    padding: 10px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-secondary);
+}
+
 .app-footer a {
     color: var(--accent-primary);
     text-decoration: none;

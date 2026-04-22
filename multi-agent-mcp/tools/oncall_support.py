@@ -7,20 +7,19 @@ load_dotenv()
 def confluence_oncall_today(query: str = None) -> str:
     print("🔎 Who is oncall this month?:", query if query else "All teams")
     """
-    Lee la página fija de Confluence (On Call Support During Holidays)
-    y devuelve quién está oncall durante todo el mes actual.
-    Si query está vacío, muestra todos los equipos.
+    Reads the fixed Confluence page (On Call Support During Holidays) and returns
+    who is on call for each day of the current month. If query is empty, shows all teams.
     """
     email = os.getenv("ATLASSIAN_EMAIL")
     token = os.getenv("CONFLUENCE_TOKEN")
     if not email or not token:
-        return "<p>Error: ATLASSIAN_EMAIL o CONFLUENCE_TOKEN no están definidos en las variables de entorno.</p>"
+        return "<p>Error: ATLASSIAN_EMAIL and CONFLUENCE_TOKEN must be set in the environment.</p>"
 
     auth = (email, token)
     base_url = "https://arlo.atlassian.net/wiki"
     page_id = "754581728"
 
-    # Traer el contenido en formato storage (HTML)
+    # Fetch body as storage (HTML)
     url = f"{base_url}/rest/api/content/{page_id}?expand=body.storage"
     response = requests.get(url, auth=auth)
     if response.status_code != 200:
@@ -29,10 +28,10 @@ def confluence_oncall_today(query: str = None) -> str:
     data = response.json()
     html_content = data["body"]["storage"]["value"]
 
-    # Parsear el HTML con BeautifulSoup
+    # Parse HTML with BeautifulSoup
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Calcular todas las fechas del mes actual
+    # All dates in the current month
     today = datetime.date.today()
     start_of_month = today.replace(day=1)
     if today.month == 12:
@@ -45,11 +44,10 @@ def confluence_oncall_today(query: str = None) -> str:
                    for i in range((end_of_month - start_of_month).days + 1)]
     month_headers = [d.strftime("%d-%b") for d in month_dates]
 
-    # Buscar encabezados de tabla
+    # Table headers
     headers = [th.get_text(strip=True) for th in soup.find_all("th")]
 
-    # Renderizar HTML
-    output = f"<h2>👩‍💻 Oncall Schedule for {today.strftime('%B %Y')} ({query if query else 'All teams'})</h2>"
+    output = f"<h2>👩‍💻 Oncall schedule for {today.strftime('%B %Y')} ({query if query else 'All teams'})</h2>"
 
     for col_header in month_headers:
         if col_header not in headers:
@@ -58,7 +56,6 @@ def confluence_oncall_today(query: str = None) -> str:
         col_index = headers.index(col_header)
         oncall_day = []
 
-        # Recorrer filas de recursos
         for row in soup.find_all("tr"):
             cells = [c.get_text(strip=True) for c in row.find_all("td")]
             if len(cells) > col_index:
@@ -67,14 +64,12 @@ def confluence_oncall_today(query: str = None) -> str:
                     name = cells[0]
                     team = cells[1] if len(cells) > 1 else ""
                     contact = cells[2] if len(cells) > 2 else ""
-                    # 🔑 Filtrar solo si query está definido
                     if not query or query.lower() in team.lower():
                         oncall_day.append({"name": name, "team": team, "contact": contact})
 
-        # Tabla por cada día
         output += f"<h3>{col_header}</h3>"
         if not oncall_day:
-            output += f"<p>No hay recursos oncall para {col_header} en {query if query else 'All teams'}</p>"
+            output += f"<p>No on-call resources for {col_header} in {query if query else 'All teams'}</p>"
         else:
             output += """
             <table border="1" cellpadding="5" cellspacing="0">

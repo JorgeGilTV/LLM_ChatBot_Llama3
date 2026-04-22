@@ -4,18 +4,33 @@ Stores and retrieves historical service health metrics
 """
 import sqlite3
 import json
+import time
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import os
 
 # Database file location
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'metrics_history.db')
 
+
+def _connect_db(timeout: Optional[float] = None):
+    """Open SQLite with WAL for better concurrent read/write under load."""
+    kw = {}
+    if timeout is not None:
+        kw["timeout"] = timeout
+    conn = sqlite3.connect(DB_PATH, **kw)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.Error:
+        pass
+    return conn
+
+
 def init_database():
     """Initialize the SQLite database with required tables"""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     # Main metrics table
@@ -207,6 +222,21 @@ def init_database():
         CREATE INDEX IF NOT EXISTS idx_tool_usage_time 
         ON tool_usage(timestamp, tool_name)
     ''')
+
+    # Short-lived API response cache (Datadog per-service health, PagerDuty, Arlo) for status monitor
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS status_monitor_api_cache (
+            cache_kind TEXT NOT NULL,
+            cache_key TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (cache_kind, cache_key)
+        )
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sm_api_cache_updated
+        ON status_monitor_api_cache(cache_kind, updated_at)
+    ''')
     
     conn.commit()
     conn.close()
@@ -227,7 +257,7 @@ def save_service_metrics(metrics_data: List[Dict], timestamp: Optional[str] = No
     if timestamp is None:
         timestamp = datetime.utcnow().isoformat()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     for metric in metrics_data:
@@ -270,7 +300,7 @@ def save_dashboard_snapshot(summary_data: Dict, timestamp: Optional[str] = None)
     if timestamp is None:
         timestamp = datetime.utcnow().isoformat()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -311,7 +341,7 @@ def get_service_history(service: str, environment: str, hours: int = 24) -> List
     Returns:
         List of metric dictionaries sorted by timestamp
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
@@ -340,7 +370,7 @@ def get_dashboard_history(environment: Optional[str] = None, hours: int = 24) ->
     Returns:
         List of snapshot dictionaries sorted by timestamp
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
@@ -432,7 +462,7 @@ def get_all_services_current_status() -> List[Dict]:
     Returns:
         List of most recent metrics for each service
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
@@ -464,7 +494,7 @@ def cleanup_old_data(days: int = 30):
     Args:
         days: Number of days to retain (default: 30)
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cutoff_time = (datetime.utcnow() - timedelta(days=days)).isoformat()
@@ -492,7 +522,7 @@ def get_critical_services_history(hours: int = 24) -> List[Dict]:
     Returns:
         List of critical service occurrences
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
@@ -515,7 +545,7 @@ def get_database_stats() -> Dict:
     if not os.path.exists(DB_PATH):
         return {'exists': False}
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('SELECT COUNT(*) as count FROM service_metrics')
@@ -554,7 +584,7 @@ def save_pagerduty_incident(incident_data: Dict, timestamp: Optional[str] = None
     if timestamp is None:
         timestamp = datetime.utcnow().isoformat()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -588,7 +618,7 @@ def save_state_change(service_name: str, environment: str, previous_state: str,
     if timestamp is None:
         timestamp = datetime.utcnow().isoformat()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -608,7 +638,7 @@ def save_baseline(service_name: str, environment: str, week_start: str,
                  avg_traffic_rpm: float, peak_traffic_rpm: float, 
                  incidents_count: int = 0):
     """Save weekly baseline metrics"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -630,7 +660,7 @@ def save_deployment(service_name: str, environment: str, version: str,
     if timestamp is None:
         timestamp = datetime.utcnow().isoformat()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -648,7 +678,7 @@ def save_outage(service_name: str, environment: str, start_time: str,
                severity: str = 'critical', root_cause: str = None,
                pagerduty_incident_id: str = None):
     """Save service outage record"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -670,7 +700,7 @@ def save_tool_usage(tool_name: str, query_text: str = None, user_ip: str = None,
     if timestamp is None:
         timestamp = datetime.utcnow().isoformat()
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -685,7 +715,7 @@ def save_tool_usage(tool_name: str, query_text: str = None, user_ip: str = None,
 
 def get_recent_incidents(hours: int = 24, service_name: str = None) -> List[Dict]:
     """Get recent PagerDuty incidents from database"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cutoff_time = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
@@ -727,7 +757,7 @@ def get_recent_incidents(hours: int = 24, service_name: str = None) -> List[Dict
 
 def get_state_changes(service_name: str, environment: str, hours: int = 24) -> List[Dict]:
     """Get state changes for a service"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = _connect_db()
     cursor = conn.cursor()
     
     cutoff_time = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
@@ -752,6 +782,71 @@ def get_state_changes(service_name: str, environment: str, hours: int = 24) -> L
     
     conn.close()
     return changes
+
+
+def sm_api_cache_get(kind: str, key: str, max_age_secs: float) -> Optional[Any]:
+    """
+    Status monitor: read short-lived cached JSON (Datadog health row, PagerDuty blob, Arlo list).
+    Returns None if missing, too old, or on error.
+    """
+    if max_age_secs <= 0:
+        return None
+    try:
+        cutoff = time.time() - float(max_age_secs)
+        conn = _connect_db(timeout=30)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT payload_json, updated_at FROM status_monitor_api_cache
+            WHERE cache_kind = ? AND cache_key = ?
+            """,
+            (kind, key),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        payload_json, updated_at = row
+        if updated_at < cutoff:
+            return None
+        return json.loads(payload_json)
+    except Exception as e:
+        print(f"⚠️ sm_api_cache_get ({kind}): {e}")
+        return None
+
+
+def sm_api_cache_set(kind: str, key: str, payload: Any) -> None:
+    """Persist JSON-serializable payload for reuse within TTL window."""
+    try:
+        blob = json.dumps(payload, default=str)
+        now = time.time()
+        conn = _connect_db(timeout=30)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO status_monitor_api_cache (cache_kind, cache_key, payload_json, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(cache_kind, cache_key) DO UPDATE SET
+                payload_json = excluded.payload_json,
+                updated_at = excluded.updated_at
+            """,
+            (kind, key, blob, now),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ sm_api_cache_set ({kind}): {e}")
+
+
+def clear_status_monitor_api_cache() -> None:
+    """Wipe status-monitor API cache (Datadog / PagerDuty / Arlo short TTL rows)."""
+    try:
+        conn = _connect_db(timeout=30)
+        conn.execute("DELETE FROM status_monitor_api_cache")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ clear_status_monitor_api_cache: {e}")
 
 
 # Initialize database on module load

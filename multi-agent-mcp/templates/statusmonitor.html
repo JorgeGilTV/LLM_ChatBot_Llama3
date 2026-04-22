@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Status Monitor Dashboard - OneView GOC AI</title>
+    <title>{% if environment %}Status Monitor — {{ environment }}{% else %}Status Monitor — Environments{% endif %} - OneView GOC AI</title>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -20,7 +20,7 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-            background: #f8f9fb;
+            background: #3d4349;
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -101,18 +101,23 @@
             padding: 16px 40px;
         }
         
+        @keyframes sm-loading-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.72; }
+        }
+        
         #loading {
             display: none;
-            position: fixed;
-            top: 90px;
-            right: 40px;
-            text-align: center;
-            padding: 14px 24px;
-            background: #ffffff;
+            width: 100%;
+            margin-bottom: 14px;
+            text-align: left;
+            padding: 12px 18px;
+            background: linear-gradient(90deg, #e0f2fe 0%, #f0f9ff 50%, #e0f2fe 100%);
+            background-size: 200% 100%;
             border-radius: 10px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-            z-index: 1000;
-            border-left: 4px solid #0095da;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border: 1px solid #bae6fd;
+            animation: sm-loading-pulse 1.4s ease-in-out infinite;
         }
         
         #loading.show {
@@ -120,15 +125,19 @@
         }
         
         #loading h3 {
-            font-size: 15px;
-            margin: 0;
-            color: #111827;
-            font-weight: 600;
+            font-size: 14px;
+            margin: 0 0 4px 0;
+            color: #0c4a6e;
+            font-weight: 700;
             letter-spacing: -0.01em;
         }
         
         #loading p {
-            display: none;
+            display: block;
+            margin: 0;
+            font-size: 12px;
+            color: #0369a1;
+            font-weight: 500;
         }
         
         #dashboard {
@@ -152,6 +161,399 @@
             letter-spacing: -0.01em;
             border: 1px solid #e5e7eb;
         }
+
+        /* Hub: single panel, all environments */
+        @keyframes sm-hub-card-pulse-warn {
+            0%, 100% { opacity: 1; box-shadow: 0 3px 12px rgba(245, 158, 11, 0.45); }
+            50% { opacity: 0.93; box-shadow: 0 0 22px rgba(251, 191, 36, 0.75), 0 5px 18px rgba(217, 119, 6, 0.5); }
+        }
+        @keyframes sm-hub-card-pulse-crit {
+            0%, 100% { opacity: 1; box-shadow: 0 3px 12px rgba(239, 68, 68, 0.45); }
+            50% { opacity: 0.9; box-shadow: 0 0 24px rgba(252, 165, 165, 0.85), 0 5px 20px rgba(220, 38, 38, 0.55); }
+        }
+        .sm-hub-controls {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+            padding: 14px 18px;
+            background: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .sm-hub-controls label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #374151;
+        }
+        .sm-hub-controls select {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            font-size: 13px;
+            font-weight: 600;
+            background: #fff;
+            color: #111827;
+        }
+        .sm-hub-panel {
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            padding: 20px 22px 22px;
+        }
+        .sm-hub-panel h2 {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 6px 0;
+            letter-spacing: -0.02em;
+        }
+        .sm-hub-panel .sm-hub-sub {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+        .sm-hub-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            align-items: start;
+        }
+        .sm-hub-cell {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            width: 100%;
+        }
+        .sm-hub-tile-reason {
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 8px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.4;
+            border: 1px solid rgba(0,0,0,0.1);
+            background: #f8fafc;
+            color: #334155;
+        }
+        .sm-hub-tile-reason--warning {
+            background: #fffbeb;
+            border-color: rgba(217, 119, 6, 0.45);
+            color: #713f12;
+        }
+        .sm-hub-tile-reason--critical {
+            background: #fef2f2;
+            border-color: rgba(185, 28, 28, 0.45);
+            color: #7f1d1d;
+        }
+        .sm-hub-tile-reason ul { margin: 0; padding-left: 1.1rem; }
+        .sm-hub-tile-reason li { margin-bottom: 4px; }
+        .sm-hub-tile-reason li:last-child { margin-bottom: 0; }
+        a.sm-hub-card {
+            display: block;
+            text-decoration: none;
+            border-radius: 12px;
+            padding: 16px 16px 14px;
+            border: 2px solid transparent;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            cursor: pointer;
+            color: inherit;
+        }
+        a.sm-hub-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+        a.sm-hub-card--healthy {
+            background: linear-gradient(165deg, #86efac 0%, #4ade80 38%, #22c55e 100%);
+            border-color: #15803d;
+            box-shadow: 0 2px 12px rgba(34, 197, 94, 0.35);
+        }
+        a.sm-hub-card--warning {
+            background: linear-gradient(165deg, #fef08a 0%, #facc15 40%, #f59e0b 100%);
+            border-color: #b45309;
+            animation: sm-hub-card-pulse-warn 2.2s ease-in-out infinite;
+        }
+        a.sm-hub-card--critical {
+            background: linear-gradient(165deg, #fca5a5 0%, #f87171 35%, #ef4444 70%, #dc2626 100%);
+            border-color: #7f1d1d;
+            animation: sm-hub-card-pulse-crit 2s ease-in-out infinite;
+        }
+        a.sm-hub-card--warning:hover,
+        a.sm-hub-card--critical:hover {
+            animation-play-state: paused;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            a.sm-hub-card--warning,
+            a.sm-hub-card--critical { animation: none; }
+        }
+        .sm-hub-card-title {
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 10px;
+        }
+        a.sm-hub-card--healthy .sm-hub-card-title { color: #064e3b; }
+        a.sm-hub-card--warning .sm-hub-card-title { color: #713f12; }
+        a.sm-hub-card--critical .sm-hub-card-title { color: #fff7ed; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .sm-hub-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 10px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        a.sm-hub-card--healthy .sm-hub-stats { color: #065f46; }
+        a.sm-hub-card--warning .sm-hub-stats { color: #78350f; }
+        a.sm-hub-card--critical .sm-hub-stats { color: #fff7ed; }
+        .sm-hub-stat-val { font-variant-numeric: tabular-nums; }
+        .sm-hub-svc-breakdown {
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+            font-size: 10px;
+            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        a.sm-hub-card--critical .sm-hub-svc-breakdown { border-top-color: rgba(255,255,255,0.2); }
+        .sm-hub-svc-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            line-height: 1.2;
+        }
+        .sm-hub-svc-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+        .sm-hub-svc-st { flex-shrink: 0; text-transform: capitalize; }
+        .sm-hub-svc--healthy .sm-hub-svc-st { color: #15803d; }
+        .sm-hub-svc--warning .sm-hub-svc-st { color: #a16207; }
+        .sm-hub-svc--critical .sm-hub-svc-st { color: #b91c1c; }
+        .sm-hub-svc--inactive .sm-hub-svc-st,
+        .sm-hub-svc--unknown .sm-hub-svc-st { color: #64748b; }
+        a.sm-hub-card--critical .sm-hub-svc--healthy .sm-hub-svc-st { color: #bbf7d0; }
+        a.sm-hub-card--critical .sm-hub-svc--warning .sm-hub-svc-st { color: #fde68a; }
+        a.sm-hub-card--critical .sm-hub-svc--inactive .sm-hub-svc-st,
+        a.sm-hub-card--critical .sm-hub-svc--unknown .sm-hub-svc-st { color: #e2e8f0; }
+
+        .sm-wall-header-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 14px;
+            background: #0095da;
+            color: #fff !important;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 8px;
+            border: none;
+            transition: filter 0.15s ease, box-shadow 0.15s ease;
+            letter-spacing: -0.01em;
+        }
+        .sm-wall-header-btn:hover {
+            filter: brightness(1.06);
+            box-shadow: 0 2px 8px rgba(0, 149, 218, 0.35);
+        }
+        button.sm-wall-header-btn {
+            cursor: pointer;
+            font-family: inherit;
+            border: none;
+        }
+        .sm-hub-controls .sm-slack-btn {
+            padding: 6px 14px;
+            background: #611f69;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: filter 0.15s ease, box-shadow 0.15s ease;
+        }
+        .sm-hub-controls .sm-slack-btn:hover {
+            filter: brightness(1.08);
+            box-shadow: 0 2px 8px rgba(97, 31, 105, 0.4);
+        }
+        .sm-hub-controls .sm-wall-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 14px;
+            background: #fff;
+            color: #0369a1;
+            border: 1px solid #7dd3fc;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .sm-hub-controls .sm-wall-btn:hover {
+            background: #e0f2fe;
+            border-color: #38bdf8;
+        }
+        .sm-hub-splunk-bar a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: 800;
+        }
+        .sm-hub-splunk-bar a:hover {
+            text-decoration: underline;
+        }
+
+        /* Rich hover panels (hub + dashboard tiles) — same behavior as status wall */
+        .sm-hub-cell.sm-tip-wrap {
+            position: relative;
+            overflow: visible;
+        }
+        .sm-hub-cell.sm-tip-wrap:hover,
+        .sm-hub-cell.sm-tip-wrap:focus-within {
+            z-index: 50;
+        }
+        .sm-tip-wrap:hover,
+        .sm-tip-wrap:focus-within {
+            z-index: 45;
+        }
+        .sm-hover-tip {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 0;
+            min-width: 240px;
+            max-width: min(360px, calc(100vw - 16px));
+            padding: 0;
+            border-radius: 14px;
+            font-size: 11px;
+            line-height: 1.45;
+            text-align: left;
+            z-index: 10000;
+            visibility: hidden;
+            pointer-events: none;
+            background: linear-gradient(145deg, #0c1220 0%, #1a1033 42%, #0f172a 100%);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            box-shadow:
+                0 0 0 1px rgba(167, 139, 250, 0.2),
+                0 18px 50px rgba(0, 0, 0, 0.55),
+                0 0 40px rgba(34, 211, 238, 0.08);
+            overflow: hidden;
+        }
+        .sm-hover-tip.sm-hover-tip--visible {
+            display: block;
+            visibility: visible;
+            pointer-events: none;
+        }
+        .sm-hover-tip-inner {
+            padding: 12px 14px 14px;
+        }
+        .sm-hover-tip-head {
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin: 0 0 10px 0;
+            line-height: 1.25;
+            background: linear-gradient(90deg, #38bdf8 0%, #a78bfa 45%, #f472b6 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: none;
+        }
+        .sm-hover-tip-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 3px 8px;
+            border-radius: 999px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #e2e8f0;
+            background: rgba(15, 23, 42, 0.65);
+        }
+        .sm-hover-tip-badge--ok { border-color: #22c55e; color: #86efac; }
+        .sm-hover-tip-badge--warn { border-color: #eab308; color: #fde047; }
+        .sm-hover-tip-badge--crit { border-color: #f87171; color: #fecaca; }
+        .sm-hover-tip-kv {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 10px;
+            align-items: baseline;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        .sm-hover-tip-k {
+            color: #22d3ee;
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .sm-hover-tip-v {
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 11px;
+        }
+        .sm-hover-tip-metrics {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(71, 85, 105, 0.65);
+            color: #e2e8f0;
+            font-weight: 700;
+        }
+        .sm-hover-tip-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }
+        .sm-hover-tip-chip {
+            font-size: 9px;
+            font-weight: 800;
+            padding: 3px 7px;
+            border-radius: 6px;
+            background: rgba(99, 102, 241, 0.25);
+            color: #c7d2fe;
+            border: 1px solid rgba(129, 140, 248, 0.45);
+        }
+        .sm-hover-tip-chip--alert {
+            background: rgba(220, 38, 38, 0.35);
+            color: #fecaca;
+            border-color: rgba(248, 113, 113, 0.5);
+        }
+        a.sm-hover-tip-chip {
+            text-decoration: none;
+            cursor: pointer;
+        }
+        a.sm-hover-tip-chip:hover {
+            filter: brightness(1.1);
+        }
+        .sm-hover-tip-chip--splunk {
+            background: rgba(14, 165, 233, 0.22);
+            color: #bae6fd;
+            border-color: rgba(56, 189, 248, 0.45);
+        }
+        .sm-hover-tip-why {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(71, 85, 105, 0.65);
+            color: #fde68a;
+            font-weight: 600;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        .sm-hover-tip-hub-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 10px;
+            margin-top: 6px;
+        }
+        .sm-hover-tip-hub-grid .sm-hover-tip-k { grid-column: 1; }
+        .sm-hover-tip-hub-grid .sm-hover-tip-v { grid-column: 2; text-align: right; }
     </style>
 </head>
 <body>
@@ -171,30 +573,82 @@
                         <li><a href="/statusmonitor/samsung" class="{{ 'active' if environment == 'samsung' else '' }}">Samsung</a></li>
                         <li><a href="/statusmonitor/adt" class="{{ 'active' if environment == 'adt' else '' }}">ADT</a></li>
                         <li><a href="/statusmonitor/redmetrics-us" class="{{ 'active' if environment == 'redmetrics-us' else '' }}">RED Metrics US</a></li>
+                        <li><a href="/statuswall">Status wall</a></li>
                     </ul>
                 </nav>
             </div>
-            <div style="font-size: 13px; color: #718096;">
-                <span style="font-weight: 600; color: #2d3748;">GOC</span> Status Monitor
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #718096; flex-wrap: wrap;">
+                <button type="button" class="sm-wall-header-btn" onclick="window.sendStatusMonitorToSlack()" title="Resumen Bedrock de la vista → Slack">📤 Slack</button>
+                <a href="/statuswall" class="sm-wall-header-btn">Status wall</a>
+                <span><span style="font-weight: 600; color: #2d3748;">GOC</span> Status Monitor</span>
             </div>
         </div>
     </header>
 
     <div class="container">
+        <div id="hub-controls" class="sm-hub-controls slack-exclude">
+            <label for="hub-timerange">Time range</label>
+            <select id="hub-timerange">
+                <option value="1" selected>Last 1 hour</option>
+                <option value="2">Last 2 hours</option>
+                <option value="4">Last 4 hours</option>
+                <option value="8">Last 8 hours</option>
+                <option value="12">Last 12 hours</option>
+                <option value="24">Last 24 hours</option>
+            </select>
+            <button type="button" onclick="loadHubSummary({ forceRefresh: true })" style="padding: 6px 14px; background: #0095da; color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">Refresh</button>
+            <button type="button" class="sm-slack-btn" onclick="window.sendStatusMonitorToSlack()" title="Resumen Bedrock → Slack">📤 Slack</button>
+            <a href="/statuswall" class="sm-wall-btn">Open status wall</a>
+        </div>
+        <div id="slack-share-root">
         <div id="loading">
-            <h3>⏳ Loading dashboard data...</h3>
-            <p style="margin-top: 10px; color: #718096;">Fetching metrics from Datadog APM</p>
+            <h3>⏳ Loading status monitor…</h3>
+            <p>Querying Datadog (parallel) and PagerDuty. First load after deploy can take 20–60s depending on service count.</p>
         </div>
         
         <div id="dashboard"></div>
+        </div>
         
-        <div class="auto-refresh-info">
-            ⏰ Dashboard auto-refreshes every 2 minutes
+        <div class="auto-refresh-info slack-exclude">
+            ⏰ Auto-refresh: environment hub every 5 min · full dashboard every 3 min · session cache reuses recent API data when you switch pages
         </div>
     </div>
     
+    <script src="/static/js/session_data_cache.js?v=20260328"></script>
+    <script src="/static/js/slack_share.js?v=20260326-slack-en-blocks"></script>
+    <script src="/static/js/samsung_status_widget.js?v=20260430-board-history"></script>
+    <script src="/static/js/adt_status_widget.js?v=20260430-board-history"></script>
+    <script>
+        window.sendStatusMonitorToSlack = function () {
+            if (typeof SlackShare === 'undefined') {
+                alert('Slack: no se pudo cargar slack_share.js');
+                return;
+            }
+            var envLabel = ENVIRONMENT == null ? 'hub (all envs)' : String(ENVIRONMENT);
+            var url = '';
+            try {
+                url = window.location.href;
+            } catch (e) {
+                url = '';
+            }
+            var header = '*Status Monitor — ' + envLabel + '*';
+            if (url) {
+                header += '\n<' + url + '|Open in browser>';
+            }
+            SlackShare.sendFromSelector('#slack-share-root', {
+                headerMrkdwn: header,
+                fallbackPrefix: 'Status Monitor',
+            });
+        };
+    </script>
     <script>
         let autoRefreshInterval = null;
+        const SM_HUB_SUMMARY_TTL_MS = 270000;
+        const SM_DASHBOARD_TTL_MS = 170000;
+
+        function smDashboardCacheKey(env, tr) {
+            return 'sm_dashboard_' + (env == null || env === undefined ? 'null' : String(env)) + '_' + tr;
+        }
         
         // Function to initialize pie chart
         window.initializePieChart = function(chartData) {
@@ -235,11 +689,15 @@
                 data: {
                     labels: ['Healthy', 'Warning', 'Critical'],
                     datasets: [{
-                        data: [chartData.healthy, chartData.warning, chartData.critical],
+                        data: [
+                            chartData.healthy,
+                            chartData.warning,
+                            chartData.critical
+                        ],
                         backgroundColor: [
-                            '#10b981',  // green
-                            '#f59e0b',  // orange
-                            '#dc2626'   // red
+                            '#10b981',
+                            '#f59e0b',
+                            '#dc2626'
                         ],
                         borderWidth: 3,
                         borderColor: '#ffffff'
@@ -340,6 +798,592 @@
             });
         }
         
+        const IS_HUB = (ENVIRONMENT === null || ENVIRONMENT === undefined);
+
+        function escHubText(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        let smHoverGlobalsBound = false;
+        function escDataAttr(obj) {
+            try {
+                return encodeURIComponent(JSON.stringify(obj));
+            } catch (e) {
+                return '';
+            }
+        }
+        function parseDataSmHover(raw) {
+            if (!raw) return null;
+            try {
+                return JSON.parse(decodeURIComponent(raw));
+            } catch (e1) {
+                try {
+                    return JSON.parse(raw);
+                } catch (e2) {
+                    return null;
+                }
+            }
+        }
+        function smFmtErr(v) {
+            if (v == null || v === '') return '—';
+            const n = Number(v);
+            return Number.isFinite(n) ? n.toFixed(2) : String(v);
+        }
+        function smHoverReason(d) {
+            if (d.status === 'inactive') return 'No APM traffic in window';
+            if (d.status === 'unknown') return 'No data / query issue';
+            if (d.status === 'healthy') return 'Healthy — within APM thresholds';
+            const bits = [];
+            if (d.pd_incident) bits.push('PagerDuty');
+            if (d.high_latency) bits.push('High latency');
+            if (d.traffic_drop) bits.push('Traffic drop vs 7d');
+            if (bits.length) return bits.join(' · ');
+            return d.status || '—';
+        }
+        function buildSmHoverTipFromData(d) {
+            const root = document.createElement('div');
+            root.className = 'sm-hover-tip';
+            const inner = document.createElement('div');
+            inner.className = 'sm-hover-tip-inner';
+            if (d.type === 'hub-env') {
+                const badge = document.createElement('div');
+                const o = d.overall || 'healthy';
+                badge.className = 'sm-hover-tip-badge ' + (o === 'critical' ? 'sm-hover-tip-badge--crit' : o === 'warning' ? 'sm-hover-tip-badge--warn' : 'sm-hover-tip-badge--ok');
+                badge.textContent = (o || '').toUpperCase();
+                inner.appendChild(badge);
+                const head = document.createElement('div');
+                head.className = 'sm-hover-tip-head';
+                head.textContent = d.label || 'Environment';
+                inner.appendChild(head);
+                const grid = document.createElement('div');
+                grid.className = 'sm-hover-tip-hub-grid';
+                const rows = [
+                    ['Healthy', d.healthy],
+                    ['Warning', d.warning],
+                    ['Critical', d.critical],
+                    ['Inactive', d.inactive != null ? d.inactive : 0],
+                    ['Unknown', d.unknown != null ? d.unknown : 0],
+                    ['Operational', d.operational != null ? d.operational : '—'],
+                    ['Configured', d.configured != null ? d.configured : '—'],
+                ];
+                rows.forEach(function(kv) {
+                    const k = document.createElement('div');
+                    k.className = 'sm-hover-tip-k';
+                    k.textContent = kv[0];
+                    const v = document.createElement('div');
+                    v.className = 'sm-hover-tip-v';
+                    v.textContent = kv[1] != null ? String(kv[1]) : '—';
+                    grid.appendChild(k);
+                    grid.appendChild(v);
+                });
+                inner.appendChild(grid);
+                const lines = d.reason_lines || [];
+                if (lines.length) {
+                    const why = document.createElement('div');
+                    why.className = 'sm-hover-tip-why';
+                    why.textContent = 'Note: ' + lines.map(function(line) { return String(line); }).join(' · ');
+                    inner.appendChild(why);
+                }
+                const hint = document.createElement('div');
+                hint.style.marginTop = '10px';
+                hint.style.fontSize = '9px';
+                hint.style.color = '#94a3b8';
+                hint.style.fontWeight = '600';
+                hint.textContent = 'Click the card to open the full status monitor for this environment.';
+                inner.appendChild(hint);
+            } else {
+                const st = d.status || 'unknown';
+                const badge = document.createElement('div');
+                badge.className = 'sm-hover-tip-badge ' + (st === 'critical' ? 'sm-hover-tip-badge--crit' : st === 'warning' ? 'sm-hover-tip-badge--warn' : st === 'healthy' ? 'sm-hover-tip-badge--ok' : '');
+                badge.textContent = (st || '').toUpperCase();
+                inner.appendChild(badge);
+                const head = document.createElement('div');
+                head.className = 'sm-hover-tip-head';
+                head.textContent = d.service || '—';
+                inner.appendChild(head);
+                {
+                    const rawR = d.region != null ? String(d.region).trim() : '';
+                    const regionDisp =
+                        !rawR || /^unknown$/i.test(rawR) ? 'Ireland' : rawR;
+                    const rg = document.createElement('div');
+                    rg.className = 'sm-hover-tip-kv';
+                    const rk = document.createElement('span');
+                    rk.className = 'sm-hover-tip-k';
+                    rk.textContent = 'Region';
+                    const rv = document.createElement('span');
+                    rv.className = 'sm-hover-tip-v';
+                    rv.textContent = regionDisp;
+                    rg.appendChild(rk);
+                    rg.appendChild(rv);
+                    inner.appendChild(rg);
+                }
+                const metrics = document.createElement('div');
+                metrics.className = 'sm-hover-tip-metrics';
+                const req = d.requests != null ? Number(d.requests).toLocaleString() : '—';
+                const errs = d.errors != null ? Number(d.errors).toLocaleString() : '—';
+                metrics.textContent = 'Error rate ' + smFmtErr(d.error_rate) + '% · Requests ' + req + ' · Errors ' + errs;
+                inner.appendChild(metrics);
+                if (d.p95_latency != null && d.p95_latency !== '') {
+                    const lat = document.createElement('div');
+                    lat.className = 'sm-hover-tip-kv';
+                    const k1 = document.createElement('span');
+                    k1.className = 'sm-hover-tip-k';
+                    k1.textContent = 'P95';
+                    const v1 = document.createElement('span');
+                    v1.className = 'sm-hover-tip-v';
+                    v1.textContent = Math.round(Number(d.p95_latency)) + ' ms' + (d.high_latency ? ' (above threshold)' : '');
+                    lat.appendChild(k1);
+                    lat.appendChild(v1);
+                    inner.appendChild(lat);
+                }
+                if (d.p99_latency != null && d.p99_latency !== '') {
+                    const p99 = document.createElement('div');
+                    p99.className = 'sm-hover-tip-kv';
+                    const k2 = document.createElement('span');
+                    k2.className = 'sm-hover-tip-k';
+                    k2.textContent = 'P99';
+                    const v2 = document.createElement('span');
+                    v2.className = 'sm-hover-tip-v';
+                    v2.textContent = Math.round(Number(d.p99_latency)) + ' ms';
+                    p99.appendChild(k2);
+                    p99.appendChild(v2);
+                    inner.appendChild(p99);
+                }
+                const clusters = Array.isArray(d.eks_clusters) ? d.eks_clusters.filter(Boolean) : [];
+                if (clusters.length) {
+                    const cl = document.createElement('div');
+                    cl.className = 'sm-hover-tip-kv';
+                    cl.style.gridColumn = '1 / -1';
+                    cl.style.marginTop = '4px';
+                    const ck = document.createElement('span');
+                    ck.className = 'sm-hover-tip-k';
+                    ck.textContent = 'Clusters';
+                    const cv = document.createElement('span');
+                    cv.className = 'sm-hover-tip-v';
+                    cv.style.wordBreak = 'break-word';
+                    cv.textContent = clusters.join(', ');
+                    cl.appendChild(ck);
+                    cl.appendChild(cv);
+                    inner.appendChild(cl);
+                }
+                const chips = document.createElement('div');
+                chips.className = 'sm-hover-tip-chips';
+                if (d.pd_incident) {
+                    let c;
+                    if (d.pd_incident_url) {
+                        c = document.createElement('a');
+                        c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                        c.href = d.pd_incident_url;
+                        c.target = '_blank';
+                        c.rel = 'noopener noreferrer';
+                        c.textContent = 'PagerDuty';
+                    } else {
+                        c = document.createElement('span');
+                        c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                        c.textContent = 'PagerDuty';
+                    }
+                    chips.appendChild(c);
+                }
+                if (d.splunk_url) {
+                    const sp = document.createElement('a');
+                    sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
+                    sp.href = d.splunk_url;
+                    sp.target = '_blank';
+                    sp.rel = 'noopener noreferrer';
+                    sp.textContent = 'Splunk';
+                    chips.appendChild(sp);
+                }
+                if (d.traffic_drop) {
+                    const c = document.createElement('span');
+                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    c.textContent = 'Traffic drop';
+                    chips.appendChild(c);
+                }
+                if (d.traffic_variance != null && !d.traffic_drop) {
+                    const c = document.createElement('span');
+                    c.className = 'sm-hover-tip-chip';
+                    c.textContent = 'Traffic ' + Math.round(Number(d.traffic_variance)) + '% vs 7d';
+                    chips.appendChild(c);
+                }
+                if (chips.children.length) inner.appendChild(chips);
+                const why = document.createElement('div');
+                why.className = 'sm-hover-tip-why';
+                why.textContent = 'Why: ' + smHoverReason(d);
+                inner.appendChild(why);
+            }
+            root.appendChild(inner);
+            return root;
+        }
+        function resetSmHoverTipStyles(tip) {
+            tip.classList.remove('sm-hover-tip--visible');
+            tip.style.removeProperty('display');
+            tip.style.removeProperty('visibility');
+            tip.style.removeProperty('position');
+            tip.style.removeProperty('left');
+            tip.style.removeProperty('top');
+            tip.style.removeProperty('transform');
+            tip.style.maxHeight = '';
+            tip.style.overflowY = '';
+        }
+        function hideAllSmHoverTips() {
+            document.querySelectorAll('.sm-hover-tip').forEach(function(t) {
+                resetSmHoverTipStyles(t);
+            });
+        }
+        function bindSmHoverGlobalHandlersOnce() {
+            if (smHoverGlobalsBound) return;
+            smHoverGlobalsBound = true;
+            function hideTips() {
+                hideAllSmHoverTips();
+            }
+            window.addEventListener('scroll', hideTips, true);
+            window.addEventListener('resize', hideTips);
+            const dash = document.getElementById('dashboard');
+            if (dash) {
+                dash.addEventListener('mouseleave', hideTips);
+            }
+        }
+        function positionSmHoverTip(wrap, tip) {
+            const tile = wrap.querySelector('.sm-op-tile, a.sm-hub-card, .sm-hub-card');
+            if (!tile) return;
+            const r = tile.getBoundingClientRect();
+            const margin = 8;
+            const bar = document.querySelector('.header');
+            const safeTop = (bar ? bar.getBoundingClientRect().bottom : 0) + 4;
+            tip.style.display = 'block';
+            tip.style.position = 'fixed';
+            tip.style.left = '-9999px';
+            tip.style.top = '0';
+            tip.style.transform = 'none';
+            tip.style.maxHeight = '';
+            tip.style.overflowY = '';
+            tip.style.visibility = 'hidden';
+            const tw = tip.offsetWidth;
+            const th = tip.offsetHeight;
+            let left = r.left + r.width / 2 - tw / 2;
+            left = Math.max(margin, Math.min(left, window.innerWidth - tw - margin));
+            let top = r.bottom + margin;
+            if (top + th > window.innerHeight - margin) {
+                top = r.top - th - margin;
+            }
+            if (top < safeTop) {
+                top = safeTop;
+                tip.style.maxHeight = Math.max(100, window.innerHeight - safeTop - margin) + 'px';
+                tip.style.overflowY = 'auto';
+            } else if (top + th > window.innerHeight - margin) {
+                tip.style.maxHeight = Math.max(100, window.innerHeight - top - margin) + 'px';
+                tip.style.overflowY = 'auto';
+            }
+            tip.style.left = Math.round(left) + 'px';
+            tip.style.top = Math.round(top) + 'px';
+            tip.style.visibility = 'visible';
+        }
+        function attachSmHoverBehavior(wrap) {
+            const tip = wrap.querySelector('.sm-hover-tip');
+            if (!tip) return;
+            if (wrap._smHoverAbort) {
+                wrap._smHoverAbort.abort();
+            }
+            wrap._smHoverAbort = new AbortController();
+            const sig = wrap._smHoverAbort.signal;
+            function show() {
+                hideAllSmHoverTips();
+                tip.classList.add('sm-hover-tip--visible');
+                requestAnimationFrame(function() {
+                    positionSmHoverTip(wrap, tip);
+                });
+            }
+            function hide() {
+                resetSmHoverTipStyles(tip);
+            }
+            wrap.addEventListener('mouseenter', show, { signal: sig });
+            wrap.addEventListener('mouseleave', hide, { signal: sig });
+            wrap.addEventListener('focusin', show, { signal: sig });
+            wrap.addEventListener('focusout', hide, { signal: sig });
+        }
+        function initSmHoverTips(root) {
+            if (!root) return;
+            root.querySelectorAll('[data-sm-hover]').forEach(function(wrap) {
+                wrap.querySelectorAll('.sm-hover-tip').forEach(function(t) {
+                    t.remove();
+                });
+                const raw = wrap.getAttribute('data-sm-hover');
+                if (!raw) return;
+                const d = parseDataSmHover(raw);
+                if (!d) return;
+                wrap.appendChild(buildSmHoverTipFromData(d));
+                attachSmHoverBehavior(wrap);
+            });
+            bindSmHoverGlobalHandlersOnce();
+        }
+
+        function loadSmHubSplunk() {
+            const slot = document.getElementById('sm-hub-splunk-slot');
+            if (!slot) {
+                return;
+            }
+            slot.innerHTML = '<div style="padding:10px 12px;color:#64748b;font-size:12px;font-weight:600;border:1px dashed #cbd5e1;border-radius:10px;">Loading Splunk P0 outliers…</div>';
+            fetch('/api/splunk/monitor?timerange=72')
+                .then(function(res) {
+                    return res.json();
+                })
+                .then(function(data) {
+                    if (!data || data.success === false) {
+                        const err = (data && data.error) ? String(data.error) : 'Unavailable';
+                        slot.innerHTML =
+                            '<div class="sm-hub-splunk-bar" style="background:#6b7280;border-radius:10px;padding:12px 14px;color:#fff;font-size:12px;font-weight:700;line-height:1.4;">' +
+                            '📊 Splunk P0: <span style="opacity:0.95;">unavailable</span> — ' + escHubText(err.substring(0, 140)) +
+                            '</div>';
+                        return;
+                    }
+                    const tools = data.tools || [];
+                    const byId = {};
+                    tools.forEach(function(t) {
+                        if (t && t.id) {
+                            byId[t.id] = t;
+                        }
+                    });
+                    function outFor(id) {
+                        const t = byId[id];
+                        if (!t || t.total_outliers == null) {
+                            return 0;
+                        }
+                        return Number(t.total_outliers) || 0;
+                    }
+                    const nS = outFor('p0_streaming');
+                    const nC = outFor('p0_cvr');
+                    const nA = outFor('p0_adt');
+                    const nU = outFor('p0_streaming_us_infra');
+                    const grand = nS + nC + nA + nU;
+                    function zoneHoverTitle(label, t) {
+                        var zones = (t && t.zones) ? t.zones : [];
+                        var zmap = {};
+                        zones.forEach(function(z) {
+                            if (z && z.zone) {
+                                zmap[z.zone] = z;
+                            }
+                        });
+                        var lines = [label + ' — outliers by zone (LLP predict):'];
+                        ['z1', 'z2', 'z3', 'z4'].forEach(function(zn) {
+                            var z = zmap[zn] || {};
+                            var o = Number(z.outliers) || 0;
+                            if (z.error) {
+                                lines.push('  ' + zn.toUpperCase() + ': data unavailable');
+                            } else {
+                                lines.push('  ' + zn.toUpperCase() + ': ' + o + ' outlier(s)');
+                            }
+                        });
+                        return lines.join('\n');
+                    }
+                    function dashUrl(id, fallback) {
+                        var tt = byId[id];
+                        return (tt && tt.dashboard_url) ? tt.dashboard_url : fallback;
+                    }
+                    function semLight(shortLabel, longLabel, id, fallbackUrl) {
+                        var t = byId[id];
+                        var url = dashUrl(id, fallbackUrl);
+                        var tot = (t && t.total_outliers != null) ? Number(t.total_outliers) : 0;
+                        var title = zoneHoverTitle(longLabel, t);
+                        var dotBg = tot > 0 ? '#ef4444' : '#22c55e';
+                        var dotSh = tot > 0 ? 'rgba(239,68,68,0.55)' : 'rgba(34,197,94,0.55)';
+                        return '<a href="' + url + '" target="_blank" rel="noopener" title="' + escHubText(title) + '" style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:#fff;min-width:40px;">' +
+                            '<span style="width:12px;height:12px;border-radius:50%;background:' + dotBg + ';box-shadow:0 0 8px ' + dotSh + ';"></span>' +
+                            '<span style="font-size:9px;font-weight:800;opacity:0.95;line-height:1.1;">' + escHubText(shortLabel) + '</span>' +
+                            '<span style="font-size:11px;font-weight:900;line-height:1;">' + tot + '</span></a>';
+                    }
+                    function semBar() {
+                        var sep = '<span style="opacity:0.45;font-size:11px;font-weight:700;padding:0 1px;">|</span>';
+                        return '<div class="spl-p0-sem" style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:6px 10px;padding:2px 0;">' +
+                            semLight('Str', 'Streaming', 'p0_streaming', 'https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard') + sep +
+                            semLight('CVR', 'CVR', 'p0_cvr', 'https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_cvr_dashboard') + sep +
+                            semLight('ADT', 'ADT', 'p0_adt', 'https://arlo.splunkcloud.com/en-US/app/search/p0_streaming_dashboard_pp') + sep +
+                            semLight('US', 'US infra', 'p0_streaming_us_infra', 'https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard__us_infra') +
+                            '</div>';
+                    }
+                    const bg = grand > 0 ? '#dc2626' : '#10b981';
+                    const blinkCls = grand > 0 ? ' pd-status-blink' : '';
+                    const statusTxt = grand > 0 ? '🔴 OUTLIERS' : '🟢 CLEAR';
+                    const tr = data.timerange_hours != null ? data.timerange_hours : 72;
+                    slot.innerHTML =
+                        '<div class="sm-hub-splunk-bar' + blinkCls + '" style="background:' + bg + ';border-radius:10px;padding:8px 12px;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.12);">' +
+                        '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;">' +
+                        '<span style="font-weight:800;font-size:12px;">📊 Splunk P0</span>' +
+                        semBar() +
+                        '<span style="font-size:9px;font-weight:700;opacity:0.92;white-space:nowrap;">' + tr + 'h · ' + statusTxt + '</span>' +
+                        '</div></div>';
+                })
+                .catch(function(err) {
+                    slot.innerHTML =
+                        '<div class="sm-hub-splunk-bar" style="background:#6b7280;border-radius:10px;padding:12px 14px;color:#fff;font-size:12px;font-weight:700;">📊 Splunk P0: ' + escHubText(err.message || String(err)) + '</div>';
+                });
+        }
+
+        function loadSmHubSamsung() {
+            const slot = document.getElementById('sm-hub-samsung-slot');
+            if (!slot) {
+                return;
+            }
+            slot.innerHTML =
+                '<div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">' +
+                '<div style="margin-bottom:12px;"><h3 style="margin:0;font-size:15px;font-weight:700;color:#0c4a6e;">📱 Samsung</h3></div>' +
+                '<div id="ss-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">' +
+                '<div style="text-align:center;flex:1;"><div id="ss-triggered-count" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Triggered</div></div>' +
+                '<div style="text-align:center;flex:1;"><div id="ss-ack-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Ack</div></div>' +
+                '<div style="text-align:center;flex:1;"><div id="ss-resolved-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Resolved</div></div></div>' +
+                '<div id="ss-board-links" style="font-size:11px;color:#64748b;margin:10px 0;line-height:1.4;padding:6px 8px;border-radius:6px;background:#f0f9ff;border:1px solid #bae6fd;">Loading…</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🔴 Active</h4><ul id="ss-active" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div>' +
+                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🟢 Resolved</h4><ul id="ss-resolved" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div></div>' +
+                '<div style="margin-top:8px;font-size:10px;color:#64748b;text-align:center;"><span id="ss-time">Last updated: --:--:--</span></div></div>';
+            if (typeof loadSamsungStatusWidget === 'function') {
+                loadSamsungStatusWidget(false);
+            }
+        }
+
+        function loadSmHubAdt() {
+            const slot = document.getElementById('sm-hub-adt-slot');
+            if (!slot) {
+                return;
+            }
+            slot.innerHTML =
+                '<div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">' +
+                '<div style="margin-bottom:12px;"><h3 style="margin:0;font-size:15px;font-weight:700;color:#3730a3;">🏠 ADT</h3></div>' +
+                '<div id="adt-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">' +
+                '<div style="text-align:center;flex:1;"><div id="adt-triggered-count" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Triggered</div></div>' +
+                '<div style="text-align:center;flex:1;"><div id="adt-ack-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Ack</div></div>' +
+                '<div style="text-align:center;flex:1;"><div id="adt-resolved-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Resolved</div></div></div>' +
+                '<div id="adt-board-links" style="font-size:11px;color:#64748b;margin:10px 0;line-height:1.4;padding:6px 8px;border-radius:6px;background:#eef2ff;border:1px solid #c7d2fe;">Loading…</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🔴 Active</h4><ul id="adt-active" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div>' +
+                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🟢 Resolved</h4><ul id="adt-resolved" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div></div>' +
+                '<div style="margin-top:8px;font-size:10px;color:#64748b;text-align:center;"><span id="adt-time">Last updated: --:--:--</span></div></div>';
+            if (typeof loadAdtStatusWidget === 'function') {
+                loadAdtStatusWidget(false);
+            }
+        }
+
+        function applyHubSummaryData(data) {
+            const dashboard = document.getElementById('dashboard');
+            if (data.success === false || (data.error && !data.environments)) {
+                const msg = (data && data.error) ? data.error : 'Unknown error';
+                dashboard.innerHTML = '<div class="sm-hub-panel"><p style="color:#b91c1c;font-weight:600;">Error loading hub: ' + escHubText(msg) + '</p></div>';
+                return;
+            }
+            const envs = data.environments || [];
+            const cards = envs.map(function(e) {
+                const cls = e.overall === 'critical' ? 'sm-hub-card--critical' : (e.overall === 'warning' ? 'sm-hub-card--warning' : 'sm-hub-card--healthy');
+                let br = '';
+                if (e.service_breakdown && e.service_breakdown.length) {
+                    br = '<div class="sm-hub-svc-breakdown">' + e.service_breakdown.map(function(r) {
+                        const stCls = String(r.status || 'unknown').replace(/[^a-z0-9_-]/gi, '');
+                        return '<div class="sm-hub-svc-line sm-hub-svc--' + stCls + '">' +
+                            '<span class="sm-hub-svc-n">' + escHubText(r.service) + '</span>' +
+                            '<span class="sm-hub-svc-st">' + escHubText(r.status) + '</span></div>';
+                    }).join('') + '</div>';
+                }
+                const cardHtml = '<a class="sm-hub-card ' + cls + '" href="' + escHubText(e.href) + '">' +
+                    '<div class="sm-hub-card-title">' + escHubText(e.label) + '</div>' +
+                    '<div class="sm-hub-stats">' +
+                    '<span>Healthy</span><span class="sm-hub-stat-val">' + e.healthy + '</span>' +
+                    '<span>Warning</span><span class="sm-hub-stat-val">' + e.warning + '</span>' +
+                    '<span>Critical</span><span class="sm-hub-stat-val">' + e.critical + '</span>' +
+                    '<span>Inactive</span><span class="sm-hub-stat-val">' + (e.inactive != null ? e.inactive : 0) + '</span>' +
+                    '<span>Unknown</span><span class="sm-hub-stat-val">' + (e.unknown != null ? e.unknown : 0) + '</span>' +
+                    '<span>Operational</span><span class="sm-hub-stat-val">' + (e.operational != null ? e.operational : ((e.healthy || 0) + (e.warning || 0) + (e.critical || 0))) + '</span>' +
+                    '<span>Configured</span><span class="sm-hub-stat-val">' + (e.configured != null ? e.configured : e.monitored) + '</span>' +
+                    '</div>' + br + '</a>';
+                let reasonHtml = '';
+                    const lines = e.status_reason_lines;
+                if ((e.overall === 'warning' || e.overall === 'critical') && lines && lines.length) {
+                    const rcls = e.overall === 'critical' ? 'sm-hub-tile-reason--critical' : 'sm-hub-tile-reason--warning';
+                    reasonHtml = '<div class="sm-hub-tile-reason ' + rcls + '" role="note"><ul>' +
+                        lines.map(function(line) { return '<li>' + escHubText(line) + '</li>'; }).join('') +
+                        '</ul></div>';
+                }
+                const hubPayload = {
+                    type: 'hub-env',
+                    label: e.label,
+                    href: e.href,
+                    overall: e.overall,
+                    healthy: e.healthy,
+                    warning: e.warning,
+                    critical: e.critical,
+                    inactive: e.inactive,
+                    unknown: e.unknown,
+                    operational: e.operational != null ? e.operational : ((e.healthy || 0) + (e.warning || 0) + (e.critical || 0)),
+                    configured: e.configured != null ? e.configured : e.monitored,
+                    reason_lines: e.status_reason_lines || [],
+                };
+                return '<div class="sm-hub-cell sm-tip-wrap" data-sm-hover="' + escDataAttr(hubPayload) + '">' + cardHtml + reasonHtml + '</div>';
+            }).join('');
+            dashboard.innerHTML =
+                '<div class="sm-hub-panel">' +
+                '<div id="sm-hub-splunk-slot" style="margin-bottom:16px;"></div>' +
+                '<div id="sm-hub-samsung-slot" style="margin-bottom:16px;"></div>' +
+                '<div id="sm-hub-adt-slot" style="margin-bottom:16px;"></div>' +
+                '<h2>Environment status</h2>' +
+                '<div class="sm-hub-sub">Datadog APM by environment (same rules as the full monitor: warning &gt;1% error rate, critical &gt;5%). <strong>Operational</strong> = healthy + warning + critical (matches drill-down Summary “Total listed”). <strong>Configured</strong> = all services in the list.</div>' +
+                '<div class="sm-hub-grid">' + cards + '</div></div>';
+            loadSmHubSplunk();
+            loadSmHubSamsung();
+            loadSmHubAdt();
+            initSmHoverTips(dashboard);
+        }
+
+        function loadHubSummary(options) {
+            const silentRefresh = options && options.silentRefresh === true;
+            const forceRefresh = options && options.forceRefresh === true;
+            const loading = document.getElementById('loading');
+            const dashboard = document.getElementById('dashboard');
+            const trEl = document.getElementById('hub-timerange');
+            const timerange = trEl ? parseInt(trEl.value, 10) : 1;
+            const loadSub = document.querySelector('#loading p');
+            const C = window.SessionDataCache;
+            const ck = 'hub_summary_' + timerange;
+
+            if (!forceRefresh && C) {
+                const hit = C.get(ck);
+                if (hit && hit.environments) {
+                    applyHubSummaryData(hit);
+                    if (!silentRefresh) {
+                        loading.classList.remove('show');
+                    }
+                    return;
+                }
+            }
+
+            if (!silentRefresh) {
+                loading.classList.add('show');
+                if (loadSub) {
+                    loadSub.textContent = 'Loading environment summary (lightweight Datadog queries — usually under ~15s).';
+                }
+            }
+            fetch('/api/statusmonitor/hub-summary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timerange: timerange, force_refresh: forceRefresh })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!silentRefresh) {
+                    loading.classList.remove('show');
+                }
+                if (C && data.success !== false && data.environments) {
+                    C.set(ck, data, SM_HUB_SUMMARY_TTL_MS);
+                }
+                applyHubSummaryData(data);
+            })
+            .catch(function(error) {
+                if (!silentRefresh) {
+                    loading.classList.remove('show');
+                }
+                console.error('Hub load error:', error);
+            });
+        }
+
         function clearCacheAndReload() {
             console.log('🧹 Clearing cache and forcing refresh...');
             
@@ -356,75 +1400,114 @@
             .then(response => response.json())
             .then(data => {
                 console.log('✅ Cache cleared:', data);
-                // Now reload dashboard with fresh data
-                loadDashboard();
+                if (window.SessionDataCache) {
+                    SessionDataCache.clearAll();
+                }
+                if (IS_HUB) {
+                    loadHubSummary({ forceRefresh: true });
+                } else {
+                    loadDashboard({ forceRefresh: true });
+                }
             })
             .catch(error => {
                 console.error('❌ Error clearing cache:', error);
                 loading.classList.remove('show');
                 alert('Error clearing cache. Reloading anyway...');
-                loadDashboard();
+                if (window.SessionDataCache) {
+                    SessionDataCache.clearAll();
+                }
+                if (IS_HUB) {
+                    loadHubSummary({ forceRefresh: true });
+                } else {
+                    loadDashboard({ forceRefresh: true });
+                }
             });
         }
         
-        function loadDashboard() {
+        function applyDashboardHtml(html) {
+            const dashboard = document.getElementById('dashboard');
+            dashboard.innerHTML = html;
+            updateClientTimestamp();
+            const scripts = dashboard.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                newScript.textContent = script.textContent;
+                script.parentNode.replaceChild(newScript, script);
+            });
+            setTimeout(() => {
+                if (window.chartData) {
+                    initializePieChart(window.chartData);
+                }
+                initSmHoverTips(dashboard);
+                if (typeof loadSamsungStatusWidget === 'function') {
+                    loadSamsungStatusWidget(false);
+                }
+                if (typeof loadAdtStatusWidget === 'function') {
+                    loadAdtStatusWidget(false);
+                }
+            }, 100);
+            const newTimerangeElement = document.getElementById('timerange');
+            if (newTimerangeElement && !newTimerangeElement.hasAttribute('data-listener')) {
+                newTimerangeElement.setAttribute('data-listener', 'true');
+                newTimerangeElement.addEventListener('change', function() {
+                    loadDashboard();
+                });
+            }
+        }
+
+        function loadDashboard(options) {
+            const silentRefresh = options && options.silentRefresh === true;
+            const forceRefresh = options && options.forceRefresh === true;
             const loading = document.getElementById('loading');
             const dashboard = document.getElementById('dashboard');
-            
-            // Get timerange value if element exists (after first load), otherwise use default
             const timerangeElement = document.getElementById('timerange');
-            const timerange = timerangeElement ? timerangeElement.value : 4;
-            
-            // DON'T clear dashboard content - keep old data visible while loading new
-            loading.classList.add('show');
-            
+            const timerange = timerangeElement ? timerangeElement.value : 1;
+            const C = window.SessionDataCache;
+            const dck = smDashboardCacheKey(ENVIRONMENT, timerange);
+
+            if (!forceRefresh && C) {
+                const hit = C.get(dck);
+                if (hit && hit.success && hit.html) {
+                    applyDashboardHtml(hit.html);
+                    if (!silentRefresh) {
+                        loading.classList.remove('show');
+                    }
+                    return;
+                }
+            }
+
+            if (!silentRefresh) {
+                loading.classList.add('show');
+            }
+
             fetch('/api/statusmonitor', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    timerange: parseInt(timerange),
-                    environment: ENVIRONMENT  // Pass environment from template
+                    timerange: parseInt(timerange, 10),
+                    environment: ENVIRONMENT,
+                    force_refresh: forceRefresh
                 })
             })
             .then(response => response.json())
             .then(data => {
-                loading.classList.remove('show');
-                // Only update dashboard after new data is ready
-                dashboard.innerHTML = data.html;
-                
-                // Update timestamp with client's local time and timezone
-                updateClientTimestamp();
-                
-                // Execute inline scripts manually
-                const scripts = dashboard.querySelectorAll('script');
-                scripts.forEach(script => {
-                    const newScript = document.createElement('script');
-                    newScript.textContent = script.textContent;
-                    script.parentNode.replaceChild(newScript, script);
-                });
-                
-                // Initialize pie chart after DOM update
-                setTimeout(() => {
-                    if (window.chartData) {
-                        initializePieChart(window.chartData);
-                    }
-                }, 100);
-                
-                // Add event listener to timerange select after it's loaded
-                const newTimerangeElement = document.getElementById('timerange');
-                if (newTimerangeElement && !newTimerangeElement.hasAttribute('data-listener')) {
-                    newTimerangeElement.setAttribute('data-listener', 'true');
-                    newTimerangeElement.addEventListener('change', function() {
-                        loadDashboard();
-                    });
+                if (!silentRefresh) {
+                    loading.classList.remove('show');
+                }
+                if (C && data.success && data.html) {
+                    C.set(dck, { success: true, html: data.html }, SM_DASHBOARD_TTL_MS);
+                }
+                if (data.html) {
+                    applyDashboardHtml(data.html);
                 }
             })
             .catch(error => {
-                loading.classList.remove('show');
+                if (!silentRefresh) {
+                    loading.classList.remove('show');
+                }
                 console.error('Dashboard load error:', error);
-                // Show error overlay without clearing existing data
                 const errorDiv = document.createElement('div');
                 errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fee; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000;';
                 errorDiv.innerHTML = '❌ Error loading dashboard: ' + error.message;
@@ -434,16 +1517,19 @@
         }
         
         function setupAutoRefresh() {
+            if (IS_HUB) {
+                return;
+            }
             // Clear existing interval if any
             if (autoRefreshInterval) {
                 clearInterval(autoRefreshInterval);
             }
             
-            // Set up auto-refresh every 2 minutes (120000 ms)
+            // Auto-refresh every 3 minutes (lower browser + server load than 2 min)
             autoRefreshInterval = setInterval(() => {
                 console.log('🔄 Auto-refreshing dashboard...');
-                loadDashboard();
-            }, 120000);
+                loadDashboard({ silentRefresh: true });
+            }, 180000);
         }
         
         function startLiveClock() {
@@ -453,11 +1539,29 @@
             }, 1000);
         }
         
-        // Load dashboard on page load
+        // Load hub (/) or full dashboard (/production, etc.)
         window.addEventListener('DOMContentLoaded', () => {
-            loadDashboard();
-            setupAutoRefresh();
-            startLiveClock();  // Start live timestamp updates
+            if (IS_HUB) {
+                const hc = document.getElementById('hub-controls');
+                if (hc) {
+                    hc.style.display = 'flex';
+                }
+                const ht = document.getElementById('hub-timerange');
+                if (ht) {
+                    ht.addEventListener('change', () => loadHubSummary());
+                }
+                loadHubSummary();
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                }
+                autoRefreshInterval = setInterval(() => {
+                    loadHubSummary({ silentRefresh: true });
+                }, 300000);
+            } else {
+                loadDashboard();
+                setupAutoRefresh();
+            }
+            startLiveClock();
         });
     </script>
 </body>

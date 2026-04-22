@@ -1,0 +1,134 @@
+<form version="1.0" theme="dark">
+  <label>S3BATs — arlos3bat100–arlos3bat120</label>
+  <description>Arlo S3BAT servers: restricts to hostnames arlos3bat100 through arlos3bat120 (regex ^arlos3bat(10[0-9]|11[0-9]|120)$). Adjust index/sourcetype if your data uses different defaults; add optional search terms for errors or specific strings.</description>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default>
+        <earliest>-24h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="text" token="idx" searchWhenChanged="true">
+      <label>Index</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="st" searchWhenChanged="true">
+      <label>Sourcetype</label>
+      <default>*</default>
+    </input>
+    <input type="text" token="q" searchWhenChanged="true">
+      <label>Optional search terms</label>
+      <default></default>
+    </input>
+  </fieldset>
+
+  <!-- Hosts arlos3bat100–120 only -->
+  <row>
+    <panel>
+      <title>Total events (s3bats range)</title>
+      <single>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ host=arlos3bat* $q$
+| where match(host, "^arlos3bat(10[0-9]|11[0-9]|120)$")
+| stats count as total</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="rangeValues">["0","1","1000","100000"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Distinct hosts seen (max 21)</title>
+      <single>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ host=arlos3bat* $q$
+| where match(host, "^arlos3bat(10[0-9]|11[0-9]|120)$")
+| stats dc(host) as distinct_hosts</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">distinct_hosts</option>
+        <option name="rangeValues">["0","10","18","21"]</option>
+        <option name="rangeColors">["0xdc4e41","0xe67e22","0xf2b827","0x53a051"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Events over time (all s3bats)</title>
+      <chart>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ host=arlos3bat* $q$
+| where match(host, "^arlos3bat(10[0-9]|11[0-9]|120)$")
+| timechart span=15m count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Event count by host</title>
+      <chart>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ host=arlos3bat* $q$
+| where match(host, "^arlos3bat(10[0-9]|11[0-9]|120)$")
+| stats count by host
+| sort host</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Events over time by host (top 12 series)</title>
+      <chart>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ host=arlos3bat* $q$
+| where match(host, "^arlos3bat(10[0-9]|11[0-9]|120)$")
+| timechart span=15m limit=12 useother=f count by host</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Recent events</title>
+      <table>
+        <search>
+          <query>index=$idx$ sourcetype=$st$ host=arlos3bat* $q$
+| where match(host, "^arlos3bat(10[0-9]|11[0-9]|120)$")
+| table _time host source sourcetype _raw
+| sort - _time
+| head 200</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">200</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

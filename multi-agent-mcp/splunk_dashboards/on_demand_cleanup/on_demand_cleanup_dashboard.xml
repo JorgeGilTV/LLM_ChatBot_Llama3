@@ -1,0 +1,231 @@
+<form version="1.0" theme="dark">
+  <label>On-demand cleanup: message sent vs execution</label>
+  <description>Compares index=prod events (&quot;New on-demand cleanup job for user … message has been sent&quot;) with index=platform_engr_prod (&quot;On demand cleanup job … executed with state&quot;). Correlation key: user id (text between &quot;user&quot; and &quot;message&quot;) matches the segment before ! inside the executed job id in brackets. Tune indexes and the time picker for your environment.</description>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default>
+        <earliest>-24h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="text" token="idx_sent" searchWhenChanged="true">
+      <label>Index (message sent)</label>
+      <default>prod</default>
+    </input>
+    <input type="text" token="idx_exec" searchWhenChanged="true">
+      <label>Index (job executed)</label>
+      <default>platform_engr_prod</default>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <title>Jobs sent</title>
+      <single>
+        <search>
+          <query>index=$idx_sent$ "New on-demand cleanup job for user" "message has been sent"
+| rex field=_raw "for user (?&lt;user_key>[^\s]+) message"
+| stats count as total</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="rangeValues">["0","1","50","200"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Jobs executed</title>
+      <single>
+        <search>
+          <query>index=$idx_exec$ "On demand cleanup job" "executed with state"
+| stats count as total</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="rangeValues">["0","1","50","200"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Sent VS Executed</title>
+      <single>
+        <search>
+          <query>index=$idx_sent$ "New on-demand cleanup job for user" "message has been sent"
+| rex field=_raw "for user (?&lt;user_key>[^\s]+) message"
+| stats count as c_sent
+| appendcols [
+    search index=$idx_exec$ "On demand cleanup job" "executed with state"
+    | stats count as c_exec
+  ]
+| eval delta=c_sent-c_exec
+| fields delta</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">delta</option>
+        <option name="rangeValues">["-99999","0","1","10"]</option>
+        <option name="rangeColors">["0xdc4e41","0x53a051","0xf2b827","0xe67e22"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Pending (sent, no execution for user_key in window)</title>
+      <single>
+        <search>
+          <query>(index=$idx_sent$ "New on-demand cleanup job for user" "message has been sent")
+| rex field=_raw "for user (?&lt;user_key>[^\s]+) message"
+| eval stream="sent"
+| fields _time user_key stream
+| append [
+    search (index=$idx_exec$ "On demand cleanup job" "executed with state")
+    | rex field=_raw "On demand cleanup job \[(?&lt;job_id>[^\]]+)\]"
+    | eval user_key=mvindex(split(job_id,"!"),0)
+    | eval stream="executed"
+    | fields _time user_key stream
+  ]
+| stats earliest(eval(if(stream="sent",_time,null()))) as first_sent
+        earliest(eval(if(stream="executed",_time,null()))) as first_exec
+  by user_key
+| where isnotnull(first_sent) AND isnull(first_exec)
+| stats count as pending</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">pending</option>
+        <option name="rangeValues">["0","1","5","20"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Sent vs executed over time</title>
+      <chart>
+        <search>
+          <query>(index=$idx_sent$ "New on-demand cleanup job for user" "message has been sent")
+| rex field=_raw "for user (?&lt;user_key>[^\s]+) message"
+| eval series="job_sent"
+| fields _time series
+| append [
+    search (index=$idx_exec$ "On demand cleanup job" "executed with state")
+    | eval series="job_executed"
+    | fields _time series
+  ]
+| timechart span=15m count by series</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- Non-matching events: full event rows (left join on user_key within time range) -->
+  <row>
+    <panel>
+      <title>Non-matching: sent events with no execution for same user_key in window</title>
+      <table>
+        <search>
+          <query>index=$idx_sent$ "New on-demand cleanup job for user" "message has been sent"
+| rex field=_raw "for user (?&lt;user_key>[^\s]+) message"
+| join type=left max=0 user_key [
+    search index=$idx_exec$ "On demand cleanup job" "executed with state"
+    | rex field=_raw "On demand cleanup job \[(?&lt;job_id>[^\]]+)\]"
+    | eval user_key=mvindex(split(job_id,"!"),0)
+    | dedup user_key
+    | eval _exec_match=1
+    | fields user_key _exec_match
+  ]
+| where isnull(_exec_match)
+| eval mismatch_type="sent_no_exec_in_window"
+| table _time mismatch_type user_key host sourcetype _raw
+| sort - _time</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Non-matching: executed events with no sent message for same user_key in window</title>
+      <table>
+        <search>
+          <query>index=$idx_exec$ "On demand cleanup job" "executed with state"
+| rex field=_raw "On demand cleanup job \[(?&lt;job_id>[^\]]+)\]"
+| eval user_key=mvindex(split(job_id,"!"),0)
+| rex field=_raw "state=(?&lt;exec_state>[^,\s\]]+)"
+| join type=left max=0 user_key [
+    search index=$idx_sent$ "New on-demand cleanup job for user" "message has been sent"
+    | rex field=_raw "for user (?&lt;user_key>[^\s]+) message"
+    | dedup user_key
+    | eval _sent_match=1
+    | fields user_key _sent_match
+  ]
+| where isnull(_sent_match)
+| eval mismatch_type="exec_only_in_window"
+| table _time mismatch_type user_key job_id exec_state host sourcetype _raw
+| sort - _time</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Recent events: message sent (sent index)</title>
+      <table>
+        <search>
+          <query>index=$idx_sent$ "New on-demand cleanup job for user" "message has been sent"
+| rex field=_raw "for user (?&lt;user_key>[^\s]+) message"
+| table _time host sourcetype user_key _raw
+| sort - _time
+| head 30</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">30</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Recent events: job executed (exec index)</title>
+      <table>
+        <search>
+          <query>index=$idx_exec$ "On demand cleanup job" "executed with state"
+| rex field=_raw "On demand cleanup job \[(?&lt;job_id>[^\]]+)\]"
+| eval user_key=mvindex(split(job_id,"!"),0)
+| rex field=_raw "state=(?&lt;exec_state>[^,\s\]]+)"
+| table _time host sourcetype user_key job_id exec_state _raw
+| sort - _time
+| head 30</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">30</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

@@ -1,25 +1,49 @@
 """
-Gunicorn configuration for production deployment
-Optimized for handling multiple concurrent users
+Gunicorn configuration for production deployment.
+
+Docker / small EC2: each worker imports the full Flask app (heavy modules). The old
+default (2 * CPU + 1) sync workers often caused OOMKilled or slow boots that failed
+HEALTHCHECK. Defaults are container-safe; override with WEB_CONCURRENCY.
 """
 
 import multiprocessing
 import os
 
-# Server socket
-bind = f"0.0.0.0:{os.getenv('PORT', 8080)}"
+# Server socket (PORT must be numeric; empty env would break bind)
+try:
+    _port = int((os.getenv("PORT") or "8080").strip() or "8080")
+except ValueError:
+    _port = 8080
+bind = f"0.0.0.0:{_port}"
+
 backlog = 2048
 
-# Worker processes
-# Formula: (2 x num_cores) + 1
-workers = multiprocessing.cpu_count() * 2 + 1
-worker_class = 'sync'
-worker_connections = 1000
-timeout = 120  # Increased timeout for long-running queries (Datadog, Splunk)
-keepalive = 5
+# Workers: WEB_CONCURRENCY overrides everything (e.g. 1–2 on t3.small / 2 GB RAM)
+_cpu = max(1, multiprocessing.cpu_count() or 1)
+_wc = (os.getenv("WEB_CONCURRENCY") or "").strip()
+if _wc:
+    try:
+        workers = max(1, min(int(_wc), 32))
+    except ValueError:
+        workers = max(1, min(_cpu, 4))
+else:
+    # Cap default so 8+ vCPU hosts do not spawn 17 processes × full app import
+    workers = max(1, min(_cpu, 4))
 
-# Worker threads (for I/O bound operations like API calls)
-threads = 4  # Each worker can handle 4 concurrent requests
+# Default sync: same as classic Gunicorn/Flask deployments (EC2-friendly, avoids rare gthread issues).
+# Set GUNICORN_WORKER_CLASS=gthread if you want threaded workers for I/O-bound routes.
+worker_class = os.getenv("GUNICORN_WORKER_CLASS", "sync").strip() or "sync"
+try:
+    threads = int((os.getenv("GUNICORN_THREADS") or "4").strip() or "4")
+except ValueError:
+    threads = 4
+threads = max(1, min(threads, 32))
+if worker_class == "sync":
+    threads = 1
+
+worker_connections = 1000
+timeout = 120  # Long-running queries (Datadog, Splunk)
+keepalive = 5
 
 # Logging
 accesslog = '-'  # Log to stdout
@@ -42,12 +66,10 @@ tmp_upload_dir = None
 # keyfile = None
 # certfile = None
 
-# Maximum concurrent requests this configuration can handle:
-# workers * threads = (2 * CPU_cores + 1) * 4
-# Example: On a 4-core machine = 9 workers * 4 threads = 36 concurrent requests
-
-print(f"🚀 Gunicorn config loaded")
-print(f"   Workers: {workers}")
-print(f"   Threads per worker: {threads}")
-print(f"   Max concurrent requests: {workers * threads}")
-print(f"   Timeout: {timeout}s")
+print("🚀 Gunicorn config loaded")
+print(f"   bind: {bind}")
+print(f"   worker_class: {worker_class}")
+print(f"   workers: {workers}")
+print(f"   threads: {threads}")
+print(f"   effective concurrency (approx): {workers * threads}")
+print(f"   timeout: {timeout}s")

@@ -3,12 +3,12 @@ import requests
 import html
 
 def service_owners_search(query):
-    print("🔎 Buscando en tabla Service Owners:", query)
+    print("🔎 Searching Service Owners table:", query)
 
     email = os.getenv("ATLASSIAN_EMAIL")
     token = os.getenv("CONFLUENCE_TOKEN")
     if not email or not token:
-        return "<p>Error: ATLASSIAN_EMAIL o CONFLUENCE_TOKEN no están definidos en las variables de entorno.</p>"
+        return "<p>Error: ATLASSIAN_EMAIL and CONFLUENCE_TOKEN must be set in the environment.</p>"
 
     auth = (email, token)
 
@@ -22,15 +22,14 @@ def service_owners_search(query):
     data = response.json()
     adf = data.get("body", {}).get("atlas_doc_format", {}).get("value", "")
     if not adf:
-        return "<p>No se encontró contenido en formato ADF.</p>"
+        return "<p>No ADF content found on the page.</p>"
 
     import json
     doc = json.loads(adf)
 
-    # Buscar la tabla dentro del JSON
     tables = [node for node in doc.get("content", []) if node.get("type") == "table"]
     if not tables:
-        return "<p>No se encontró ninguna tabla en la página.</p>"
+        return "<p>No table found on the page.</p>"
 
     table = tables[0]
     rows = table.get("content", [])
@@ -41,16 +40,14 @@ def service_owners_search(query):
     for row in rows:
         cells = []
         for cell in row.get("content", []):
-            # Cada celda puede tener párrafos con texto o menciones
             cell_text_parts = []
             for paragraph in cell.get("content", []):
                 for item in paragraph.get("content", []):
                     if item["type"] == "text":
                         cell_text_parts.append(item["text"])
                     elif item["type"] == "mention":
-                        cell_text_parts.append(item["attrs"]["text"])  # aquí aparece el @usuario
+                        cell_text_parts.append(item["attrs"]["text"])
             cells.append(" ".join(cell_text_parts).strip())
-        # Si es la primera fila, son los headers
         if row["content"][0]["type"] == "tableHeader":
             headers = cells
         else:
@@ -59,9 +56,7 @@ def service_owners_search(query):
                 filtered_rows.append(cells)
 
     if not filtered_rows:
-        return f"<p>No se encontraron coincidencias en la tabla para: <strong>{html.escape(query)}</strong></p>"
-
-    # Construir tabla HTML
+        return f"<p>No matches in the table for: <strong>{html.escape(query)}</strong></p>"
     table_html = "<table border='1' style='border-collapse:collapse; width:100%;'>"
     if headers:
         table_html += "<tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr>"

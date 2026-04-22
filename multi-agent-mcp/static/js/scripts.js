@@ -1,6 +1,48 @@
-// Scripts.js loaded - Version 20260213-v21 (OneView GOC AI - Enhanced UI with theme toggle, tooltips, search, etc.)
+// Scripts.js — OneView GOC AI (main chat UI)
 let counterInterval;
 let startTime;
+
+const CHART_JS_URL = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+const HTML2CANVAS_URL = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+
+let _chartJsPromise = null;
+/** Load Chart.js only when a result needs charts (faster first paint). */
+function ensureChartJs() {
+    if (typeof Chart !== 'undefined') {
+        return Promise.resolve();
+    }
+    if (_chartJsPromise) {
+        return _chartJsPromise;
+    }
+    _chartJsPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = CHART_JS_URL;
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Chart.js failed to load'));
+        document.head.appendChild(s);
+    });
+    return _chartJsPromise;
+}
+
+let _html2canvasPromise = null;
+function ensureHtml2Canvas() {
+    if (typeof html2canvas === 'function') {
+        return Promise.resolve();
+    }
+    if (_html2canvasPromise) {
+        return _html2canvasPromise;
+    }
+    _html2canvasPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = HTML2CANVAS_URL;
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('html2canvas failed to load'));
+        document.head.appendChild(s);
+    });
+    return _html2canvasPromise;
+}
 
 // ============================================
 // THEME TOGGLE
@@ -303,13 +345,16 @@ function addResultActions(resultsBox) {
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'result-actions';
     actionsDiv.innerHTML = `
-        <button class="result-action-btn" onclick="copyResultsToClipboard()" title="Copy results">
+        <button type="button" class="result-action-btn" onclick="copyResultsToClipboard()" title="Copy results">
             📋 Copy
         </button>
-        <button class="result-action-btn" onclick="expandAllSections()" title="Expand all sections">
+        <button type="button" class="result-action-btn result-action-btn--slack" onclick="sendResultsToSlack()" title="Bedrock summary of this result block only → Slack">
+            📤 Enviar a Slack
+        </button>
+        <button type="button" class="result-action-btn" onclick="expandAllSections()" title="Expand all sections">
             📖 Expand All
         </button>
-        <button class="result-action-btn" onclick="collapseAllSections()" title="Collapse all sections">
+        <button type="button" class="result-action-btn" onclick="collapseAllSections()" title="Collapse all sections">
             📕 Collapse All
         </button>
     `;
@@ -318,13 +363,49 @@ function addResultActions(resultsBox) {
     resultsBox.insertBefore(actionsDiv, resultsBox.firstChild);
 }
 
-function copyResultsToClipboard() {
+function getResultsTextExcludingActions() {
     const resultsBox = document.getElementById('results-box');
-    if (resultsBox) {
-        const text = resultsBox.innerText;
+    if (!resultsBox) return '';
+    const clone = resultsBox.cloneNode(true);
+    const actions = clone.querySelector('.result-actions');
+    if (actions) actions.remove();
+    return clone.innerText.trim();
+}
+
+function copyResultsToClipboard() {
+    const text = getResultsTextExcludingActions();
+    if (text) {
         copyToClipboard(text);
     }
 }
+
+function sendResultsToSlack() {
+    if (typeof window.SlackShare === 'undefined') {
+        showNotification('⚠️ Slack no disponible (falta slack_share.js)', 6000);
+        return;
+    }
+    const box = document.getElementById('results-box');
+    if (!box || !box.innerText || !box.innerText.trim()) {
+        showNotification('⚠️ No content to summarize');
+        return;
+    }
+    window.SlackShare.sendSummaryFromElement(box, {
+        page_title: 'OneView — resultado de consulta',
+    });
+}
+
+window.sendResultsToSlack = sendResultsToSlack;
+
+/** Barra superior: resumen Bedrock de toda la UI (sidebar + columna principal). */
+function sendMainPageSlackSummary() {
+    if (typeof window.SlackShare === 'undefined') {
+        showNotification('⚠️ Slack no disponible (falta slack_share.js)', 6000);
+        return;
+    }
+    window.SlackShare.sendSummaryFromHomePage();
+}
+
+window.sendMainPageSlackSummary = sendMainPageSlackSummary;
 
 function expandAllSections() {
     // Expand all subsections in the active tab
@@ -550,7 +631,8 @@ function setupTimeRangeSelector() {
                               selectedTools.includes('DD_403_Errors') ||
                               selectedTools.includes('P0_Streaming') ||
                               selectedTools.includes('P0_CVR_Streaming') ||
-                              selectedTools.includes('P0_ADT_Streaming');
+                              selectedTools.includes('P0_ADT_Streaming') ||
+                              selectedTools.includes('P0_Streaming_US');
         
         if (timerangeContainer) {
             timerangeContainer.style.display = showTimeRange ? 'block' : 'none';
@@ -566,31 +648,7 @@ function setupTimeRangeSelector() {
     updateTimeRangeVisibility();
 }
 
-function setupArlochatInstructions() {
-    const instructionsDiv = document.getElementById('arlochat-instructions');
-    
-    function updateInstructionsVisibility() {
-        const checkboxes = document.querySelectorAll('input[type=checkbox][name=tool]:checked');
-        const selectedTools = Array.from(checkboxes).map(cb => cb.value);
-        
-        // Show instructions only if Ask_ARLOCHAT is selected
-        const showInstructions = selectedTools.includes('Ask_ARLOCHAT');
-        
-        if (instructionsDiv) {
-            instructionsDiv.style.display = showInstructions ? 'block' : 'none';
-        }
-    }
-    
-    // Add event listeners to all tool checkboxes
-    document.querySelectorAll('input[type=checkbox][name=tool]').forEach(checkbox => {
-        checkbox.addEventListener('change', updateInstructionsVisibility);
-    });
-    
-    // Initial check
-    updateInstructionsVisibility();
-}
-
-// Mostrar el spinner y contador mientras se ejecuta la consulta
+// Show spinner and counter while the query runs
 function showLoading(selectedTools = []) {
     // Show overlay
     showLoadingOverlay();
@@ -696,8 +754,8 @@ function toggleHistoryExpanded() {
     renderHistory(historyExpanded);
 }
 
-// Mostrar resultado del historial
-function showHistoryResult(index) {
+// Show history result
+async function showHistoryResult(index) {
     if (!window.historyData || !window.historyData[index]) {
         console.error('No history data available for index:', index);
         return;
@@ -713,12 +771,17 @@ function showHistoryResult(index) {
         historyResult.innerHTML = '';
     }
     
-    // Mostrar resultado en results-box SOLAMENTE
+    // Show result in results-box only
     const resultsBox = document.getElementById('results-box');
     const htmlContent = window.historyData[index].result || '<p>No result available</p>';
+    try {
+        await ensureChartJs();
+    } catch (e) {
+        console.warn('Chart.js preload (history):', e);
+    }
     resultsBox.innerHTML = htmlContent;
     
-    // Re-ejecutar scripts para cargar gráficos de Chart.js
+    // Re-run scripts to load Chart.js charts
     const scripts = resultsBox.querySelectorAll('script');
     
     let scriptIndex = 0;
@@ -808,7 +871,7 @@ function newChat() {
         counterInterval = null;
     }
     
-    // Focus en el textarea para empezar a escribir inmediatamente
+    // Focus textarea so the user can type immediately
     if (inputText) {
         inputText.focus();
     }
@@ -816,15 +879,172 @@ function newChat() {
     console.log('✅ New chat started - all fields cleared');
 }
 
+/** Home page environment strip — same API as /statusmonitor hub */
+const HOME_ENV_HUB_TIMERANGE = 1;
+const HOME_ENV_HUB_REFRESH_MS = 300000; // 5 minutes
+const HUB_SUMMARY_CACHE_TTL_MS = 270000; // slightly under 5 min home refresh
+
+function renderHomeEnvironmentHubFromPayload(data, grid, meta, fromSessionCache) {
+    if (data.success === false || (data.error && !data.environments)) {
+        const msg = data && data.error ? String(data.error) : 'Unknown error';
+        grid.innerHTML = '';
+        const errEl = document.createElement('div');
+        errEl.className = 'env-hub-home-error';
+        errEl.textContent = 'Could not load environment summary: ' + msg;
+        grid.appendChild(errEl);
+        return;
+    }
+    const envs = data.environments || [];
+    grid.innerHTML = '';
+    envs.forEach(e => {
+                const cls =
+                    e.overall === 'critical'
+                        ? 'env-hub-tile--critical'
+                        : e.overall === 'warning'
+                          ? 'env-hub-tile--warning'
+                          : 'env-hub-tile--healthy';
+                const cell = document.createElement('div');
+                cell.className = 'env-hub-cell';
+                const a = document.createElement('a');
+                a.className = 'env-hub-tile ' + cls;
+                a.href = e.href || '#';
+                a.target = '_blank';
+                a.rel = 'noopener';
+                const title = document.createElement('div');
+                title.className = 'env-hub-tile-title';
+                title.textContent = e.label || e.slug || '—';
+                const stats = document.createElement('div');
+                stats.className = 'env-hub-tile-stats';
+                [
+                    ['Healthy', e.healthy],
+                    ['Warning', e.warning],
+                    ['Critical', e.critical],
+                    ['Inactive', e.inactive],
+                    ['Unknown', e.unknown],
+                    // Operational = healthy+warn+crit (same as drill-down "Total listed" / op band)
+                    [
+                        'Operational',
+                        e.operational != null
+                            ? e.operational
+                            : (Number(e.healthy || 0) + Number(e.warning || 0) + Number(e.critical || 0))
+                    ],
+                    ['Configured', e.configured != null ? e.configured : e.monitored]
+                ].forEach(([k, v]) => {
+                    const l = document.createElement('span');
+                    l.textContent = k;
+                    const n = document.createElement('span');
+                    n.textContent = v != null ? String(v) : '0';
+                    stats.appendChild(l);
+                    stats.appendChild(n);
+                });
+                a.appendChild(title);
+                a.appendChild(stats);
+                if (e.service_breakdown && e.service_breakdown.length > 0) {
+                    const br = document.createElement('div');
+                    br.className = 'env-hub-tile-breakdown';
+                    br.setAttribute('aria-label', 'Per-service hub status');
+                    e.service_breakdown.forEach(row => {
+                        const line = document.createElement('div');
+                        line.className =
+                            'env-hub-tile-svc env-hub-tile-svc--' +
+                            String(row.status || 'unknown').replace(/[^a-z0-9_-]/gi, '');
+                        const sn = document.createElement('span');
+                        sn.className = 'env-hub-tile-svc-name';
+                        sn.textContent = row.service || '—';
+                        const st = document.createElement('span');
+                        st.className = 'env-hub-tile-svc-status';
+                        st.textContent = row.status || '—';
+                        line.appendChild(sn);
+                        line.appendChild(st);
+                        br.appendChild(line);
+                    });
+                    a.appendChild(br);
+                }
+                cell.appendChild(a);
+                const reasons = e.status_reason_lines;
+                if (
+                    (e.overall === 'warning' || e.overall === 'critical') &&
+                    Array.isArray(reasons) &&
+                    reasons.length > 0
+                ) {
+                    const box = document.createElement('div');
+                    box.className =
+                        'env-hub-tile-reason env-hub-tile-reason--' +
+                        (e.overall === 'critical' ? 'critical' : 'warning');
+                    box.setAttribute('role', 'note');
+                    const ul = document.createElement('ul');
+                    reasons.forEach(line => {
+                        const li = document.createElement('li');
+                        li.textContent = line;
+                        ul.appendChild(li);
+                    });
+                    box.appendChild(ul);
+                    cell.appendChild(box);
+                }
+                grid.appendChild(cell);
+            });
+    if (meta) {
+        const now = new Date();
+        const ts = now.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        if (fromSessionCache) {
+            meta.textContent =
+                'Session cache (fewer API calls) · ' +
+                ts +
+                ' · auto-refresh every 5 min';
+        } else {
+            meta.textContent = 'Last updated: ' + ts + ' · auto-refresh every 5 min';
+        }
+    }
+}
+
+function loadHomeEnvironmentHub(isManual) {
+    const grid = document.getElementById('env-hub-home-grid');
+    const meta = document.getElementById('env-hub-home-updated');
+    if (!grid) return;
+
+    const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
+    const ck = 'hub_summary_' + HOME_ENV_HUB_TIMERANGE;
+    if (isManual !== true && C) {
+        const hit = C.get(ck);
+        if (hit) {
+            renderHomeEnvironmentHubFromPayload(hit, grid, meta, true);
+            return;
+        }
+    }
+
+    if (isManual === true) {
+        grid.innerHTML = '<div class="env-hub-home-loading">Refreshing…</div>';
+    }
+
+    fetch('/api/statusmonitor/hub-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timerange: HOME_ENV_HUB_TIMERANGE })
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (C && data.success !== false && data.environments) {
+                C.set(ck, data, HUB_SUMMARY_CACHE_TTL_MS);
+            }
+            renderHomeEnvironmentHubFromPayload(data, grid, meta, false);
+        })
+        .catch(err => {
+            console.error('Home environment hub:', err);
+            grid.innerHTML = '';
+            const errEl = document.createElement('div');
+            errEl.className = 'env-hub-home-error';
+            errEl.textContent = 'Could not load environment summary (network error).';
+            grid.appendChild(errEl);
+        });
+}
+
 // 🔄 Auto-refresh Status Monitor
 // Load PagerDuty Monitor
-function loadPagerDutyMonitor() {
-    fetch('/api/pagerduty/monitor')
-        .then(res => {
-            if (!res.ok) throw new Error('Error loading PagerDuty data');
-            return res.json();
-        })
-        .then(data => {
+function applyPagerDutyMonitorPayload(data) {
             // Update timestamp
             const timeElement = document.getElementById('pd-time');
             if (timeElement) {
@@ -835,6 +1055,45 @@ function loadPagerDutyMonitor() {
                     second: '2-digit'
                 });
                 timeElement.textContent = `Last updated: ${timeString}`;
+            }
+
+            const boardLinks = document.getElementById('pd-board-links');
+            if (boardLinks) {
+                const esc = (s) =>
+                    String(s == null ? '' : s)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/"/g, '&quot;');
+                const aOpen = (href, label) =>
+                    '<a href="' +
+                    esc(href) +
+                    '" target="_blank" rel="noopener noreferrer" style="color: var(--link-color, #2563eb); font-weight: 600;">' +
+                    esc(label) +
+                    '</a>';
+                if (data.error) {
+                    boardLinks.textContent = '';
+                } else {
+                    const id = data.status_dashboard_id || 'PRBJIO4';
+                    const sub = 'arlo';
+                    const base =
+                        data.status_dashboard_url ||
+                        'https://' + sub + '.pagerduty.com/external-status-dashboard/' + id + '/incidents';
+                    const basePath = base.split('?')[0];
+                    const uOngoing = data.status_dashboard_url_active || basePath + '?tab=active';
+                    const uRes = data.status_dashboard_url_resolved || basePath + '?tab=resolved';
+                    const uPend = data.status_dashboard_url_pending || basePath + '?tab=pending';
+                    boardLinks.innerHTML =
+                        '<span style="opacity:0.85;font-weight:700;">External status</span> · board <code style="font-size:10px;">' +
+                        esc(id) +
+                        '</code><br>' +
+                        aOpen(uOngoing, 'Ongoing') +
+                        ' · ' +
+                        aOpen(uRes, 'Resolved') +
+                        ' · ' +
+                        aOpen(uPend, 'Pending') +
+                        ' · ' +
+                        aOpen(base, 'All incidents');
+                }
             }
             
             const triggered = data.triggered || 0;
@@ -880,14 +1139,18 @@ function loadPagerDutyMonitor() {
                     activeElement.innerHTML = '<li style="color: #48bb78; border-left-color: #48bb78;">✅ No active incidents</li>';
                 } else {
                     activeElement.innerHTML = data.active.map(inc => {
-                        const statusClass = inc.status.toLowerCase();
-                        const icon = inc.status === 'triggered' ? '🔴' : '🟡';
-                        const url = inc.url || '#';
+                        const st = (inc && inc.status) ? String(inc.status).toLowerCase() : 'unknown';
+                        const statusClass = st;
+                        const icon = st === 'triggered' ? '🔴' : '🟡';
+                        const url = (inc && inc.url) ? inc.url : '#';
+                        const title = inc && inc.title != null ? inc.title : '';
+                        const num = inc && inc.number != null ? inc.number : '—';
+                        const svc = inc && inc.service != null ? inc.service : '';
                         return `
-                            <li class="${statusClass}" title="${inc.title}" onclick="window.open('${url}', '_blank')" style="cursor: pointer;">
-                                <strong>${icon} #${inc.number}</strong>
+                            <li class="${statusClass}" title="${String(title).replace(/"/g, '&quot;')}" onclick="window.open('${String(url).replace(/'/g, '%27')}', '_blank')" style="cursor: pointer;">
+                                <strong>${icon} #${num}</strong>
                                 <div style="color: var(--text-secondary); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
-                                    ${inc.service}
+                                    ${svc}
                                 </div>
                             </li>
                         `;
@@ -916,6 +1179,210 @@ function loadPagerDutyMonitor() {
                     }).join('');
                 }
             }
+}
+
+const SIDEBAR_WIDGET_CACHE_TTL_MS = 170000;
+/** Confluence Team Calendar API is often slow; cache deployments longer to avoid repeated waits. */
+const DEPLOYMENTS_WIDGET_CACHE_TTL_MS = 300000;
+
+function setDeploymentsLoading(loading) {
+    const summary = document.getElementById('deployments-summary');
+    const list = document.getElementById('deployments-list');
+    const btn = document.getElementById('deployments-refresh-btn');
+    if (btn) {
+        btn.disabled = !!loading;
+        btn.style.opacity = loading ? '0.55' : '1';
+        btn.style.cursor = loading ? 'wait' : 'pointer';
+    }
+    if (!loading) {
+        return;
+    }
+    if (summary) {
+        summary.innerHTML =
+            '<div style="font-size:11px;line-height:1.45;opacity:0.95;">⏳ Loading GRM calendar from Confluence…<br><span style="font-size:9px;opacity:0.88;">This can take 10–30s when Atlassian is busy.</span></div>';
+    }
+    if (list) {
+        list.innerHTML =
+            '<li style="padding:8px;color:var(--text-secondary);font-size:10px;line-height:1.4;">Waiting for Team Calendar API…</li>';
+    }
+}
+
+function _splunkOutlierUiColors() {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (dark) {
+        return {
+            metricLine: '#f8fafc',
+            metricMuted: '#e2e8f0',
+            zoneOk: '#bbf7d0',
+            zoneBad: '#fecaca',
+            summaryStrong: '#ffffff',
+        };
+    }
+    return {
+        metricLine: '#0f172a',
+        metricMuted: '#334155',
+        zoneOk: '#14532d',
+        zoneBad: '#991b1b',
+        summaryStrong: '#ffffff',
+    };
+}
+
+function _splunkEscAttr(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/"/g, '&quot;');
+}
+
+function _splunkZoneHoverTitle(label, t) {
+    const zones = (t && t.zones) ? t.zones : [];
+    const zmap = {};
+    zones.forEach(function (z) {
+        if (z && z.zone) zmap[z.zone] = z;
+    });
+    const lines = [label + ' — outliers by zone (LLP predict):'];
+    ['z1', 'z2', 'z3', 'z4'].forEach(function (zn) {
+        const z = zmap[zn] || {};
+        const o = Number(z.outliers) || 0;
+        if (z.error) {
+            lines.push('  ' + zn.toUpperCase() + ': data unavailable');
+        } else {
+            lines.push('  ' + zn.toUpperCase() + ': ' + o + ' outlier(s)');
+        }
+    });
+    return lines.join('\n');
+}
+
+function buildSplunkSemaphoreRowHtml(data) {
+    const tools = data.tools || [];
+    const byId = {};
+    tools.forEach(function (t) {
+        if (t && t.id) byId[t.id] = t;
+    });
+    function dashUrl(id, fallback) {
+        const tt = byId[id];
+        return (tt && tt.dashboard_url) ? tt.dashboard_url : fallback;
+    }
+    function light(shortLabel, longLabel, id, fallbackUrl) {
+        const t = byId[id];
+        const url = dashUrl(id, fallbackUrl);
+        const tot = (t && t.total_outliers != null) ? Number(t.total_outliers) : 0;
+        const title = _splunkZoneHoverTitle(longLabel, t);
+        const dotBg = tot > 0 ? '#ef4444' : '#22c55e';
+        const dotSh = tot > 0 ? 'rgba(239,68,68,0.45)' : 'rgba(34,197,94,0.45)';
+        return (
+            '<a href="' + url + '" target="_blank" rel="noopener" title="' + _splunkEscAttr(title) + '" ' +
+            'style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:inherit;min-width:38px;">' +
+            '<span style="width:11px;height:11px;border-radius:50%;background:' + dotBg + ';box-shadow:0 0 6px ' + dotSh + ';"></span>' +
+            '<span style="font-size:8px;font-weight:800;opacity:0.9;line-height:1;">' + _splunkEscAttr(shortLabel) + '</span>' +
+            '<span style="font-size:10px;font-weight:900;">' + tot + '</span></a>'
+        );
+    }
+    const sep = '<span style="opacity:0.35;font-size:10px;padding:0 2px;">|</span>';
+    return (
+        '<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:4px 8px;padding:4px 2px;">' +
+        light('Str', 'Streaming', 'p0_streaming', 'https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard') + sep +
+        light('CVR', 'CVR', 'p0_cvr', 'https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_cvr_dashboard') + sep +
+        light('ADT', 'ADT', 'p0_adt', 'https://arlo.splunkcloud.com/en-US/app/search/p0_streaming_dashboard_pp') + sep +
+        light('US', 'US infra', 'p0_streaming_us_infra', 'https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard__us_infra') +
+        '</div>'
+    );
+}
+
+function applySplunkOutliersMonitorPayload(data) {
+    const splUi = _splunkOutlierUiColors();
+    const timeEl = document.getElementById('spl-time');
+    if (timeEl) {
+        const now = new Date();
+        timeEl.textContent = 'Last updated: ' + now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+    const summary = document.getElementById('spl-summary');
+    const summaryBody = document.getElementById('spl-summary-body');
+    const listEl = document.getElementById('spl-tools');
+    if (!listEl) return;
+
+    if (!data || data.success === false) {
+        if (summary) summary.style.background = '#7f1d1d';
+        if (summaryBody) {
+            summaryBody.textContent = (data && data.error) ? data.error : 'Unable to load Splunk data';
+        }
+        listEl.innerHTML = '<li style="padding:6px;color:#f87171;">⚠️ Check SPLUNK_TOKEN / network</li>';
+        return;
+    }
+
+    const tools = data.tools || [];
+    let grand = 0;
+    tools.forEach((t) => { grand += Number(t.total_outliers) || 0; });
+    if (summary) {
+        summary.style.background = grand > 0 ? '#7f1d1d' : '#14532d';
+    }
+    if (summaryBody) {
+        const tr = data.timerange_hours != null ? data.timerange_hours : '—';
+        summaryBody.innerHTML =
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
+            '<span>Σ total: <strong style="color:' + splUi.summaryStrong + ';font-size:1.2em;">' + grand + '</strong></span>' +
+            '<span style="font-size:9px;opacity:0.9;">' + tr + 'h LLP</span></div>';
+    }
+
+    if (!tools.length) {
+        listEl.innerHTML = '<li style="padding:6px;color:#999;">No tools configured</li>';
+        return;
+    }
+
+    listEl.innerHTML = '<li style="padding:0;margin:0;list-style:none;">' + buildSplunkSemaphoreRowHtml(data) + '</li>';
+}
+
+function loadSplunkOutliersMonitor(forceRefresh) {
+    const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
+    const ck = 'splunk_outliers_monitor';
+    if (!forceRefresh && C) {
+        const hit = C.get(ck);
+        if (hit) {
+            applySplunkOutliersMonitorPayload(hit);
+            return;
+        }
+    }
+    fetch('/api/splunk/monitor?timerange=72')
+        .then(function (res) {
+            if (!res.ok) throw new Error('Splunk monitor HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function (data) {
+            if (C) {
+                C.set(ck, data, SIDEBAR_WIDGET_CACHE_TTL_MS);
+            }
+            applySplunkOutliersMonitorPayload(data);
+        })
+        .catch(function (err) {
+            console.error('Splunk outliers monitor:', err);
+            applySplunkOutliersMonitorPayload({ success: false, error: err.message || String(err) });
+        });
+}
+
+function loadPagerDutyMonitor(forceRefresh) {
+    const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
+    const ck = 'pagerduty_monitor';
+    if (!forceRefresh && C) {
+        const hit = C.get(ck);
+        if (hit) {
+            applyPagerDutyMonitorPayload(hit);
+            return;
+        }
+    }
+    fetch('/api/pagerduty/monitor')
+        .then(res => {
+            if (!res.ok) throw new Error('Error loading PagerDuty data');
+            return res.json();
+        })
+        .then(data => {
+            if (C) {
+                C.set(ck, data, SIDEBAR_WIDGET_CACHE_TTL_MS);
+            }
+            applyPagerDutyMonitorPayload(data);
         })
         .catch(err => {
             console.error('Error loading PagerDuty monitor:', err);
@@ -926,13 +1393,14 @@ function loadPagerDutyMonitor() {
         });
 }
 
-function loadUpcomingDeployments() {
-    fetch('/api/deployments/upcoming')
-        .then(res => {
-            if (!res.ok) throw new Error('Error loading deployments data');
-            return res.json();
-        })
-        .then(data => {
+function applyDeploymentsPayload(data) {
+            function deploymentEnd(deployment) {
+                if (deployment.end_timestamp) {
+                    return new Date(deployment.end_timestamp);
+                }
+                return new Date(new Date(deployment.timestamp).getTime() + (2 * 60 * 60 * 1000));
+            }
+            const deploymentsList = Array.isArray(data.deployments) ? data.deployments : [];
             // Update timestamp
             const timeElement = document.getElementById('deployments-time');
             if (timeElement) {
@@ -945,14 +1413,14 @@ function loadUpcomingDeployments() {
                 timeElement.textContent = `Last updated: ${timeString}`;
             }
             
-            // Check if there's a deployment currently in progress
+            // In progress = now inside [start, end] from API (or default 2h window)
             const now = new Date();
             let currentDeployment = null;
             
-            if (data.deployments && data.deployments.length > 0) {
-                for (const deployment of data.deployments) {
+            if (deploymentsList.length > 0) {
+                for (const deployment of deploymentsList) {
                     const deployTime = new Date(deployment.timestamp);
-                    const deployEndTime = new Date(deployTime.getTime() + (2 * 60 * 60 * 1000)); // 2 hours duration
+                    const deployEndTime = deploymentEnd(deployment);
                     
                     if (now >= deployTime && now <= deployEndTime) {
                         currentDeployment = deployment;
@@ -979,9 +1447,16 @@ function loadUpcomingDeployments() {
                 if (data.error) {
                     summaryElement.innerHTML = `<span style="color: #fee;">⚠️ ${data.error}</span>`;
                 } else {
-                    // Count upcoming (not past) deployments
-                    const upcomingCount = data.deployments.filter(d => !d.is_past).length;
-                    const pastCount = data.deployments.filter(d => d.is_past).length;
+                    // Past = window ended. Upcoming = start time still in the future (not in progress).
+                    const pastCount = deploymentsList.filter(d => deploymentEnd(d) < now).length;
+                    const upcomingCount = deploymentsList.filter(d => {
+                        const start = new Date(d.timestamp);
+                        return start > now;
+                    }).length;
+                    const warnColor = data.source === 'no_credentials' ? '#f87171' : '#f59e0b';
+                    const warn = data.warning
+                        ? `<div style="font-size: 9px; color: ${warnColor}; margin-top: 4px; text-align: center; line-height: 1.3;">${data.source === 'mock' ? '🧪 Demo data' : '⚠️ ' + data.warning}</div>`
+                        : (data.source === 'mock' ? '<div style="font-size: 9px; color: #f59e0b;">🧪 Demo data</div>' : '');
                     
                     summaryElement.innerHTML = `
                         <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
@@ -989,6 +1464,7 @@ function loadUpcomingDeployments() {
                             <div style="font-size: 11px; opacity: 0.9;">upcoming</div>
                             ${pastCount > 0 ? `<div style="font-size: 10px; opacity: 0.7;"> | ${pastCount} past</div>` : ''}
                         </div>
+                        ${warn}
                     `;
                 }
             }
@@ -998,13 +1474,14 @@ function loadUpcomingDeployments() {
             if (listElement) {
                 if (data.error) {
                     listElement.innerHTML = '<li style="color: #f56565; border-left-color: #f56565;">⚠️ Unable to load</li>';
-                } else if (!data.deployments || data.deployments.length === 0) {
+                } else if (deploymentsList.length === 0) {
                     listElement.innerHTML = '<li style="color: #999;">No deployments found</li>';
                 } else {
-                    listElement.innerHTML = data.deployments.map(deployment => {
+                    listElement.innerHTML = deploymentsList.map(deployment => {
                         const deployTime = new Date(deployment.timestamp);
+                        const deployEndTime = deploymentEnd(deployment);
                         const isActive = currentDeployment && currentDeployment.timestamp === deployment.timestamp;
-                        const isPast = deployment.is_past || deployTime < now;
+                        const isPast = deployEndTime < now;
                         
                         // Color scheme based on status
                         let borderColor, bgColor, textColor, opacity;
@@ -1029,10 +1506,8 @@ function loadUpcomingDeployments() {
                             opacity = '1';
                         }
                         
-                        // Calculate end time (2 hours after start)
-                        const deployEndTime = new Date(deployTime.getTime() + (2 * 60 * 60 * 1000));
                         
-                        // Format times in CST (no conversion, just display)
+                        // Format times (America/Chicago for deploy schedule)
                         const startTimeStr = deployTime.toLocaleTimeString('en-US', {
                             timeZone: 'America/Chicago',
                             hour: '2-digit',
@@ -1046,7 +1521,7 @@ function loadUpcomingDeployments() {
                             hour12: true
                         });
                         
-                        // Check if deployment is today or tomorrow (in CST)
+                        // Check if deployment is today or tomorrow (same TZ as schedule)
                         const cstNow = new Date(now.toLocaleString('en-US', {timeZone: 'America/Chicago'}));
                         const nowDate = cstNow.toDateString();
                         const deployDate = new Date(deployTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})).toDateString();
@@ -1056,16 +1531,16 @@ function loadUpcomingDeployments() {
                         
                         let dateLabel;
                         if (deployDate === nowDate) {
-                            dateLabel = (isPast ? '✓ ' : '') + 'Today ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                            dateLabel = (isPast ? '✓ ' : '') + 'Today ' + startTimeStr + ' - ' + endTimeStr;
                         } else if (deployDate === tomorrowDate) {
-                            dateLabel = 'Tomorrow ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                            dateLabel = 'Tomorrow ' + startTimeStr + ' - ' + endTimeStr;
                         } else {
                             const dateStr = deployTime.toLocaleDateString('en-US', {
                                 timeZone: 'America/Chicago',
                                 month: 'short',
                                 day: 'numeric'
                             });
-                            dateLabel = (isPast ? '✓ ' : '') + dateStr + ' ' + startTimeStr + ' - ' + endTimeStr + ' CST';
+                            dateLabel = (isPast ? '✓ ' : '') + dateStr + ' ' + startTimeStr + ' - ' + endTimeStr;
                         }
                         
                         return `
@@ -1081,23 +1556,62 @@ function loadUpcomingDeployments() {
                     }).join('');
                 }
             }
+}
+
+function loadUpcomingDeployments(forceRefresh) {
+    const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
+    const ck = 'deployments_upcoming_v2';
+    if (!forceRefresh && C) {
+        const hit = C.get(ck);
+        if (hit) {
+            applyDeploymentsPayload(hit);
+            return;
+        }
+    }
+    setDeploymentsLoading(true);
+    const ac = new AbortController();
+    const abortTimer = setTimeout(function () {
+        ac.abort();
+    }, 55000);
+    fetch('/api/deployments/upcoming', { signal: ac.signal })
+        .then(res => {
+            if (!res.ok) throw new Error('Error loading deployments data');
+            return res.json();
+        })
+        .then(data => {
+            if (C) {
+                C.set(ck, data, DEPLOYMENTS_WIDGET_CACHE_TTL_MS);
+            }
+            applyDeploymentsPayload(data);
         })
         .catch(err => {
             console.error('Error loading deployments:', err);
             const summaryElement = document.getElementById('deployments-summary');
             if (summaryElement) {
-                summaryElement.innerHTML = '<span style="color: #fee;">⚠️ Connection error</span>';
+                const msg =
+                    err && err.name === 'AbortError'
+                        ? 'Request timed out — Confluence calendar took too long. Try again.'
+                        : 'Connection error — check network or try again.';
+                summaryElement.innerHTML = `<span style="color: #fee;">⚠️ ${msg}</span>`;
+            }
+            const listElement = document.getElementById('deployments-list');
+            if (listElement) {
+                listElement.innerHTML =
+                    '<li style="color:#f56565;font-size:10px;">Could not load deployments.</li>';
+            }
+        })
+        .finally(() => {
+            clearTimeout(abortTimer);
+            const btn = document.getElementById('deployments-refresh-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
             }
         });
 }
 
-function loadStatusMonitor() {
-    fetch('/api/status/monitor')
-        .then(res => {
-            if (!res.ok) throw new Error('Error loading status');
-            return res.json();
-        })
-        .then(data => {
+function applyArloStatusMonitorPayload(data) {
             // Update timestamp
             const timeElement = document.getElementById('status-time');
             if (timeElement) {
@@ -1165,6 +1679,28 @@ function loadStatusMonitor() {
             
             console.log('✅ Status monitor updated');
             updateLastUpdateTime();
+}
+
+function loadStatusMonitor(forceRefresh) {
+    const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
+    const ck = 'arlo_status_monitor';
+    if (!forceRefresh && C) {
+        const hit = C.get(ck);
+        if (hit) {
+            applyArloStatusMonitorPayload(hit);
+            return;
+        }
+    }
+    fetch('/api/status/monitor')
+        .then(res => {
+            if (!res.ok) throw new Error('Error loading status');
+            return res.json();
+        })
+        .then(data => {
+            if (C) {
+                C.set(ck, data, SIDEBAR_WIDGET_CACHE_TTL_MS);
+            }
+            applyArloStatusMonitorPayload(data);
         })
         .catch(err => {
             console.error('Error loading status monitor:', err);
@@ -1175,28 +1711,53 @@ function loadStatusMonitor() {
         });
 }
 
-// 🚀 Inicialización al cargar la página
+// Page load initialization
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Initializing OneView GOC AI v2.0...');
     
     // Load saved theme
     loadSavedTheme();
     
-    // Cargar historial inicial
-    loadHistory();
+    // Defer history fetch so first paint + /api/tools are not competing for the network
+    const bootHistory = () => loadHistory();
+    if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(bootHistory, { timeout: 800 });
+    } else {
+        setTimeout(bootHistory, 100);
+    }
     
     // Setup history search
     setTimeout(setupHistorySearch, 1000);
     
-    // Load status monitor immediately
-    loadStatusMonitor();
-    loadPagerDutyMonitor();
-    loadUpcomingDeployments();
+    // Environment hub on main chat (above How to use)
+    if (document.getElementById('env-hub-home-grid')) {
+        const bootEnvHub = () => loadHomeEnvironmentHub(false);
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(bootEnvHub, { timeout: 1200 });
+        } else {
+            setTimeout(bootEnvHub, 150);
+        }
+        setInterval(() => loadHomeEnvironmentHub(false), HOME_ENV_HUB_REFRESH_MS);
+    }
+
+    // Sidebar widgets: defer until idle so first paint + /api/tools are not blocked
+    const runSidebarMonitors = () => {
+        loadStatusMonitor();
+        loadPagerDutyMonitor();
+        loadSplunkOutliersMonitor();
+        loadUpcomingDeployments();
+    };
+    if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(runSidebarMonitors, { timeout: 2000 });
+    } else {
+        setTimeout(runSidebarMonitors, 0);
+    }
     
     // Auto-refresh status every 3 minutes (180000ms)
     setInterval(loadStatusMonitor, 180000);
     setInterval(loadPagerDutyMonitor, 180000);
-    setInterval(loadUpcomingDeployments, 180000);
+    setInterval(loadSplunkOutliersMonitor, 180000);
+    setInterval(loadUpcomingDeployments, 300000);
     
     // Update timestamp initially
     updateLastUpdateTime();
@@ -1242,7 +1803,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     return 'splunk';
                 } else if (toolName.includes('PagerDuty')) {
                     return 'pagerduty';
-                } else if (toolName === 'Wiki' || toolName === 'Owners' || toolName === 'Arlo_Versions' || toolName === 'Holiday_Oncall') {
+                } else if (
+                    toolName === 'Wiki' ||
+                    toolName === 'Owners' ||
+                    toolName === 'Arlo_Versions' ||
+                    toolName === 'Deployed_FW_Versions' ||
+                    toolName === 'Holiday_Oncall'
+                ) {
                     return 'confluence';
                 } else if (toolName.includes('Slack')) {
                     return 'slack';
@@ -1296,15 +1863,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="tool-dropdown-icon" onclick="toggleToolDropdown('${dropdownId}', event)">${logo}</span>
                     <span class="tool-dropdown-title" onclick="toggleToolDropdown('${dropdownId}', event)">${section.title}</span>
                     <span class="tool-dropdown-toggle" onclick="toggleToolDropdown('${dropdownId}', event)">
-                        ▲
+                        ▼
                     </span>
                 `;
-                header.classList.add('active');
                 dropdownDiv.appendChild(header);
                 
-                // Create dropdown content (expanded by default)
+                // Collapsed by default
                 const content = document.createElement('div');
-                content.className = 'tool-dropdown-content active';
+                content.className = 'tool-dropdown-content';
                 content.id = dropdownId;
                 
                 // Create tools container
@@ -1319,30 +1885,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="tool-item-text" style="font-weight: 700;">Select All</span>
                 `;
                 toolsContainer.appendChild(selectAllLabel);
-                
-                tools.forEach(tool => {
+
+                function createToolCheckboxLabel(tool) {
                     const label = document.createElement('label');
                     label.className = 'tool-item tool-item-sub';
                     label.title = tool.desc || tool.name;
-                    
-                    // Splunk and Slack tools are now enabled
-                    // const isDisabled = tool.name === 'P0_Streaming' || 
-                    //                   tool.name === 'P0_CVR_Streaming' || 
-                    //                   tool.name === 'P0_ADT_Streaming';
-                    // if (isDisabled) {
-                    //     label.classList.add('tool-item-disabled');
-                    //     label.title = `${tool.desc || tool.name} (Currently unavailable)`;
-                    // }
-                    
-                    // Display name mapping
                     const displayName = tool.name === 'Ask_ARLOCHAT' ? 'MCP_ARLO' : tool.name;
-                    
                     label.innerHTML = `
                         <input type="checkbox" name="tool" value="${tool.name}">
                         <span class="tool-item-text">${displayName}</span>
                     `;
-                    toolsContainer.appendChild(label);
+                    return label;
+                }
+
+                const TOOL_PREVIEW_COUNT = 5;
+                const previewTools = tools.slice(0, TOOL_PREVIEW_COUNT);
+                const extraTools = tools.slice(TOOL_PREVIEW_COUNT);
+
+                const previewWrap = document.createElement('div');
+                previewWrap.className = 'tool-items-preview';
+                previewTools.forEach(tool => {
+                    previewWrap.appendChild(createToolCheckboxLabel(tool));
                 });
+                toolsContainer.appendChild(previewWrap);
+
+                if (extraTools.length > 0) {
+                    const more = document.createElement('details');
+                    more.className = 'tool-items-more';
+                    const summary = document.createElement('summary');
+                    const n = extraTools.length;
+                    summary.textContent = `Show ${n} more tool${n === 1 ? '' : 's'}`;
+                    more.appendChild(summary);
+                    const moreInner = document.createElement('div');
+                    moreInner.className = 'tool-more-inner';
+                    extraTools.forEach(tool => {
+                        moreInner.appendChild(createToolCheckboxLabel(tool));
+                    });
+                    more.appendChild(moreInner);
+                    toolsContainer.appendChild(more);
+                }
                 
                 content.appendChild(toolsContainer);
                 dropdownDiv.appendChild(content);
@@ -1354,8 +1935,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add event listeners to show/hide timerange selector
             setupTimeRangeSelector();
             
-            // Add event listener to show/hide Ask_ARLOCHAT instructions
-            setupArlochatInstructions();
         })
         .catch(err => {
             console.error('Error loading tools:', err);
@@ -1372,7 +1951,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('✅ AI Auto-Select button initialized');
     }
 
-    // Manejar envío del formulario
+    // Form submit handler
     document.getElementById('search-form').addEventListener('submit', e => {
         e.preventDefault();
         const inputText = document.getElementById('input-text').value;
@@ -1403,17 +1982,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(`Server error: ${res.status}`);
                 return res.json();
             })
-            .then(data => {
+            .then(async (data) => {
                 // Limpiar mensajes de carga
                 clearInterval(counterInterval);
                 hideLoadingOverlay();
                 document.getElementById('loading-message').innerHTML = '';
                 
-                // Mostrar resultados
+                // Show results
                 const resultsBox = document.getElementById('results-box');
                 const htmlContent = data.result || '<p>No results returned</p>';
                 
-                // Insertar HTML
+                try {
+                    await ensureChartJs();
+                } catch (e) {
+                    console.warn('Chart.js preload:', e);
+                }
                 resultsBox.innerHTML = htmlContent;
                 
                 // Add action buttons to results
@@ -1421,7 +2004,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     addResultActions(resultsBox);
                 }, 500);
                 
-                // Ejecutar scripts que fueron insertados via innerHTML
+                // Run scripts inserted via innerHTML
                 const scripts = resultsBox.querySelectorAll('script');
                 
                 // Execute scripts sequentially (wait for external scripts to load)
@@ -1434,12 +2017,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     const oldScript = scripts[scriptIndex];
                     const newScript = document.createElement('script');
                     
-                    // Copiar atributos (especialmente src para scripts externos)
+                    // Copy attributes (especially src for external scripts)
                     Array.from(oldScript.attributes).forEach(attr => {
                         newScript.setAttribute(attr.name, attr.value);
                     });
                     
-                    // Copiar contenido para scripts inline
+                    // Copy inline script content
                     if (oldScript.textContent) {
                         newScript.textContent = oldScript.textContent;
                     }
@@ -1462,7 +2045,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         setTimeout(executeNextScript, 30); // Delay for DOM updates
                     }
                     
-                    // Agregar al documento para que se ejecute
+                    // Append to document so it executes
                     document.body.appendChild(newScript);
                     
                     // Remover el script viejo
@@ -1471,13 +2054,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 executeNextScript();
                 
-                // Mostrar tiempo de ejecución
+                // Show execution time
                 const execTime = data.exec_time || '0';
                 document.getElementById('final-counter').innerText = `⏱ Execution time: ${execTime}s`;
                 
-                // Recargar historial después de un pequeño delay para asegurar que el backend guardó
+                // Reload history after a short delay so the backend can persist
                 setTimeout(() => {
-                    loadHistory(); // 🔄 refresca historial automáticamente
+                    loadHistory(); // refresh history
                     console.log('✅ Query completed, history refreshed');
                 }, 500);
                 
@@ -1517,11 +2100,14 @@ async function downloadResults() {
     }
     
     try {
-        // Show loading notification
         showNotification('📸 Capturing screenshot...');
-        
-        // Capture the visual screenshot using html2canvas
-        const canvas = await html2canvas(resultsBox, {
+        await ensureHtml2Canvas();
+        const h2c = typeof window.html2canvas === 'function' ? window.html2canvas : null;
+        if (!h2c) {
+            showNotification('❌ html2canvas failed to load.');
+            return;
+        }
+        const canvas = await h2c(resultsBox, {
             backgroundColor: '#ffffff',
             scale: 2, // Higher quality (2x resolution)
             logging: false,

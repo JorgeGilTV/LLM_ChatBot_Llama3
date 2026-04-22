@@ -1,7 +1,7 @@
 [project]
 name = "multi-agent-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "OneView GOC AI — Flask app with Datadog, Splunk, PagerDuty, Confluence, and MCP tools"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

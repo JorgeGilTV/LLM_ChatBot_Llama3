@@ -79,4 +79,8 @@ old/
 # Docker tar files (too large for git)
 *.tar
 *.tar.gz
+# OCI extract + filesystem recovery from docker load (local only)
+.oci-tar-extract/
+recovered/
+recovered-from-docker-tar/
 config_secure.py

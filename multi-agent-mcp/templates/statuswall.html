@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status wall — all environments</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        .sw-top {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 14px;
+            padding: 8px 14px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .sw-logo-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sw-logo {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 8px;
+            padding: 4px 10px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+        }
+        .sw-logo img {
+            height: 24px;
+            width: auto;
+            display: block;
+        }
+        .sw-top h1 {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #f8fafc;
+        }
+        .sw-top label { font-size: 12px; color: #94a3b8; margin-right: 6px; }
+        .sw-top select {
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+        .sw-top button {
+            padding: 6px 14px;
+            background: #0095da;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .sw-top button:hover { filter: brightness(1.08); }
+        .sw-top button.sw-slack-btn {
+            background: #611f69;
+        }
+        .sw-top button.sw-slack-btn:hover { filter: brightness(1.1); }
+        .sw-meta { font-size: 12px; color: #94a3b8; margin-left: auto; }
+        .sw-meta.err { color: #fca5a5; }
+        .sw-nav-hub {
+            font-size: 12px;
+            font-weight: 700;
+            color: #38bdf8;
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            transition: border-color 0.15s ease, color 0.15s ease;
+        }
+        .sw-nav-hub:hover {
+            color: #7dd3fc;
+            border-color: #475569;
+        }
+        .sw-main { padding: 8px 12px 16px; }
+        .sw-group {
+            margin-bottom: 12px;
+        }
+        .sw-group-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px 14px;
+            margin-bottom: 10px;
+            padding: 10px 14px;
+            background: linear-gradient(105deg, #1e3a5f 0%, #243b53 42%, #1e293b 100%);
+            border: 1px solid #334155;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+        }
+        .sw-group-head .sw-badges {
+            margin-left: auto;
+        }
+        .sw-group-title {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #f8fafc;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+        .sw-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .sw-badge {
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: #334155;
+            color: #cbd5e1;
+        }
+        .sw-badge--ok { background: #14532d; color: #bbf7d0; }
+        .sw-badge--warn { background: #854d0e; color: #fef08a; }
+        .sw-badge--crit { background: #7f1d1d; color: #fecaca; }
+        .sw-overall-pill {
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid #475569;
+            color: #94a3b8;
+        }
+        .sw-overall-pill.healthy { border-color: #22c55e; color: #86efac; }
+        .sw-overall-pill.warning { border-color: #facc15; color: #fde047; }
+        .sw-overall-pill.critical { border-color: #f87171; color: #fca5a5; }
+
+        .sw-monitor-pill {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid #475569;
+            color: #cbd5e1;
+            background: #0f172a;
+            white-space: nowrap;
+        }
+        .sw-monitor-pill--ok { border-color: #22c55e; color: #86efac; }
+        .sw-monitor-pill--warning { border-color: #eab308; color: #fde047; }
+        .sw-monitor-pill--critical { border-color: #f87171; color: #fecaca; }
+        .sw-monitor-pill--unknown { border-color: #64748b; color: #94a3b8; }
+
+        .sw-region-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            align-items: start;
+        }
+        @media (max-width: 900px) {
+            .sw-region-grid { grid-template-columns: 1fr; }
+        }
+        .sw-region-col {
+            min-width: 0;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.45);
+            padding: 8px 8px 10px;
+        }
+        .sw-region-col-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 6px 10px;
+            margin-bottom: 8px;
+            padding: 0 4px;
+        }
+        .sw-region-col-title {
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: #e2e8f0;
+            letter-spacing: 0.02em;
+        }
+        .sw-region-col-hint {
+            font-size: 10px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .sw-tiles--region {
+            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+        }
+
+        @keyframes blink-alert {
+            0%, 100% { opacity: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+            50% { opacity: 0.88; box-shadow: 0 0 10px rgba(255,255,255,0.35); }
+        }
+        .sw-tiles {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+            gap: 6px;
+        }
+        .sw-tile-wrap {
+            position: relative;
+            min-width: 0;
+            overflow: visible;
+        }
+        .sw-tile-wrap:hover,
+        .sw-tile-wrap:focus-within {
+            z-index: 40;
+        }
+        /* Same rich hover panels as Status monitor */
+        .sm-hover-tip {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 0;
+            min-width: 240px;
+            max-width: min(360px, calc(100vw - 16px));
+            padding: 0;
+            border-radius: 14px;
+            font-size: 11px;
+            line-height: 1.45;
+            text-align: left;
+            z-index: 10000;
+            visibility: hidden;
+            pointer-events: none;
+            background: linear-gradient(145deg, #0c1220 0%, #1a1033 42%, #0f172a 100%);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            box-shadow:
+                0 0 0 1px rgba(167, 139, 250, 0.2),
+                0 18px 50px rgba(0, 0, 0, 0.55),
+                0 0 40px rgba(34, 211, 238, 0.08);
+            overflow: hidden;
+        }
+        .sm-hover-tip.sm-hover-tip--visible {
+            display: block;
+            visibility: visible;
+            pointer-events: none;
+        }
+        .sm-hover-tip-inner {
+            padding: 12px 14px 14px;
+        }
+        .sm-hover-tip-head {
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin: 0 0 10px 0;
+            line-height: 1.25;
+            background: linear-gradient(90deg, #38bdf8 0%, #a78bfa 45%, #f472b6 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .sm-hover-tip-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 3px 8px;
+            border-radius: 999px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #e2e8f0;
+            background: rgba(15, 23, 42, 0.65);
+        }
+        .sm-hover-tip-badge--ok { border-color: #22c55e; color: #86efac; }
+        .sm-hover-tip-badge--warn { border-color: #eab308; color: #fde047; }
+        .sm-hover-tip-badge--crit { border-color: #f87171; color: #fecaca; }
+        .sm-hover-tip-kv {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 10px;
+            align-items: baseline;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        .sm-hover-tip-k {
+            color: #22d3ee;
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .sm-hover-tip-v {
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 11px;
+        }
+        .sm-hover-tip-metrics {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(71, 85, 105, 0.65);
+            color: #e2e8f0;
+            font-weight: 700;
+        }
+        .sm-hover-tip-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }
+        .sm-hover-tip-chip {
+            font-size: 9px;
+            font-weight: 800;
+            padding: 3px 7px;
+            border-radius: 6px;
+            background: rgba(99, 102, 241, 0.25);
+            color: #c7d2fe;
+            border: 1px solid rgba(129, 140, 248, 0.45);
+        }
+        .sm-hover-tip-chip--alert {
+            background: rgba(220, 38, 38, 0.35);
+            color: #fecaca;
+            border-color: rgba(248, 113, 113, 0.5);
+        }
+        a.sm-hover-tip-chip {
+            text-decoration: none;
+            cursor: pointer;
+        }
+        a.sm-hover-tip-chip:hover {
+            filter: brightness(1.1);
+        }
+        .sm-hover-tip-chip--splunk {
+            background: rgba(14, 165, 233, 0.22);
+            color: #bae6fd;
+            border-color: rgba(56, 189, 248, 0.45);
+        }
+        .sm-hover-tip-why {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(71, 85, 105, 0.65);
+            color: #fde68a;
+            font-weight: 600;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        .sw-tile {
+            aspect-ratio: 1;
+            width: 100%;
+            min-height: 0;
+            max-height: none;
+            border-radius: 9px;
+            border: 1px solid #166534;
+            background: linear-gradient(165deg, #86efac 0%, #4ade80 32%, #22c55e 68%, #15803d 100%);
+            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+            color: #052e16;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 4px;
+            text-align: center;
+            text-decoration: none;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+            cursor: pointer;
+        }
+        a.sw-tile { color: inherit; }
+        .sw-tile:hover {
+            transform: scale(1.06);
+            box-shadow: 0 4px 14px rgba(34, 197, 94, 0.45);
+            z-index: 2;
+        }
+        .sw-tile--warn {
+            border-color: #b45309;
+            background: linear-gradient(165deg, #fef08a 0%, #facc15 35%, #f59e0b 72%, #d97706 100%);
+            box-shadow: 0 3px 10px rgba(245, 158, 11, 0.45);
+        }
+        .sw-tile--warn:hover { box-shadow: 0 4px 14px rgba(245, 158, 11, 0.5); }
+        .sw-tile--crit {
+            border-color: #7f1d1d;
+            background: linear-gradient(165deg, #fca5a5 0%, #f87171 32%, #ef4444 65%, #b91c1c 100%);
+            box-shadow: 0 3px 12px rgba(239, 68, 68, 0.45);
+        }
+        .sw-tile--crit:hover { box-shadow: 0 4px 14px rgba(220, 38, 38, 0.55); }
+        .sw-tile--warn.sw-tile--alert, .sw-tile--crit.sw-tile--alert {
+            animation: blink-alert 2s ease-in-out infinite;
+        }
+        .sw-tile--warn .sw-tile-icon,
+        .sw-tile--warn .sw-tile-name-compact {
+            color: #422006;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+        }
+        .sw-tile--crit .sw-tile-icon,
+        .sw-tile--crit .sw-tile-name-compact {
+            color: #fff7ed;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+        }
+        .sw-tile--neutral {
+            border-color: #475569;
+            background: linear-gradient(165deg, #64748b 0%, #475569 50%, #334155 100%);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.5);
+        }
+        .sw-tile--neutral .sw-tile-icon,
+        .sw-tile--neutral .sw-tile-name-compact {
+            color: #f1f5f9;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .sw-tile-icon {
+            font-size: 13px;
+            line-height: 1;
+            margin-bottom: 2px;
+            color: #f0fdf4;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .sw-tile-name-compact {
+            font-size: clamp(8px, 2.15vw, 11px);
+            font-weight: 800;
+            line-height: 1.12;
+            margin-top: 0;
+            color: #052e16;
+            text-align: center;
+            max-height: 3.6em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            word-break: break-word;
+            hyphens: auto;
+            padding: 0 2px;
+        }
+        .sw-loading { padding: 40px 20px; text-align: center; color: #94a3b8; }
+        /* Monitor pills cluster (PagerDuty, Samsung, ADT, Splunk) — same row as section title, left area */
+        .sw-monitor-cluster {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <header class="sw-top">
+        <div class="sw-logo-section">
+            <a href="/" class="sw-logo" title="Arlo">
+                <img src="/static/images/arlo-logo.png" alt="Arlo">
+            </a>
+            <h1>Status wall</h1>
+        </div>
+        <a href="/statusmonitor" class="sw-nav-hub">Status monitor hub</a>
+        <button type="button" id="sw-slack" class="sw-slack-btn" title="Resumen Bedrock del wall → Slack">📤 Slack</button>
+        <div>
+            <label for="sw-timerange">Time range</label>
+            <select id="sw-timerange">
+                <option value="1" selected>Last 1 hour</option>
+                <option value="2">Last 2 hours</option>
+                <option value="4">Last 4 hours</option>
+                <option value="8">Last 8 hours</option>
+                <option value="12">Last 12 hours</option>
+                <option value="24">Last 24 hours</option>
+            </select>
+            <button type="button" id="sw-refresh">Refresh</button>
+        </div>
+        <span class="sw-meta" id="sw-status">Loading…</span>
+    </header>
+    <!-- Off-screen: semaphore-only DOM for Samsung/ADT JS (wall shows status as pills in section heads). -->
+    <div id="sw-external-pd-widgets-host" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" aria-hidden="true">
+        <div id="ss-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;">
+            <div style="text-align:center;flex:1;"><div id="ss-triggered-count">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Triggered</div></div>
+            <div style="text-align:center;flex:1;"><div id="ss-ack-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Ack</div></div>
+            <div style="text-align:center;flex:1;"><div id="ss-resolved-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Resolved</div></div>
+        </div>
+        <div id="adt-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;">
+            <div style="text-align:center;flex:1;"><div id="adt-triggered-count">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Triggered</div></div>
+            <div style="text-align:center;flex:1;"><div id="adt-ack-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Ack</div></div>
+            <div style="text-align:center;flex:1;"><div id="adt-resolved-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Resolved</div></div>
+        </div>
+    </div>
+    <main class="sw-main" id="sw-root">
+        <div class="sw-loading" id="sw-loading">Querying Datadog and PagerDuty…</div>
+    </main>
+    <script src="/static/js/session_data_cache.js?v=20260328"></script>
+    <script src="/static/js/slack_share.js?v=20260326-slack-en-blocks"></script>
+    <script src="/static/js/samsung_status_widget.js?v=20260430-board-history"></script>
+    <script src="/static/js/adt_status_widget.js?v=20260430-board-history"></script>
+    <script>
+        const WALL_REFRESH_MS = 180000;
+        let wallTipGlobalsBound = false;
+
+        function resetWallTipInlineStyles(tip) {
+            tip.classList.remove('sm-hover-tip--visible');
+            tip.style.removeProperty('display');
+            tip.style.removeProperty('visibility');
+            tip.style.removeProperty('position');
+            tip.style.removeProperty('left');
+            tip.style.removeProperty('top');
+            tip.style.removeProperty('transform');
+            tip.style.maxHeight = '';
+            tip.style.overflowY = '';
+        }
+
+        function hideAllWallTips() {
+            document.querySelectorAll('.sm-hover-tip').forEach(function(t) {
+                resetWallTipInlineStyles(t);
+            });
+        }
+
+        function bindWallTipGlobalHandlersOnce() {
+            if (wallTipGlobalsBound) return;
+            wallTipGlobalsBound = true;
+            function hideTips() {
+                hideAllWallTips();
+            }
+            window.addEventListener('scroll', hideTips, true);
+            window.addEventListener('resize', hideTips);
+            const root = document.getElementById('sw-root');
+            if (root) {
+                root.addEventListener('mouseleave', hideTips);
+            }
+        }
+
+        function positionTipPanel(wrap, tip) {
+            const tile = wrap.querySelector('.sw-tile');
+            if (!tile) return;
+            const r = tile.getBoundingClientRect();
+            const margin = 8;
+            const topBar = document.querySelector('.sw-top');
+            const safeTop = (topBar ? topBar.getBoundingClientRect().bottom : 0) + 4;
+
+            tip.style.display = 'block';
+            tip.style.position = 'fixed';
+            tip.style.left = '-9999px';
+            tip.style.top = '0';
+            tip.style.transform = 'none';
+            tip.style.maxHeight = '';
+            tip.style.overflowY = '';
+            tip.style.visibility = 'hidden';
+
+            const tw = tip.offsetWidth;
+            const th = tip.offsetHeight;
+
+            let left = r.left + r.width / 2 - tw / 2;
+            left = Math.max(margin, Math.min(left, window.innerWidth - tw - margin));
+
+            let top = r.bottom + margin;
+            if (top + th > window.innerHeight - margin) {
+                top = r.top - th - margin;
+            }
+            if (top < safeTop) {
+                top = safeTop;
+                tip.style.maxHeight = Math.max(100, window.innerHeight - safeTop - margin) + 'px';
+                tip.style.overflowY = 'auto';
+            } else if (top + th > window.innerHeight - margin) {
+                tip.style.maxHeight = Math.max(100, window.innerHeight - top - margin) + 'px';
+                tip.style.overflowY = 'auto';
+            }
+
+            tip.style.left = Math.round(left) + 'px';
+            tip.style.top = Math.round(top) + 'px';
+            tip.style.visibility = 'visible';
+        }
+
+        function attachTipBehavior(wrap) {
+            const tip = wrap.querySelector('.sm-hover-tip');
+            if (!tip) return;
+            if (wrap._wallHoverAbort) {
+                wrap._wallHoverAbort.abort();
+            }
+            wrap._wallHoverAbort = new AbortController();
+            const sig = wrap._wallHoverAbort.signal;
+            function show() {
+                hideAllWallTips();
+                tip.classList.add('sm-hover-tip--visible');
+                requestAnimationFrame(function() {
+                    positionTipPanel(wrap, tip);
+                });
+            }
+            function hide() {
+                resetWallTipInlineStyles(tip);
+            }
+            wrap.addEventListener('mouseenter', show, { signal: sig });
+            wrap.addEventListener('mouseleave', hide, { signal: sig });
+            wrap.addEventListener('focusin', show, { signal: sig });
+            wrap.addEventListener('focusout', hide, { signal: sig });
+        }
+
+        function fmtErr(v) {
+            if (v == null || v === '') return '—';
+            const n = Number(v);
+            return Number.isFinite(n) ? n.toFixed(2) : String(v);
+        }
+
+        function wallReasonFallback(s) {
+            if (s.status_reason) return s.status_reason;
+            const bits = [];
+            if (s.pd_incident) bits.push('PagerDuty');
+            if (s.high_latency) bits.push('High latency');
+            if (s.traffic_drop) bits.push('Traffic drop vs 7d');
+            const st = s.status || '';
+            if (st === 'inactive') return 'No APM traffic in window';
+            if (st === 'unknown') return 'No data / query issue';
+            if (st === 'healthy') return 'Healthy';
+            return bits.length ? bits.join(' · ') : (st || '—');
+        }
+
+        function buildTileTip(s) {
+            const root = document.createElement('div');
+            root.className = 'sm-hover-tip';
+            const inner = document.createElement('div');
+            inner.className = 'sm-hover-tip-inner';
+            const st = s.status || 'unknown';
+            const badge = document.createElement('div');
+            badge.className = 'sm-hover-tip-badge ' + (st === 'critical' ? 'sm-hover-tip-badge--crit' : st === 'warning' ? 'sm-hover-tip-badge--warn' : st === 'healthy' ? 'sm-hover-tip-badge--ok' : '');
+            badge.textContent = (st || '').toUpperCase();
+            inner.appendChild(badge);
+            const head = document.createElement('div');
+            head.className = 'sm-hover-tip-head';
+            head.textContent = s.service || '—';
+            inner.appendChild(head);
+            if (s.region) {
+                const rg = document.createElement('div');
+                rg.className = 'sm-hover-tip-kv';
+                const rk = document.createElement('span');
+                rk.className = 'sm-hover-tip-k';
+                rk.textContent = 'Region';
+                const rv = document.createElement('span');
+                rv.className = 'sm-hover-tip-v';
+                rv.textContent = String(s.region);
+                rg.appendChild(rk);
+                rg.appendChild(rv);
+                inner.appendChild(rg);
+            }
+            const metrics = document.createElement('div');
+            metrics.className = 'sm-hover-tip-metrics';
+            const req = s.requests != null ? Number(s.requests).toLocaleString() : '—';
+            const errs = s.errors != null ? Number(s.errors).toLocaleString() : '—';
+            metrics.textContent = 'Error rate ' + fmtErr(s.error_rate) + '% · Requests ' + req + ' · Errors ' + errs;
+            inner.appendChild(metrics);
+            if (s.p95_latency != null && s.p95_latency !== '') {
+                const lat = document.createElement('div');
+                lat.className = 'sm-hover-tip-kv';
+                const k1 = document.createElement('span');
+                k1.className = 'sm-hover-tip-k';
+                k1.textContent = 'P95';
+                const v1 = document.createElement('span');
+                v1.className = 'sm-hover-tip-v';
+                v1.textContent = Math.round(Number(s.p95_latency)) + ' ms' + (s.high_latency ? ' (above threshold)' : '');
+                lat.appendChild(k1);
+                lat.appendChild(v1);
+                inner.appendChild(lat);
+            }
+            if (s.p99_latency != null && s.p99_latency !== '') {
+                const p99 = document.createElement('div');
+                p99.className = 'sm-hover-tip-kv';
+                const k2 = document.createElement('span');
+                k2.className = 'sm-hover-tip-k';
+                k2.textContent = 'P99';
+                const v2 = document.createElement('span');
+                v2.className = 'sm-hover-tip-v';
+                v2.textContent = Math.round(Number(s.p99_latency)) + ' ms';
+                p99.appendChild(k2);
+                p99.appendChild(v2);
+                inner.appendChild(p99);
+            }
+            const clusters = Array.isArray(s.eks_clusters) ? s.eks_clusters.filter(Boolean) : [];
+            if (clusters.length) {
+                const cl = document.createElement('div');
+                cl.className = 'sm-hover-tip-kv';
+                cl.style.gridColumn = '1 / -1';
+                cl.style.marginTop = '4px';
+                const ck = document.createElement('span');
+                ck.className = 'sm-hover-tip-k';
+                ck.textContent = 'Clusters';
+                const cv = document.createElement('span');
+                cv.className = 'sm-hover-tip-v';
+                cv.style.wordBreak = 'break-word';
+                cv.textContent = clusters.join(', ');
+                cl.appendChild(ck);
+                cl.appendChild(cv);
+                inner.appendChild(cl);
+            }
+            const chips = document.createElement('div');
+            chips.className = 'sm-hover-tip-chips';
+            if (s.pd_incident) {
+                let c;
+                if (s.pd_incident_url) {
+                    c = document.createElement('a');
+                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    c.href = s.pd_incident_url;
+                    c.target = '_blank';
+                    c.rel = 'noopener noreferrer';
+                    c.textContent = 'PagerDuty';
+                } else {
+                    c = document.createElement('span');
+                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    c.textContent = 'PagerDuty';
+                }
+                chips.appendChild(c);
+            }
+            if (s.splunk_url) {
+                const sp = document.createElement('a');
+                sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
+                sp.href = s.splunk_url;
+                sp.target = '_blank';
+                sp.rel = 'noopener noreferrer';
+                sp.textContent = 'Splunk';
+                chips.appendChild(sp);
+            }
+            if (s.traffic_drop) {
+                const c = document.createElement('span');
+                c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                c.textContent = 'Traffic drop';
+                chips.appendChild(c);
+            }
+            if (s.traffic_variance != null && !s.traffic_drop) {
+                const c = document.createElement('span');
+                c.className = 'sm-hover-tip-chip';
+                c.textContent = 'Traffic ' + Math.round(Number(s.traffic_variance)) + '% vs 7d';
+                chips.appendChild(c);
+            }
+            if (chips.children.length) inner.appendChild(chips);
+            const why = document.createElement('div');
+            why.className = 'sm-hover-tip-why';
+            why.textContent = 'Why: ' + wallReasonFallback(s);
+            inner.appendChild(why);
+            root.appendChild(inner);
+            return root;
+        }
+
+        function nativeTitleSummary(s) {
+            const req = s.requests != null ? Number(s.requests).toLocaleString() : '—';
+            const lines = [s.service || '—'];
+            if (s.region) lines.push('Region: ' + String(s.region));
+            const latBits = [];
+            if (s.p95_latency != null && s.p95_latency !== '') {
+                latBits.push('P95 ' + Math.round(Number(s.p95_latency)) + 'ms');
+            }
+            if (s.p99_latency != null && s.p99_latency !== '') {
+                latBits.push('P99 ' + Math.round(Number(s.p99_latency)) + 'ms');
+            }
+            if (latBits.length) lines.push(latBits.join(' · '));
+            const clusters = Array.isArray(s.eks_clusters) ? s.eks_clusters.filter(Boolean) : [];
+            if (clusters.length) lines.push('Clusters: ' + clusters.join(', '));
+            lines.push('ERR ' + fmtErr(s.error_rate) + '% · ' + req + ' req');
+            lines.push(wallReasonFallback(s));
+            return lines.join('\n');
+        }
+
+        function wallSortKey(s) {
+            const st = s.status;
+            const er = Number(s.error_rate || 0);
+            const errCnt = Number(s.errors || 0);
+            const name = (s.service || '').toLowerCase();
+            if (st === 'critical') return [0, -er, -errCnt, name];
+            if (st === 'warning') return [1, -er, -errCnt, name];
+            if (st === 'healthy') return [2, name, 0, ''];
+            return [3, name, 0, ''];
+        }
+
+        function wallSortCmp(a, b) {
+            const ka = wallSortKey(a);
+            const kb = wallSortKey(b);
+            const len = Math.max(ka.length, kb.length);
+            for (let i = 0; i < len; i++) {
+                const va = ka[i];
+                const vb = kb[i];
+                if (va === vb) continue;
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return va < vb ? -1 : 1;
+                }
+                if (String(va) < String(vb)) return -1;
+                if (String(va) > String(vb)) return 1;
+            }
+            return 0;
+        }
+
+        function buildRegionColumnsFromServices(services) {
+            const glo = [];
+            const eu = [];
+            for (const s of services || []) {
+                const r = String(s.region || 'Ireland').trim();
+                if (r === 'Multi-region') {
+                    glo.push(s);
+                    eu.push(s);
+                } else if (r === 'Oregon') {
+                    glo.push(s);
+                } else if (r === 'Ireland') {
+                    eu.push(s);
+                } else {
+                    eu.push(s);
+                }
+            }
+            glo.sort(wallSortCmp);
+            eu.sort(wallSortCmp);
+            return [
+                { key: 'arlo_global', label: 'Arlo Global', subtitle: 'Oregon', services: glo },
+                { key: 'arlo_eu', label: 'Arlo EU', subtitle: 'Ireland', services: eu },
+            ];
+        }
+
+        function appendMonitorPills(head, monitors) {
+            if (!monitors || typeof monitors !== 'object') return;
+            const cluster = document.createElement('div');
+            cluster.className = 'sw-monitor-cluster';
+            /* Same visual order as status monitor left column: PagerDuty → Samsung → ADT → Splunk */
+            ['pagerduty', 'samsung', 'adt', 'splunk'].forEach(function (k) {
+                const m = monitors[k];
+                if (!m || !m.label) return;
+                const pill = document.createElement('span');
+                pill.className = 'sw-monitor-pill sw-monitor-pill--' + (m.status || 'unknown');
+                pill.title = m.detail || '';
+                pill.textContent = m.label + ': ' + (m.short != null ? m.short : '');
+                cluster.appendChild(pill);
+            });
+            head.appendChild(cluster);
+        }
+
+        function appendTilesToGrid(grid, svcs) {
+            if (!svcs || !svcs.length) {
+                const empty = document.createElement('div');
+                empty.className = 'sw-meta';
+                empty.style.gridColumn = '1 / -1';
+                empty.textContent = 'No services in this column.';
+                grid.appendChild(empty);
+                return;
+            }
+            for (const s of svcs) {
+                const st = s.status || 'unknown';
+                const wrap = document.createElement('div');
+                wrap.className = 'sw-tile-wrap';
+
+                const el = document.createElement('a');
+                el.href = s.apm_url || '#';
+                el.target = '_blank';
+                el.rel = 'noopener';
+                el.setAttribute('title', nativeTitleSummary(s));
+                el.className = 'sw-tile';
+                if (st === 'critical') {
+                    el.classList.add('sw-tile--crit', 'sw-tile--alert');
+                } else if (st === 'warning') {
+                    el.classList.add('sw-tile--warn', 'sw-tile--alert');
+                } else if (st === 'healthy') {
+                    /* green default */
+                } else {
+                    el.classList.add('sw-tile--neutral');
+                }
+
+                const icon = document.createElement('div');
+                icon.className = 'sw-tile-icon';
+                if (st === 'critical') icon.textContent = '✕';
+                else if (st === 'warning') icon.textContent = '⚠';
+                else if (st === 'healthy') icon.textContent = '✓';
+                else if (st === 'inactive') icon.textContent = '○';
+                else icon.textContent = '?';
+                el.appendChild(icon);
+
+                const met = document.createElement('div');
+                met.className = 'sw-tile-name-compact';
+                met.textContent = s.service || '—';
+                el.appendChild(met);
+
+                wrap.appendChild(el);
+                wrap.appendChild(buildTileTip(s));
+                attachTipBehavior(wrap);
+                grid.appendChild(wrap);
+            }
+        }
+
+        function renderWall(data) {
+            const root = document.getElementById('sw-root');
+            const loading = document.getElementById('sw-loading');
+            if (loading) loading.remove();
+
+            root.textContent = '';
+            const groups = data.groups || [];
+            const monitors = data.monitors || null;
+            for (const g of groups) {
+                const section = document.createElement('section');
+                section.className = 'sw-group';
+
+                const head = document.createElement('div');
+                head.className = 'sw-group-head';
+
+                const title = document.createElement('div');
+                title.className = 'sw-group-title';
+                title.textContent = g.label;
+                head.appendChild(title);
+
+                appendMonitorPills(head, monitors);
+
+                const pill = document.createElement('span');
+                pill.className = 'sw-overall-pill ' + (g.overall || 'healthy');
+                pill.textContent = (g.overall || 'healthy');
+                head.appendChild(pill);
+
+                const c = g.counts || {};
+                const badges = document.createElement('div');
+                badges.className = 'sw-badges';
+                const parts = [
+                    ['✓', c.healthy, 'sw-badge--ok'],
+                    ['⚠', c.warning, 'sw-badge--warn'],
+                    ['✕', c.critical, 'sw-badge--crit'],
+                    ['?', c.unknown, ''],
+                    ['○', c.inactive, ''],
+                ];
+                for (const [sym, n, cls] of parts) {
+                    if (!n && sym !== '✓') continue;
+                    const b = document.createElement('span');
+                    b.className = 'sw-badge' + (cls ? ' ' + cls : '');
+                    b.textContent = sym + ' ' + (n != null ? n : 0);
+                    badges.appendChild(b);
+                }
+                head.appendChild(badges);
+                section.appendChild(head);
+
+                const regionWrap = document.createElement('div');
+                regionWrap.className = 'sw-region-grid';
+                const allSvcs = g.services || [];
+                const hasAny = allSvcs.length > 0;
+                if (!hasAny) {
+                    const empty = document.createElement('div');
+                    empty.className = 'sw-meta';
+                    empty.style.gridColumn = '1 / -1';
+                    empty.textContent = 'No services with APM signal in this window (inactive/unknown are hidden on the wall).';
+                    regionWrap.appendChild(empty);
+                } else {
+                    let columns = g.region_columns;
+                    if (!columns || !columns.length) {
+                        columns = buildRegionColumnsFromServices(allSvcs);
+                    }
+                    for (const col of columns) {
+                        const colEl = document.createElement('div');
+                        colEl.className = 'sw-region-col';
+                        const hrow = document.createElement('div');
+                        hrow.className = 'sw-region-col-head';
+                        const ct = document.createElement('div');
+                        ct.className = 'sw-region-col-title';
+                        ct.textContent = col.label || '';
+                        const ch = document.createElement('span');
+                        ch.className = 'sw-region-col-hint';
+                        ch.textContent = col.subtitle || '';
+                        hrow.appendChild(ct);
+                        hrow.appendChild(ch);
+                        colEl.appendChild(hrow);
+                        const grid = document.createElement('div');
+                        grid.className = 'sw-tiles sw-tiles--region';
+                        appendTilesToGrid(grid, col.services || []);
+                        colEl.appendChild(grid);
+                        regionWrap.appendChild(colEl);
+                    }
+                }
+                section.appendChild(regionWrap);
+                root.appendChild(section);
+            }
+            bindWallTipGlobalHandlersOnce();
+        }
+
+        async function loadWall(options) {
+            const forceRefresh = options && options.forceRefresh === true;
+            const trEl = document.getElementById('sw-timerange');
+            const timerange = trEl ? parseInt(trEl.value, 10) : 1;
+            const statusEl = document.getElementById('sw-status');
+            statusEl.classList.remove('err');
+            statusEl.textContent = 'Loading…';
+            try {
+                const res = await fetch('/api/statusmonitor/wall', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timerange, force_refresh: forceRefresh }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Request failed');
+                renderWall(data);
+                const t = new Date().toLocaleTimeString();
+                statusEl.textContent = 'Updated ' + t + ' · range ' + (data.timerange || timerange) + 'h · auto-refresh 3 min';
+                if (typeof loadSamsungStatusWidget === 'function') {
+                    loadSamsungStatusWidget(false);
+                }
+                if (typeof loadAdtStatusWidget === 'function') {
+                    loadAdtStatusWidget(false);
+                }
+            } catch (e) {
+                statusEl.classList.add('err');
+                statusEl.textContent = 'Error: ' + (e.message || e);
+            }
+        }
+
+        document.getElementById('sw-refresh').addEventListener('click', function() {
+            loadWall({ forceRefresh: true });
+        });
+        document.getElementById('sw-slack').addEventListener('click', function() {
+            if (typeof SlackShare === 'undefined') {
+                alert('Slack: no se pudo cargar slack_share.js');
+                return;
+            }
+            var st = document.getElementById('sw-status');
+            var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
+            var title = 'Status wall — all environments';
+            if (line) title += ' · ' + line;
+            SlackShare.sendFromSelector('#sw-root', {
+                page_title: title,
+            });
+        });
+        document.getElementById('sw-timerange').addEventListener('change', loadWall);
+        loadWall();
+        setInterval(loadWall, WALL_REFRESH_MS);
+    </script>
+</body>
+</html>

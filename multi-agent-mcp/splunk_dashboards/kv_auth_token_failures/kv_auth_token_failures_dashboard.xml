@@ -1,0 +1,158 @@
+<form version="1.0" theme="dark">
+  <label>KV auth token: read_kv_auth_token failures</label>
+  <description>Correlates device_prod KV failure logs with client_prod UserLocationServiceImpl getUserLocations: extracts ownerId, userId, SerialNumber from JSON; aggregates error_count via searchmatch; requires ownerId, xCloudId (latest DID), and error_count &gt; 0.</description>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default>
+        <earliest>-4d</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+
+  <!-- Base pipeline (through filter); append panel-specific stats -->
+  <row>
+    <panel>
+      <title>Total error_count (sum)</title>
+      <single>
+        <search>
+          <query>(index=device_prod sourcetype="kube:container:backend-log-server" "read_kv_auth_token" "failed to retrieve authtoken from KV store" SerialNumber=*) OR
+(index=client_prod sourcetype=kube:container:backend-hmsdevicemanagement UserLocationServiceImpl getUserLocations)
+| rex "\"ownerId\":\"(?&lt;ownerId>[\-\w]+)\""
+| rex "gatewayDeviceIds\":\[\"(?&lt;userId>[-\w]+)_(?&lt;SerialNumber>\w+)\""
+| stats latest(ownerId) as ownerId latest(userId) as userId latest(DID) as xCloudId count(eval(searchmatch("failed to retrieve authtoken from KV store"))) as error_count by SerialNumber
+| where isnotnull(ownerId) AND isnotnull(xCloudId) AND error_count&gt;0
+| stats sum(error_count) as total</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">total</option>
+        <option name="rangeValues">["0","1","50","500"]</option>
+        <option name="rangeColors">["0x53a051","0xf2b827","0xe67e22","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Distinct ownerId</title>
+      <single>
+        <search>
+          <query>(index=device_prod sourcetype="kube:container:backend-log-server" "read_kv_auth_token" "failed to retrieve authtoken from KV store" SerialNumber=*) OR
+(index=client_prod sourcetype=kube:container:backend-hmsdevicemanagement UserLocationServiceImpl getUserLocations)
+| rex "\"ownerId\":\"(?&lt;ownerId>[\-\w]+)\""
+| rex "gatewayDeviceIds\":\[\"(?&lt;userId>[-\w]+)_(?&lt;SerialNumber>\w+)\""
+| stats latest(ownerId) as ownerId latest(userId) as userId latest(DID) as xCloudId count(eval(searchmatch("failed to retrieve authtoken from KV store"))) as error_count by SerialNumber
+| where isnotnull(ownerId) AND isnotnull(xCloudId) AND error_count&gt;0
+| stats dc(ownerId) as distinct_owners</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">distinct_owners</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Distinct SerialNumber</title>
+      <single>
+        <search>
+          <query>(index=device_prod sourcetype="kube:container:backend-log-server" "read_kv_auth_token" "failed to retrieve authtoken from KV store" SerialNumber=*) OR
+(index=client_prod sourcetype=kube:container:backend-hmsdevicemanagement UserLocationServiceImpl getUserLocations)
+| rex "\"ownerId\":\"(?&lt;ownerId>[\-\w]+)\""
+| rex "gatewayDeviceIds\":\[\"(?&lt;userId>[-\w]+)_(?&lt;SerialNumber>\w+)\""
+| stats latest(ownerId) as ownerId latest(userId) as userId latest(DID) as xCloudId count(eval(searchmatch("failed to retrieve authtoken from KV store"))) as error_count by SerialNumber
+| where isnotnull(ownerId) AND isnotnull(xCloudId) AND error_count&gt;0
+| stats dc(SerialNumber) as distinct_serials</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="field">distinct_serials</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Failures over time (device_prod KV events only)</title>
+      <chart>
+        <search>
+          <query>index=device_prod sourcetype="kube:container:backend-log-server" "read_kv_auth_token" "failed to retrieve authtoken from KV store" SerialNumber=*
+| timechart span=1h count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Top ownerId by error_count</title>
+      <chart>
+        <search>
+          <query>(index=device_prod sourcetype="kube:container:backend-log-server" "read_kv_auth_token" "failed to retrieve authtoken from KV store" SerialNumber=*) OR
+(index=client_prod sourcetype=kube:container:backend-hmsdevicemanagement UserLocationServiceImpl getUserLocations)
+| rex "\"ownerId\":\"(?&lt;ownerId>[\-\w]+)\""
+| rex "gatewayDeviceIds\":\[\"(?&lt;userId>[-\w]+)_(?&lt;SerialNumber>\w+)\""
+| stats latest(ownerId) as ownerId latest(userId) as userId latest(DID) as xCloudId count(eval(searchmatch("failed to retrieve authtoken from KV store"))) as error_count by SerialNumber
+| where isnotnull(ownerId) AND isnotnull(xCloudId) AND error_count&gt;0
+| stats sum(error_count) as error_count by ownerId
+| sort - error_count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Top SerialNumber by error_count</title>
+      <chart>
+        <search>
+          <query>(index=device_prod sourcetype="kube:container:backend-log-server" "read_kv_auth_token" "failed to retrieve authtoken from KV store" SerialNumber=*) OR
+(index=client_prod sourcetype=kube:container:backend-hmsdevicemanagement UserLocationServiceImpl getUserLocations)
+| rex "\"ownerId\":\"(?&lt;ownerId>[\-\w]+)\""
+| rex "gatewayDeviceIds\":\[\"(?&lt;userId>[-\w]+)_(?&lt;SerialNumber>\w+)\""
+| stats latest(ownerId) as ownerId latest(userId) as userId latest(DID) as xCloudId count(eval(searchmatch("failed to retrieve authtoken from KV store"))) as error_count by SerialNumber
+| where isnotnull(ownerId) AND isnotnull(xCloudId) AND error_count&gt;0
+| stats sum(error_count) as error_count by SerialNumber
+| sort - error_count
+| head 20</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Detail: SerialNumber, ownerId, error_count</title>
+      <table>
+        <search>
+          <query>(index=device_prod sourcetype="kube:container:backend-log-server" "read_kv_auth_token" "failed to retrieve authtoken from KV store" SerialNumber=*) OR
+(index=client_prod sourcetype=kube:container:backend-hmsdevicemanagement UserLocationServiceImpl getUserLocations)
+| rex "\"ownerId\":\"(?&lt;ownerId>[\-\w]+)\""
+| rex "gatewayDeviceIds\":\[\"(?&lt;userId>[-\w]+)_(?&lt;SerialNumber>\w+)\""
+| stats latest(ownerId) as ownerId latest(userId) as userId latest(DID) as xCloudId count(eval(searchmatch("failed to retrieve authtoken from KV store"))) as error_count by SerialNumber
+| where isnotnull(ownerId) AND isnotnull(xCloudId) AND error_count&gt;0
+| fields SerialNumber, ownerId, error_count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

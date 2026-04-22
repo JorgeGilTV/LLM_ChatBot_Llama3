@@ -1,5 +1,6 @@
 import os
 import html
+import threading
 import requests
 import time
 import json
@@ -8,8 +9,109 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
+from requests.adapters import HTTPAdapter
+from requests.exceptions import ChunkedEncodingError, ConnectionError, Timeout
+from urllib3.util.retry import Retry
 
 load_dotenv()
+
+_dd_session_local = threading.local()
+
+
+def _reset_datadog_session_for_thread():
+    """Drop pooled TLS connections after a reset/abort (stale pool entries)."""
+    sess = getattr(_dd_session_local, "session", None)
+    if sess is not None:
+        try:
+            sess.close()
+        except Exception:
+            pass
+        _dd_session_local.session = None
+
+
+def _is_transient_datadog_connection_error(exc: BaseException) -> bool:
+    """True for network drops / server resets that often succeed on retry."""
+    if isinstance(exc, (ConnectionError, Timeout, ChunkedEncodingError)):
+        return True
+    msg = repr(exc).lower()
+    return any(
+        x in msg
+        for x in (
+            "connection reset",
+            "connection aborted",
+            "broken pipe",
+            "eof occurred",
+            "ssl",
+            "temporarily unavailable",
+        )
+    )
+
+
+def _normalize_datadog_site(dd_site: str) -> str:
+    if not dd_site:
+        return "datadoghq.com"
+    s = str(dd_site).replace("https://", "").replace("http://", "").strip()
+    if "/" in s:
+        s = s.split("/")[0]
+    if "?" in s:
+        s = s.split("?")[0]
+    if not s or "." not in s:
+        return "datadoghq.com"
+    return s
+
+
+def datadog_ui_origin(dd_site: str | None) -> str:
+    """
+    Base URL (origin) for Datadog web UI links in the browser.
+
+    US1 default site key ``datadoghq.com`` maps to ``https://arlo.datadoghq.com`` (org subdomain).
+    Any other site (e.g. ``arlo.datadoghq.com``, ``us5.datadoghq.com``, ``datadoghq.eu``) uses
+    ``https://{site}`` — never ``app.{site}`` when the site already includes a hostname.
+    """
+    s = _normalize_datadog_site(dd_site or "")
+    if s == "datadoghq.com":
+        return "https://arlo.datadoghq.com"
+    return f"https://{s}"
+
+
+def normalize_datadog_ui_url(url: str | None) -> str:
+    """Rewrite default US1 app host to org subdomain when present (API may return app.datadoghq.com)."""
+    if not url:
+        return ""
+    u = str(url).strip()
+    u = u.replace("https://app.datadoghq.com", "https://arlo.datadoghq.com")
+    u = u.replace("http://app.datadoghq.com", "https://arlo.datadoghq.com")
+    return u
+
+
+def datadog_dashboard_href(dd_site: str | None, dash_id: str, url_from_api: str | None = None) -> str:
+    """Browser URL for a dashboard (relative path, absolute app.*, or built from id)."""
+    u = (url_from_api or "").strip()
+    if not u:
+        return f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
+    if u.startswith("http"):
+        return normalize_datadog_ui_url(u)
+    return f"{datadog_ui_origin(dd_site)}{u if u.startswith('/') else '/' + u}"
+
+
+def _datadog_http_session():
+    """Thread-local Session with retries (Session is not safe across threads)."""
+    if getattr(_dd_session_local, "session", None) is None:
+        retry = Retry(
+            total=6,
+            connect=5,
+            read=5,
+            backoff_factor=0.8,
+            status_forcelist=(502, 503, 504),
+            allowed_methods=frozenset(["GET", "POST"]),
+            respect_retry_after_header=True,
+        )
+        adapter = HTTPAdapter(max_retries=retry, pool_connections=6, pool_maxsize=12)
+        sess = requests.Session()
+        sess.mount("https://", adapter)
+        _dd_session_local.session = sess
+    return _dd_session_local.session
+
 
 __all__ = [
     'read_datadog_dashboards',
@@ -171,6 +273,7 @@ def create_graph_snapshot(dd_api_key, dd_app_key, dd_site, metric_query, from_ti
 
 def get_dashboard_details(dd_api_key, dd_app_key, dd_site, dashboard_id):
     """Get detailed information about a specific dashboard including widgets"""
+    dd_site = _normalize_datadog_site(dd_site or "")
     # Handle custom subdomains (e.g., arlo.datadoghq.com)
     if dd_site.startswith('arlo.') or '.' in dd_site.split('.')[0]:
         # Custom subdomain - use the main API endpoint
@@ -185,19 +288,34 @@ def get_dashboard_details(dd_api_key, dd_app_key, dd_site, dashboard_id):
         "Content-Type": "application/json"
     }
     
-    try:
-        response = requests.get(api_url, headers=headers, timeout=15)
-        print(f"📡 Response status: {response.status_code}")
-        
-        if response.status_code == 200:
-            print(f"✅ Dashboard details retrieved successfully")
-            return response.json()
-        else:
-            print(f"❌ Failed to get dashboard: {response.status_code} - {response.text[:200]}")
+    # Dashboard JSON can be large; intermittent TCP resets from api.datadoghq.com are common
+    # under parallel load — urllib3 retries + app-level backoff + fresh session on failure.
+    timeout = (10, 60)
+    max_attempts = 4
+    for attempt in range(max_attempts):
+        session = _datadog_http_session()
+        try:
+            response = session.get(api_url, headers=headers, timeout=timeout)
+            if response.status_code == 200:
+                return response.json()
+            print(
+                f"❌ Failed to get dashboard {dashboard_id}: {response.status_code} - {response.text[:200]}"
+            )
             return None
-    except Exception as e:
-        print(f"❌ Exception getting dashboard details: {str(e)}")
-        return None
+        except Exception as e:
+            transient = _is_transient_datadog_connection_error(e)
+            if transient and attempt < max_attempts - 1:
+                _reset_datadog_session_for_thread()
+                delay = 0.75 * (2**attempt)
+                print(
+                    f"⚠️ Datadog dashboard fetch transient error ({dashboard_id}), "
+                    f"retry {attempt + 1}/{max_attempts} in {delay:.1f}s: {e!s}"
+                )
+                time.sleep(delay)
+                continue
+            print(f"❌ Exception getting dashboard details ({dashboard_id}): {e!s}")
+            return None
+    return None
 
 def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
     """
@@ -318,7 +436,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
             filtered_dashboards = [{
                 "id": query,
                 "title": details.get("title", "RED - Metrics"),
-                "url": f"https://{dd_site}/dashboard/{query}",
+                "url": f"{datadog_ui_origin(dd_site)}/dashboard/{query}",
                 "layout_type": details.get("layout_type", "ordered"),
                 "author_name": details.get("author_name", "Unknown")
             }]
@@ -460,7 +578,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
         </style>
         <div class="response-area">
             <h2>📊 Datadog Dashboards</h2>
-            <p>Source: <a href="https://{dd_site}/dashboard/lists" target="_blank" class="dashboard-link">Datadog Dashboard List</a></p>
+            <p>Source: <a href="{datadog_ui_origin(dd_site)}/dashboard/lists" target="_blank" class="dashboard-link">Datadog Dashboard List</a></p>
             <p style="font-size: 12px; color: #666;">Site: {html.escape(dd_site)}</p>
         """
         
@@ -483,7 +601,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
             for dashboard in filtered_dashboards:
                 dash_id = dashboard.get("id", "")
                 dash_title = dashboard.get("title", "Untitled")
-                dash_url = dashboard.get("url", f"https://{dd_site}/dashboard/{dash_id}")
+                dash_url = datadog_dashboard_href(dd_site, dash_id, dashboard.get("url"))
                 
                 # Calculate timestamp range for display
                 import time
@@ -735,7 +853,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                                 'end': str(current_time),
                                 'query': query
                             }
-                            graph_url = f"https://{dd_site}/dashboard/{dash_id}"
+                            graph_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
                         
                         output += f"""
                         <div style='background-color: #f7fafc; 
@@ -1116,7 +1234,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                             output += f"""
                                 </div>
                                 <div style='text-align: center; margin-top: 2px; padding-top: 2px; border-top: 1px solid #e5e7eb;'>
-                                    <a href='https://{dd_site}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
+                                    <a href='{datadog_ui_origin(dd_site)}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
                                        style='display: inline-block; padding: 3px 6px; background-color: #632ca6; color: white; 
                                               text-decoration: none; border-radius: 2px; font-size: 11px; font-weight: 600;'>
                                         View →
@@ -1176,7 +1294,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                             output += f"""
                             <div style='background-color: #ffffff; padding: 5px; border-radius: 3px; border: 1px solid #e2e8f0;'>
                                 <p style='margin: 0; font-size: 10px; color: #718096;'>
-                                    {html.escape(widget_type)} - <a href='https://{dd_site}/dashboard/{dash_id}' target='_blank' style='color: #632ca6; font-size: 9px;'>View →</a>
+                                    {html.escape(widget_type)} - <a href='{datadog_ui_origin(dd_site)}/dashboard/{dash_id}' target='_blank' style='color: #632ca6; font-size: 9px;'>View →</a>
                                 </p>
                             </div>
                             """
@@ -1225,11 +1343,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                 dash_id = dashboard.get("id", "N/A")
                 dash_type = dashboard.get("layout_type", "N/A")
                 author = dashboard.get("author_name", "Unknown")
-                dash_url = dashboard.get("url", "")
-                
-                # Construct full URL if not provided
-                if not dash_url.startswith("http"):
-                    dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+                dash_url = datadog_dashboard_href(dd_site, dash_id, dashboard.get("url"))
                 
                 output += f"""
                 <tr>
@@ -1309,7 +1423,7 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
         
         dash_id = default_adt_dashboard_id
         dash_title = details.get('title', 'RED - Metrics - ADT')
-        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        dash_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
         
         # Generate timestamp range display
         timestamp_range_html = format_timestamp_range(from_time, current_time)
@@ -1815,7 +1929,7 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
                 output += f"""
                     </div>
                     <div style='text-align: center; margin-top: 2px; padding-top: 2px; border-top: 1px solid #e5e7eb;'>
-                        <a href='https://{dd_site}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
+                        <a href='{datadog_ui_origin(dd_site)}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
                            style='display: inline-block; padding: 3px 6px; background-color: #7c3aed; color: white; 
                                   text-decoration: none; border-radius: 2px; font-size: 11px; font-weight: 600;'>
                             View Service →
@@ -1889,7 +2003,7 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
         
         dash_id = default_red_dashboard_id
         dash_title = details.get('title', 'RED - Metrics')
-        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        dash_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
         
         # Calculate timestamps for display
         import time
@@ -2247,7 +2361,7 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
                         </div>
                     </div>
                     <div style='text-align: center; margin-top: 2px; padding-top: 2px; border-top: 1px solid #e5e7eb;'>
-                        <a href='https://{dd_site}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
+                        <a href='{datadog_ui_origin(dd_site)}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
                            style='display: inline-block; padding: 3px 6px; background-color: #dc2626; color: white; 
                                   text-decoration: none; border-radius: 2px; font-size: 11px; font-weight: 600;'>
                             View Service →
@@ -2501,7 +2615,7 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
         
         dash_id = default_adt_dashboard_id
         dash_title = details.get('title', 'RED - Metrics - ADT')
-        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        dash_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
         
         # Calculate timestamps for display
         import time
@@ -2970,7 +3084,7 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
             widget_html += f"""
                 </div>
                 <div style='text-align: center; margin-top: 2px; padding-top: 2px; border-top: 1px solid #e5e7eb;'>
-                    <a href='https://{dd_site}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
+                    <a href='{datadog_ui_origin(dd_site)}/apm/service/{html.escape(service)}?env={html.escape(env)}' target='_blank' 
                        style='display: inline-block; padding: 3px 6px; background-color: #dc2626; color: white; 
                               text-decoration: none; border-radius: 2px; font-size: 11px; font-weight: 600;'>
                         View Service →
@@ -3072,7 +3186,7 @@ def read_datadog_samsung(query: str, timerange_hours: int = 4) -> str:
         
         dash_id = default_samsung_dashboard_id
         dash_title = details.get('title', 'RED - Metrics - Samsung')
-        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        dash_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
         
         # Generate timestamp range display
         timestamp_range_html = format_timestamp_range(from_time, current_time)
@@ -3476,7 +3590,7 @@ def read_datadog_samsung_errors_only(query: str = "", timerange_hours: int = 4) 
         
         dash_id = default_samsung_dashboard_id
         dash_title = details.get('title', 'RED - Metrics - Samsung')
-        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        dash_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
         
         # Calculate timestamps for display
         import time
@@ -4498,11 +4612,14 @@ def search_datadog_dashboards(query: str = "", timerange: int = 4) -> str:
             
             # Build full dashboard URL with time range
             if dashboard_url:
-                full_url = f"https://{dd_site}{dashboard_url}"
-                # Add time range parameters
-                full_url += f"?from_ts={from_time * 1000}&to_ts={current_time * 1000}&live=true"
+                if dashboard_url.startswith("http"):
+                    full_url = normalize_datadog_ui_url(dashboard_url)
+                else:
+                    full_url = f"{datadog_ui_origin(dd_site)}{dashboard_url}"
             else:
-                full_url = f"https://{dd_site}/dashboard/{dashboard_id}"
+                full_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dashboard_id}"
+            ts_q = f"from_ts={from_time * 1000}&to_ts={current_time * 1000}&live=true"
+            full_url += ("&" if "?" in full_url else "?") + ts_q
             
             # Format modified date
             try:
@@ -4811,7 +4928,7 @@ def search_datadog_services(query: str = "", timerange: int = 4) -> str:
     
     # Display each service variant that has traffic
     for service_name in services_with_traffic:
-        service_url = f"https://{dd_site}/apm/entity/service%3A{service_name}"
+        service_url = f"{datadog_ui_origin(dd_site)}/apm/entity/service%3A{service_name}"
         chart_base_id = f"apm_{random.randint(1000, 9999)}"
         
         output += f"""
@@ -5207,7 +5324,7 @@ def read_datadog_redmetrics_us(query: str, timerange_hours: int = 4) -> str:
         
         dash_id = default_dashboard_id
         dash_title = details.get('title', 'RED Metrics - US')
-        dash_url = f"https://{dd_site}/dashboard/{dash_id}"
+        dash_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
         
         # Generate timestamp range display
         timestamp_range_html = format_timestamp_range(from_time, current_time)
@@ -5719,7 +5836,7 @@ def read_datadog_redmetrics_us(query: str, timerange_hours: int = 4) -> str:
                 output += f"""
                     </div>
                     <div style='text-align: center; margin-top: 2px; padding-top: 2px; border-top: 1px solid #e5e7eb;'>
-                        <a href='https://{dd_site}/apm/service/{html.escape(service_name)}?env={html.escape(env)}' target='_blank' 
+                        <a href='{datadog_ui_origin(dd_site)}/apm/service/{html.escape(service_name)}?env={html.escape(env)}' target='_blank' 
                            style='display: inline-block; padding: 3px 6px; background-color: #10b981; color: white; 
                                   text-decoration: none; border-radius: 2px; font-size: 11px; font-weight: 600;'>
                             View →

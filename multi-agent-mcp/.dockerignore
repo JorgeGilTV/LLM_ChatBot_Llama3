@@ -79,6 +79,16 @@ dist/
 *.tar
 goc-agenticai-embedded*.tar
 
+# Extracted / recovered image contents (huge, breaks docker build xattr on macOS)
+recovered-from-docker-tar/
+
+# Local archive, presentations, dist — not part of the running app
+old/
+
+# Do not bake host metrics DB into the image
+data/*.db
+data/*.db-journal
+
 # Presentation files
 PRESENTATION_NOTES_EN.md
 PRESENTATION_SPEECH.md

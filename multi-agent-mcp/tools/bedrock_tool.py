@@ -144,3 +144,55 @@ IMPORTANT: Return ONLY the HTML content, without wrapping it in markdown code bl
         return f"AWS Bedrock Error ({error_code}): {error_message}"
     except Exception as e:
         return f"Error executing AWS Bedrock: {e}"
+
+
+def summarize_page_for_slack(
+    page_text: str,
+    page_title: str = "",
+    source_url: str = "",
+) -> str:
+    """
+    Summarize OneView page text for Slack (English body, Slack mrkdwn-friendly).
+    Returns error strings starting with "Error:" or "AWS Bedrock Error" on failure.
+    """
+    import re
+
+    if not (page_text or "").strip():
+        return "Error: empty page text."
+
+    meta_lines = []
+    if (page_title or "").strip():
+        meta_lines.append(f"Page / UI label (may be non-English): {page_title.strip()}")
+    if (source_url or "").strip():
+        meta_lines.append(f"URL: {source_url.strip()}")
+    meta_block = "\n".join(meta_lines) if meta_lines else "(no extra metadata)"
+
+    prompt = f"""{meta_block}
+
+You are an SRE analyst. Summarize the following text scraped from a OneView GOC AI screen (tool results, Datadog status monitor, status wall, Splunk hints, etc.). The source text may be in Spanish, English, or mixed.
+
+OUTPUT (all in English):
+- First line (same line): *Quick read:* then one concise sentence.
+- Then structured sections in Slack mrkdwn:
+  • Short line *Overall:* followed by one or two sentences.
+  • If there are issues: a line *Alerts & status:* then bullet lines starting with "• ".
+  • *Notable services / metrics:* with "• " bullets for names, error rates, latency, or counts when present.
+  • Optional *Context:* only if it helps (environment, time range, region).
+- Use *Label:* at the start of a line for small headings (asterisks for bold in Slack).
+- Use "• " for every list item. Add a blank line between sections.
+- Do NOT use HTML, code fences, or JSON. Do NOT use # headings.
+- Stay under ~30 lines and ~900 words.
+
+--- PAGE TEXT ---
+{page_text}
+--- END ---"""
+
+    out = ask_bedrock(prompt, selected_tools=None, enable_mcp_access=False)
+    if not out or not str(out).strip():
+        return "Error: Bedrock returned an empty response."
+    s = str(out).strip()
+    if s.startswith("Error:") or s.startswith("AWS Bedrock Error") or "Bedrock is not working" in s:
+        return s
+    s = re.sub(r"<[^>]{1,300}>", "", s)
+    s = re.sub(r"\n{4,}", "\n\n\n", s.strip())
+    return s

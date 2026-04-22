@@ -21,7 +21,7 @@ def read_tickets(query: str) -> str:
         status = issue.get("state")
         summary = issue.get("short_description")
         description = issue.get("description", "No description available")
-        # ⚠️ Los comentarios en ServiceNow se obtienen de journal entries, aquí simplificado
+        # ServiceNow comments come from journal entries; simplified here
         comments = issue.get("comments", [])
         last_two_comments = comments[-2:] if comments else ["No comments available"]
         url = f"https://arlo.service-now.com/now/nav/ui/classic/params/target/incident.do?sys_id={query}"
@@ -44,14 +44,14 @@ def read_tickets(query: str) -> str:
         })
         return _render_table(tabla)
 
-    # ✅ Caso normal: búsqueda por texto en short_description
+    # Normal case: search by short_description text
     search_url = f'https://arlo.service-now.com/api/now/table/incident?sysparm_query=short_descriptionLIKE{query}&sysparm_limit=50'
     response = session.get(search_url)
     if response.status_code != 200:
         return f"<p>Error {response.status_code}: {response.reason}</p>"
     issues = response.json().get("result", [])
     if not issues:
-        return f"<p>No se encontró información para: '{html.escape(query)}'</p>"
+        return f"<p>No information found for: '{html.escape(query)}'</p>"
 
     for issue in issues:
         key = issue.get("number")
@@ -80,7 +80,7 @@ def read_tickets(query: str) -> str:
         })
 
     if not tabla:
-        return f"<p>No se encontraron incidents abiertos para: '{html.escape(query)}'</p>"
+        return f"<p>No open incidents found for: '{html.escape(query)}'</p>"
     return _render_table(tabla)
 
 

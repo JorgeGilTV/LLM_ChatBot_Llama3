@@ -10,6 +10,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Local /api/deployments/upcoming can take 25s+25s (two Confluence attempts) plus parsing — keep above that.
+def _internal_deployments_api_url() -> str:
+    port = (os.getenv("PORT") or "8080").strip()
+    return f"http://127.0.0.1:{port}/api/deployments/upcoming"
+
+
+def _internal_deployments_http_timeout():
+    connect_s = float(os.getenv("DEPLOYMENTS_INTERNAL_HTTP_CONNECT_TIMEOUT", "5"))
+    read_s = float(os.getenv("DEPLOYMENTS_INTERNAL_HTTP_READ_TIMEOUT", "90"))
+    return (connect_s, read_s)
+
+
 def get_grm_deployments(query: str = "", timerange_hours: int = 24) -> str:
     """
     Get deployments from GRM Calendar (Confluence).
@@ -41,8 +53,8 @@ def get_grm_deployments(query: str = "", timerange_hours: int = 24) -> str:
         # Call the internal API endpoint that already fetches deployments
         # This makes a local request to our Flask app's /api/deployments/upcoming endpoint
         response = requests.get(
-            'http://127.0.0.1:8080/api/deployments/upcoming',
-            timeout=10
+            _internal_deployments_api_url(),
+            timeout=_internal_deployments_http_timeout(),
         )
         
         if response.status_code != 200:
@@ -224,13 +236,27 @@ def get_grm_deployments(query: str = "", timerange_hours: int = 24) -> str:
         """
         
         return output
-        
+
+    except requests.exceptions.Timeout:
+        port = (os.getenv("PORT") or "8080").strip()
+        return f"""
+        <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px;'>
+            <p style='margin: 0; color: #c53030;'>
+                ❌ <strong>GRM Calendar service did not respond in time.</strong><br>
+                The local deployments API on port {html.escape(port)} is still waiting on Confluence
+                (slow Team Calendar). If this persists, increase <code>DEPLOYMENTS_INTERNAL_HTTP_READ_TIMEOUT</code>
+                or check Confluence/API token.
+            </p>
+        </div>
+        """
+
     except requests.exceptions.ConnectionError:
-        return """
+        port = (os.getenv("PORT") or "8080").strip()
+        return f"""
         <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px;'>
             <p style='margin: 0; color: #c53030;'>
                 ❌ <strong>Cannot connect to deployments API.</strong><br>
-                Make sure the Flask server is running on port 8080.
+                Make sure the Flask server is listening on port {html.escape(port)} (env <code>PORT</code>).
             </p>
         </div>
         """

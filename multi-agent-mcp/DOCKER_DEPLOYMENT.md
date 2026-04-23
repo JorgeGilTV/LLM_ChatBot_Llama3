@@ -5,7 +5,7 @@
 - **Imagen Docker** (ejemplo de release reciente): `oneview-goc-ai_v3.2.7-mcp.tar`
 - **Tag**: `oneview-goc-ai:latest` y `oneview-goc-ai:3.2.7-mcp`
 - **Base**: Python 3.12-slim
-- **Plataforma**: `docker-build-export.sh` usa por defecto `--platform linux/amd64` (EC2, EKS x86, etc.). En **Mac Apple Silicon**, para imagen nativa en el host: `BUILD_PLATFORM=linux/arm64 ./docker-build-export.sh` (ver *Troubleshooting* si hay *wrong architecture*).
+- **Plataforma**: el despliegue objetivo es **linux/arm64** (`docker-build-export.sh` por defecto `--platform linux/arm64`, alineado con `docker compose` y nodos **Graviton / ARM**). En hosts **x86_64** (EC2/VM comunes) genera la imagen con: `BUILD_PLATFORM=linux/amd64 ./docker-build-export.sh` (ver *Troubleshooting* si hay *wrong architecture*). Si usas un `override` o quitas `platform` en el compose, compila y corre con la misma arquitectura que el destino.
 
 ## 🚀 Instrucciones de Deployment
 
@@ -310,7 +310,7 @@ docker load -i oneview-goc-ai_v3.2.7-mcp.tar
 
 **Causa**: La arquitectura de la imagen no coincide con el host (p. ej. imagen **arm64** y servidor **amd64**, o al revés).
 
-**Solución**: Vuelve a generar el `.tar` con la plataforma del destino. Por defecto el script construye **linux/amd64**. Si el host de destino es **ARM** (o tu Mac M‑series y quieres run nativo sin emulación): `BUILD_PLATFORM=linux/arm64 ./docker-build-export.sh`. Luego `docker load` y arranca de nuevo.
+**Solución**: Vuelve a generar el `.tar` con la plataforma del destino. Por defecto el script construye **linux/arm64**. Si el host de destino es **x86_64** (amd64): `BUILD_PLATFORM=linux/amd64 ./docker-build-export.sh` o ajusta `platform` en el `docker-compose` a `linux/amd64`. Luego `docker load` y arranca de nuevo; la arquitectura de la imagen y la del nodo deben coincidir.
 
 Comprobar arquitectura de una imagen cargada:
 

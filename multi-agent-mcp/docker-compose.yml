@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   arlo-agenticai:
+    # Alineado con el build por defecto (ARM64 en la nube / Mac Apple Silicon).
+    platform: linux/arm64
     build:
       context: .
       dockerfile: Dockerfile

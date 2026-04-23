@@ -5,7 +5,7 @@
 - **Imagen Docker** (ejemplo de release reciente): `oneview-goc-ai_v3.2.7-mcp.tar`
 - **Tag**: `oneview-goc-ai:latest` y `oneview-goc-ai:3.2.7-mcp`
 - **Base**: Python 3.12-slim
-- **Plataforma**: el script `docker-build-export.sh` construye con `--platform linux/amd64` para que el `.tar` funcione en servidores Linux x86_64 típicos (si construyes solo para arm64 en Mac, el despliegue en Linux puede fallar — ver sección *Problemas frecuentes*).
+- **Plataforma**: `docker-build-export.sh` usa por defecto `--platform linux/arm64` (Mac Apple Silicon, mismo host). Para un `.tar` que corra en servidores Linux **x86_64** (EKS, VM típicas), genera con: `BUILD_PLATFORM=linux/amd64 ./docker-build-export.sh` (ver *Troubleshooting* si hay *wrong architecture*).
 
 ## 🚀 Instrucciones de Deployment
 
@@ -308,9 +308,9 @@ docker load -i oneview-goc-ai_v3.2.7-mcp.tar
 
 ### Contenedor no arranca: `exec format error`, `no matching manifest`, o imagen “wrong architecture”
 
-**Causa**: La imagen se construyó para **arm64** (p. ej. Mac Apple Silicon) y el servidor de despliegue es **linux/amd64**, o al revés.
+**Causa**: La arquitectura de la imagen no coincide con el host (p. ej. imagen **arm64** y servidor **amd64**, o al revés).
 
-**Solución**: Vuelve a generar el `.tar` con el script actual (`docker-build-export.sh` usa `docker build --platform linux/amd64`). En el servidor, `docker load` y arranca de nuevo.
+**Solución**: Vuelve a generar el `.tar` con la plataforma del destino. Por defecto el script construye **linux/arm64**; para despliegue en Linux x86_64: `BUILD_PLATFORM=linux/amd64 ./docker-build-export.sh`. Luego `docker load` y arranca de nuevo.
 
 Comprobar arquitectura de una imagen cargada:
 
@@ -318,7 +318,7 @@ Comprobar arquitectura de una imagen cargada:
 docker image inspect oneview-goc-ai:latest --format '{{.Architecture}}'
 ```
 
-Debe ser `amd64` si el host Linux es x86_64.
+Debe coincidir con el host (p. ej. `amd64` en un nodo EKS x86_64, `arm64` en un host ARM).
 
 ### `docker compose` no arranca: `couldn't find env file` o `env file ... not found`
 

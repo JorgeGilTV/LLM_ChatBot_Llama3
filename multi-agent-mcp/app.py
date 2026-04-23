@@ -2003,14 +2003,30 @@ def _team_calendar_event_start_end(event: dict) -> tuple[Optional[datetime], Opt
 
     start_dt = None
     end_dt = None
-    for sk in ("start", "startDate", "startTime", "from", "begin", "startMillis"):
+    for sk in (
+        "start",
+        "startDate",
+        "startTime",
+        "fromDateTime",
+        "from",
+        "begin",
+        "startMillis",
+    ):
         if sk in event and event[sk] not in (None, ""):
             start_dt = _parse_team_calendar_datetime(event[sk])
             if start_dt:
                 break
     if start_dt is None and isinstance(event.get("start"), dict):
         start_dt = _parse_team_calendar_datetime(event["start"])
-    for ek in ("end", "endDate", "endTime", "to", "finish", "endMillis"):
+    for ek in (
+        "end",
+        "endDate",
+        "endTime",
+        "toDateTime",
+        "to",
+        "finish",
+        "endMillis",
+    ):
         if ek in event and event[ek] not in (None, ""):
             end_dt = _parse_team_calendar_datetime(event[ek])
             if end_dt:
@@ -2051,16 +2067,22 @@ def _grm_event_to_deployment(event: dict, cst) -> Optional[dict]:
     }
 
 
+def _deployments_int_env(name: str, default: int, lo: int, hi: int) -> int:
+    try:
+        v = int((os.getenv(name) or str(default)).strip())
+        return max(lo, min(hi, v))
+    except (TypeError, ValueError):
+        return default
+
+
 @flask_app.route('/api/deployments/upcoming')
 def api_deployments_upcoming():
-    """Endpoint for upcoming deployments from Confluence GRM Calendar"""
+    """Endpoint for upcoming deployments from Confluence GRM Calendar (Team Calendars API)."""
     try:
         import requests
         from datetime import datetime, timedelta, timezone
         from zoneinfo import ZoneInfo
-        from bs4 import BeautifulSoup
-        import re
-        
+
         cst = ZoneInfo('America/Chicago')
         use_mock_deployments = os.getenv("DEPLOYMENTS_USE_MOCK_DATA", "").strip().lower() in (
             "1",
@@ -2102,13 +2124,26 @@ def api_deployments_upcoming():
 
         deployments = []
 
-        # Date-only range for Team Calendar API: must span enough calendar days (CST) so events
-        # are not dropped when UTC day boundaries differ from Chicago. Filter overlap happens later.
+        # Date-only range for Team Calendar API (CST). The wiki GRM view shows a multi-week/month
+        # horizon; a short end_date used to return almost no events compared to the Confluence page.
+        fetch_days_ahead = _deployments_int_env(
+            "DEPLOYMENTS_CALENDAR_FETCH_DAYS_AHEAD", 60, 3, 120
+        )
+        lookback_days = _deployments_int_env("DEPLOYMENTS_CALENDAR_LOOKBACK_DAYS", 2, 0, 30)
+        filter_hours_future = _deployments_int_env(
+            "DEPLOYMENTS_FILTER_HOURS_FUTURE", 720, 24, 2160
+        )
+        filter_hours_past = _deployments_int_env("DEPLOYMENTS_FILTER_HOURS_PAST", 2, 0, 168)
+        max_rows = _deployments_int_env("DEPLOYMENTS_MAX_ROWS", 50, 5, 150)
         now_cst = datetime.now(cst)
-        start_date = (now_cst - timedelta(days=1)).strftime("%Y-%m-%d")
-        end_date = (now_cst + timedelta(days=3)).strftime("%Y-%m-%d")
+        start_date = (now_cst - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        end_date = (now_cst + timedelta(days=fetch_days_ahead)).strftime("%Y-%m-%d")
         diag["calendar_start_date"] = start_date
         diag["calendar_end_date"] = end_date
+        diag["fetch_days_ahead"] = fetch_days_ahead
+        diag["filter_hours_future"] = filter_hours_future
+        diag["filter_hours_past"] = filter_hours_past
+        diag["max_rows"] = max_rows
 
         # First try: Get events via Team Calendars REST API
         try:
@@ -2248,9 +2283,10 @@ def api_deployments_upcoming():
                 logging.error(f"❌ Error generating mock deployments: {e}")
                 deployment_source = "empty"
         
-        # Filter: events that overlap [now-2h, now+24h]. is_past = window fully ended (not "start in past").
-        past_window = today - timedelta(hours=2)
-        next_window = today + timedelta(hours=24)
+        # Overlap with [now - past_window, now + future_window] so the sidebar can mirror the
+        # GRM calendar (events beyond 24h were previously never shown).
+        past_window = today - timedelta(hours=filter_hours_past)
+        next_window = today + timedelta(hours=filter_hours_future)
         filtered_deployments = []
 
         def _aware(dt):
@@ -2280,21 +2316,35 @@ def api_deployments_upcoming():
 
         deployments = filtered_deployments
         deployments.sort(key=lambda x: x.get("timestamp", ""))
-        upcoming = deployments[:20]
+        upcoming = deployments[:max_rows]
 
         logging.info(
             f"✅ Deployments ({deployment_source}): {len(upcoming)} row(s) in last 2h + next 24h window"
         )
 
+        grm_wiki = (
+            "https://arlo.atlassian.net/wiki/spaces/RM/pages/153256867/GRM+Calendar"
+        )
         payload = {
             "deployments": upcoming,
             "total": len(deployments),
             "timestamp": time.strftime("%H:%M:%S"),
             "source": deployment_source,
+            "grm": {
+                "confluence_wiki_url": grm_wiki,
+                "filter_hours_future": filter_hours_future,
+                "filter_hours_past": filter_hours_past,
+                "fetch_end_date": end_date,
+                "sub_calendar_id": sub_calendar_id,
+            },
             "diagnostics": {
                 "sub_calendar_id": sub_calendar_id,
                 "calendar_start_date": diag.get("calendar_start_date"),
                 "calendar_end_date": diag.get("calendar_end_date"),
+                "fetch_days_ahead": diag.get("fetch_days_ahead"),
+                "filter_hours_future": diag.get("filter_hours_future"),
+                "filter_hours_past": diag.get("filter_hours_past"),
+                "max_rows": diag.get("max_rows"),
                 "primary_http_status": diag.get("primary_http_status"),
                 "alt_http_status": diag.get("alt_http_status"),
                 "raw_events_primary": diag.get("raw_events_primary"),

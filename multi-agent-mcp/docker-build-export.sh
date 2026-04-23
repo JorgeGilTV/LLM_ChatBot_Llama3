@@ -36,8 +36,12 @@ NC='\033[0m' # No Color
 
 # Configuration
 IMAGE_NAME="oneview-goc-ai"
-VERSION="3.2.10-mcp"
+VERSION="3.2.13-mcp"
 TAR_FILE="${IMAGE_NAME}_v${VERSION}.tar"
+# Imagen: por defecto linux/arm64 (Mac Apple Silicon; misma arquitectura que el host).
+# Mac Intel: BUILD_PLATFORM=linux/amd64 ./docker-build-export.sh
+# Linux x86_64 en la nube (EKS, etc.): BUILD_PLATFORM=linux/amd64 ./docker-build-export.sh
+BUILD_PLATFORM="${BUILD_PLATFORM:-linux/arm64}"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}OneView GOC AI - Docker Build & Export${NC}"
@@ -65,10 +69,8 @@ fi
 echo ""
 
 # Step 2: Build new image
-# linux/amd64: servidores Linux x86_64 (EKS, VM, bare metal). Si construyes en Apple Silicon sin esto,
-# la imagen puede ser arm64 y al desplegar verás "exec format error" o el contenedor no arranca.
-echo -e "${YELLOW}[2/4] Construyendo nueva imagen de Docker (platform linux/amd64)...${NC}"
-docker build --platform linux/amd64 -t ${IMAGE_NAME}:latest -t ${IMAGE_NAME}:${VERSION} .
+echo -e "${YELLOW}[2/4] Construyendo nueva imagen de Docker (platform ${BUILD_PLATFORM})...${NC}"
+docker build --platform "${BUILD_PLATFORM}" -t ${IMAGE_NAME}:latest -t ${IMAGE_NAME}:${VERSION} .
 echo -e "${GREEN}   ✓ Imagen construida exitosamente${NC}"
 echo ""
 

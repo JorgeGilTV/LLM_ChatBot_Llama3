@@ -549,6 +549,55 @@
         const WALL_REFRESH_MS = 180000;
         let wallTipGlobalsBound = false;
 
+        /** WebKit throws "The string did not match the expected pattern" on invalid href / new URL. */
+        function setSafeAnchorHref(anchor, href) {
+            if (!anchor) return;
+            if (!href || href === '#') {
+                anchor.href = '#';
+                return;
+            }
+            var s = String(href).trim();
+            if (!s) {
+                anchor.href = '#';
+                return;
+            }
+            try {
+                new URL(s, window.location.href);
+                anchor.href = s;
+            } catch (_e) {
+                anchor.href = '#';
+            }
+        }
+
+        function swUpdateHistoryForDdEnv(ddVal) {
+            function run(u) {
+                u.searchParams.set('dd_env', String(ddVal));
+                if (u.searchParams.get('dd_env') === 'production') {
+                    u.searchParams.delete('dd_env');
+                }
+                var next = u.pathname + (u.search || '');
+                history.replaceState(null, '', next);
+            }
+            try {
+                run(new URL(window.location.href));
+            } catch (_e) {
+                try {
+                    var sp = new URLSearchParams(window.location.search);
+                    if (String(ddVal) === 'production') {
+                        sp.delete('dd_env');
+                    } else {
+                        sp.set('dd_env', String(ddVal));
+                    }
+                    if (sp.get('dd_env') === 'production') {
+                        sp.delete('dd_env');
+                    }
+                    var q = sp.toString() ? '?' + sp.toString() : '';
+                    var p = (window.location.pathname && window.location.pathname.length) ? window.location.pathname : '/';
+                    history.replaceState(null, '', p + q);
+                } catch (_e2) { }
+            }
+        }
+
         function resetWallTipInlineStyles(tip) {
             tip.classList.remove('sm-hover-tip--visible');
             tip.style.removeProperty('display');
@@ -752,7 +801,7 @@
                 if (s.pd_incident_url) {
                     c = document.createElement('a');
                     c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    c.href = s.pd_incident_url;
+                    setSafeAnchorHref(c, s.pd_incident_url);
                     c.target = '_blank';
                     c.rel = 'noopener noreferrer';
                     c.textContent = 'PagerDuty';
@@ -766,7 +815,7 @@
             if (s.splunk_url) {
                 const sp = document.createElement('a');
                 sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
-                sp.href = s.splunk_url;
+                setSafeAnchorHref(sp, s.splunk_url);
                 sp.target = '_blank';
                 sp.rel = 'noopener noreferrer';
                 sp.textContent = 'Splunk';
@@ -789,7 +838,7 @@
                 if (s.dd_monitors_url) {
                     const cdd = document.createElement('a');
                     cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    cdd.href = s.dd_monitors_url;
+                    setSafeAnchorHref(cdd, s.dd_monitors_url);
                     cdd.target = '_blank';
                     cdd.rel = 'noopener noreferrer';
                     cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
@@ -928,7 +977,7 @@
                 wrap.className = 'sw-tile-wrap';
 
                 const el = document.createElement('a');
-                el.href = s.apm_url || '#';
+                setSafeAnchorHref(el, s.apm_url || '#');
                 el.target = '_blank';
                 el.rel = 'noopener';
                 el.setAttribute('title', nativeTitleSummary(s));
@@ -968,6 +1017,19 @@
             }
         }
 
+        var _swDidScrollToHash = false;
+        function swScrollToHashIfAny() {
+            if (_swDidScrollToHash) return;
+            const raw = (location.hash || '').replace(/^#/, '');
+            if (!raw) return;
+            const el = document.getElementById(raw);
+            if (!el) return;
+            _swDidScrollToHash = true;
+            requestAnimationFrame(function() {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+
         function renderWall(data) {
             const root = document.getElementById('sw-root');
             const loading = document.getElementById('sw-loading');
@@ -979,6 +1041,9 @@
             for (const g of groups) {
                 const section = document.createElement('section');
                 section.className = 'sw-group';
+                if (g.slug) {
+                    section.id = 'sw-group-' + String(g.slug).replace(/[^a-z0-9_-]/gi, '-');
+                }
 
                 const head = document.createElement('div');
                 head.className = 'sw-group-head';
@@ -1103,6 +1168,7 @@
                 root.appendChild(section);
             }
             bindWallTipGlobalHandlersOnce();
+            swScrollToHashIfAny();
         }
 
         const WALL_DATA_URL = {{ (wall_api|default('/api/statusmonitor/wall'))|tojson }};
@@ -1111,11 +1177,12 @@
             var a = document.getElementById('sw-datadog-software-link');
             var sel = document.getElementById('sw-apm-dd-env');
             if (!a || !sel) return;
-            var s = String(a.href || a.getAttribute('href') || '');
+            var s = String(a.getAttribute('href') || a.href || '').trim();
             if (!s) return;
-            a.href = /env=/i.test(s) ? s.replace(
+            var out = /env=/i.test(s) ? s.replace(
                 /env=[^&]*/i, 'env=' + encodeURIComponent(sel.value)
             ) : s;
+            setSafeAnchorHref(a, out);
         }
 
         async function loadWall(options) {
@@ -1175,13 +1242,7 @@
         if (_swApmEnv) {
             _swApmEnv.addEventListener('change', function() {
                 swApmUpdateDatadogLink();
-                var u = new URL(window.location.href);
-                u.searchParams.set('dd_env', _swApmEnv.value);
-                if (u.searchParams.get('dd_env') === 'production') {
-                    u.searchParams.delete('dd_env');
-                }
-                var qs = u.search || '';
-                history.replaceState(null, '', u.pathname + qs);
+                swUpdateHistoryForDdEnv(_swApmEnv.value);
                 loadWall({ forceRefresh: true });
             });
         }

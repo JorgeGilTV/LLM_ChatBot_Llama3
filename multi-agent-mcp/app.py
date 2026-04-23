@@ -385,35 +385,39 @@ def statuswall_preview_page():
 @flask_app.route('/apm-services')
 def apm_services_page():
     """
-    APM Status Wall: APM + PagerDuty for a chosen APM `env` tag
-    (production, goldendev, goldenqa, adt_prod, qa, samsung_prod: bundled lists). ?dd_env= or APM_STATUS_WALL_DD_ENV.
+    APM Status Wall: default `all` = every APM `env` as its own block; or one
+    (production, goldendev, goldenqa, adt_prod, qa, samsung_prod) via `?dd_env=…`.
     See SOFTWARE_CATALOG_* and lists/*_apm_services.txt.
     """
     from tools.status_monitor import normalize_software_catalog_wall_dd_env
     import re
 
-    q = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "").strip()
-    wall_dd_env = normalize_software_catalog_wall_dd_env(q or "production")
+    q = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "all").strip()
+    wall_dd_env = normalize_software_catalog_wall_dd_env(q)
+    # Datadog Software list uses one `env` tag; when showing all, link to a neutral default.
+    _dd_sw = "production" if wall_dd_env == "all" else wall_dd_env
     dd_base = (os.environ.get("DATADOG_APM_SOFTWARE_BASE") or "").strip()
     if not dd_base:
         datadog_software_href = (
-            f"https://arlo.datadoghq.com/software?env={wall_dd_env}&fromUser=true"
+            f"https://arlo.datadoghq.com/software?env={_dd_sw}&fromUser=true"
         )
     else:
         if re.search(r"[?&]env=", dd_base):
             datadog_software_href = re.sub(
-                r"env=[^&]*", f"env={wall_dd_env}", dd_base, count=1
+                r"env=[^&]*", f"env={_dd_sw}", dd_base, count=1
             )
         else:
             sep = "&" if "?" in dd_base else "?"
-            datadog_software_href = f"{dd_base}{sep}env={wall_dd_env}"
+            datadog_software_href = f"{dd_base}{sep}env={_dd_sw}"
             if "fromUser" not in datadog_software_href:
                 qm = "?" if "?" not in datadog_software_href else "&"
                 datadog_software_href = f"{datadog_software_href}{qm}fromUser=true"
-    _slack = (
-        f"APM Status Wall — {wall_dd_env}" if wall_dd_env != "production" else
-        "APM Status Wall — production"
-    )
+    if wall_dd_env == "all":
+        _slack = "APM Status Wall — all envs"
+    elif wall_dd_env != "production":
+        _slack = f"APM Status Wall — {wall_dd_env}"
+    else:
+        _slack = "APM Status Wall — production"
     return render_template(
         "statuswall.html",
         wall_title="APM Status Wall",
@@ -492,8 +496,8 @@ def api_statusmonitor_wall():
 @flask_app.route("/api/statusmonitor/software-catalog-wall", methods=["POST"])
 def api_statusmonitor_software_catalog_wall():
     """
-    JSON for /apm-services: APM Status Wall × env:production|goldendev|goldenqa|adt_prod|qa|samsung_prod; same
-    APM+PD rules as the main status wall. Body: dd_env (optional, default production).
+    JSON for /apm-services: APM Status Wall. Body: dd_env
+    = all (default) for every env, or one of production|goldendev|goldenqa|adt_prod|qa|samsung_prod.
     """
     try:
         from tools.status_monitor import (
@@ -508,7 +512,7 @@ def api_statusmonitor_software_catalog_wall():
         )
         raw_dd = data.get("dd_env") or data.get("ddEnv")
         dd_e = normalize_software_catalog_wall_dd_env(
-            (raw_dd if raw_dd is not None else "production")
+            (raw_dd if raw_dd is not None and str(raw_dd).strip() else None)
         )
         return jsonify(
             status_monitor_software_catalog_wall_data(

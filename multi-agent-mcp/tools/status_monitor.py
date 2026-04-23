@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Import metrics persistence
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from tools.metrics_persistence import (
     save_service_metrics,
@@ -139,6 +139,27 @@ def _sm_status_shows_issue_links(svc: dict) -> bool:
     if svc.get("high_latency"):
         return True
     return False
+
+
+def _sm_sanitize_href_for_wall(value: str | None) -> str | None:
+    """
+    PagerDuty / API sometimes returns newlines or junk in hrefs; WebKit can throw
+    (\"The string did not match the expected pattern\") on invalid href. Keep only
+    well-formed http(s) URLs.
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s or s == "#":
+        return None
+    s = "".join(ch for ch in s if ch not in "\r\n\0")
+    s = s.strip()
+    if not s:
+        return None
+    u = urlparse(s)
+    if u.scheme in ("http", "https") and u.netloc:
+        return s
+    return None
 
 
 def _dd_monitors_manage_url(service_name: str, environment: str, dd_site: str) -> str:
@@ -2771,6 +2792,16 @@ def _wall_serialize_status(
     if _sm_status_shows_issue_links(s):
         su = _sm_splunk_service_search_url(str(svc), max(1, min(int(timerange_hours), 168)))
         spl_url = su if su else None
+    if pd_u:
+        pd_u = _sm_sanitize_href_for_wall(pd_u) or None
+    if spl_url:
+        spl_url = _sm_sanitize_href_for_wall(spl_url) or None
+    ddm = (s.get("dd_monitors_url") or "").strip() or None
+    if not ddm:
+        b = _dd_monitors_manage_url(str(svc), str(env), dd_site)
+        ddm = b if b else None
+    if ddm:
+        ddm = _sm_sanitize_href_for_wall(ddm) or None
     return {
         "service": svc,
         "environment": env,
@@ -2790,9 +2821,7 @@ def _wall_serialize_status(
         "dd_monitor_alerts": list(s.get("dd_monitor_alerts") or [])[:32],
         "dd_monitor_alert_count": int(s.get("dd_monitor_alert_count") or 0)
         or len(s.get("dd_monitor_alerts") or []),
-        "dd_monitors_url": (s.get("dd_monitors_url") or "").strip()
-        or _dd_monitors_manage_url(str(svc), str(env), dd_site)
-        or None,
+        "dd_monitors_url": ddm,
         "status_reason": _wall_status_reason_plain(s),
         "eks_clusters": list(s.get("eks_clusters") or []),
         "p99_latency": s.get("p99_latency"),
@@ -2812,7 +2841,7 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
     unknown are omitted so the screen stays focused on live APM signal + issues.
     """
     global _wall_data_cache
-    cache_version = "wall_v16_dd_monitor_alerts"
+    cache_version = "wall_v17_sanitize_hrefs"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_wall_data_cache, cache_key, force_refresh)
     if hit is not None:
@@ -3060,13 +3089,40 @@ def _bundled_samsung_apm_path() -> str:
     )
 
 
+# APM Software Catalog /apm-services: "all" loads one group per environment (order preserved).
+SOFTWARE_CATALOG_WALL_APM_ENVS: tuple[str, ...] = (
+    "production",
+    "goldendev",
+    "goldenqa",
+    "adt_prod",
+    "qa",
+    "samsung_prod",
+)
+
+
 def normalize_software_catalog_wall_dd_env(raw: str | None) -> str:
     """
-    APM / Software UI env: production, goldendev, goldenqa, adt_prod, qa, or samsung_prod.
+    APM / Software UI env: "all" (all listed envs in one view), or production, goldendev, …, samsung_prod.
     Aliases: gqa, adt, env-qa, samsung. Other values fall back to production.
+    Unset / empty / missing defaults to "all" for the combined wall.
     """
-    s = (raw or "production").strip().lower()
-    if s in ("", "prod", "production"):
+    s = (raw or "").strip().lower()
+    if s in (
+        "all",
+        "*",
+        "todos",
+        "todos_los",
+        "todos_los_env",
+        "todos_los_envs",
+        "all_envs",
+        "all_env",
+        "every",
+        "todo",
+    ):
+        return "all"
+    if not s:
+        return "all"
+    if s in ("prod", "production"):
         return "production"
     if s in ("gdev", "goldendev", "golden-dev", "golden_dev"):
         return "goldendev"
@@ -3094,6 +3150,11 @@ def resolve_software_catalog_wall_service_names(
     → optional catalog API → ADT+GENERAL union.
     """
     _dd_env = normalize_software_catalog_wall_dd_env(dd_env)
+    if _dd_env == "all":
+        return (
+            [],
+            "invalid: use a concrete env, not 'all' (all is handled by the APM wall aggregator)",
+        )
 
     raw = (os.getenv("SOFTWARE_CATALOG_SERVICE_NAMES") or "").strip()
     if raw:
@@ -3346,25 +3407,16 @@ def resolve_software_catalog_wall_service_names(
     return fallback, "fallback_union"
 
 
-def status_monitor_software_catalog_wall_data(
-    timerange: int = 1, force_refresh: bool = False, dd_env: str = "production"
+def _software_catalog_wall_payload_for_single_env(
+    dde: str,
+    timerange: int,
+    force_refresh: bool,
+    pre_pd: tuple[dict, list] | None = None,
 ) -> dict:
     """
-    One wall section: all Software catalog services × env tag (default production;
-    also goldendev / goldenqa / adt_prod / qa / samsung_prod with bundled lists), same APM/PD rules as the main status wall
-    (get_service_health_status + PagerDuty correlation + EKS hints).
-    Inactive/unknown are returned as green \"low signal\" tile rows
-    (same JSON as main wall, separate columns).
+    One APM software-catalog wall response (one `groups` item). `dde` is never "all".
+    If `pre_pd` is (PagerDuty counts dict, incidents list), reuses that fetch (for all-env build).
     """
-    global _software_catalog_wall_cache
-    dde = normalize_software_catalog_wall_dd_env(dd_env)
-    cache_version = "sc_wall_v14_dd_monitor_alerts"
-    apm_bucket = _apm_status_wall_cache_bucket_secs()
-    cache_key = f"{cache_version}_{dde}_{timerange}_{int(time.time() // apm_bucket)}"
-    hit = _read_sm_mem_cache(_software_catalog_wall_cache, cache_key, force_refresh)
-    if hit is not None:
-        return dict(hit)
-
     dd_api_key = os.getenv("DATADOG_API_KEY")
     dd_app_key = os.getenv("DATADOG_APP_KEY")
     dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
@@ -3381,7 +3433,7 @@ def status_monitor_software_catalog_wall_data(
     if not services:
         return {
             "success": False,
-            "error": "No services resolved for software catalog wall",
+            "error": f"No services resolved for APM software catalog wall (env={dde})",
             "timerange": timerange,
             "dd_env": dde,
             "groups": [],
@@ -3398,15 +3450,18 @@ def status_monitor_software_catalog_wall_data(
     wall_mode = "samsung" if dde == "samsung_prod" else dde
 
     pd_api_key = os.getenv("PAGERDUTY_API_TOKEN")
-    _pd_c = {"triggered": 0, "acknowledged": 0, "resolved": 0}
-    pd_incidents: list = []
-    if pd_api_key:
-        try:
-            _pd_c, pd_incidents = get_pagerduty_status_counts(
-                pd_api_key, force_refresh
-            )
-        except Exception as e:
-            print(f"⚠️ Software catalog wall: PagerDuty fetch failed: {e}")
+    if pre_pd is not None:
+        _pd_c, pd_incidents = pre_pd
+    else:
+        _pd_c = {"triggered": 0, "acknowledged": 0, "resolved": 0}
+        pd_incidents: list = []
+        if pd_api_key:
+            try:
+                _pd_c, pd_incidents = get_pagerduty_status_counts(
+                    pd_api_key, force_refresh
+                )
+            except Exception as e:
+                print(f"⚠️ Software catalog wall: PagerDuty fetch failed: {e}")
 
     all_statuses = _sm_fetch_parallel_service_health(
         services,
@@ -3439,18 +3494,11 @@ def status_monitor_software_catalog_wall_data(
         eks_wall_cache: dict = {}
         _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache)
 
-    low_statuses = [
-        s
-        for s in all_statuses
-        if s.get("status") in ("inactive", "unknown")
-    ]
-    low_statuses.sort(key=lambda x: (x.get("service") or "").lower())
-
     h = sum(1 for s in statuses if s.get("status") == "healthy")
     w = sum(1 for s in statuses if s.get("status") == "warning")
     c = sum(1 for s in statuses if s.get("status") == "critical")
-    unk = n_unknown
-    inn = n_inactive
+    unk = 0
+    inn = 0
     if c > 0:
         overall = "critical"
     elif w > 0:
@@ -3475,25 +3523,6 @@ def status_monitor_software_catalog_wall_data(
             "services": ar_eu,
         },
     ]
-    low_ser = [
-        _wall_serialize_status(s, dd_site_ser, wall_mode, timerange)
-        for s in low_statuses
-    ]
-    lo_g, lo_eu = _wall_split_services_by_region(low_ser)
-    low_signal_region_columns = [
-        {
-            "key": "lo_global",
-            "label": "Baja señal (verde)",
-            "subtitle": "Oregon · inactive/unknown",
-            "services": lo_g,
-        },
-        {
-            "key": "lo_eu",
-            "label": "Baja señal (verde)",
-            "subtitle": "Ireland · inactive/unknown",
-            "services": lo_eu,
-        },
-    ]
     if _apm_status_wall_header_light():
         monitors = _wall_apm_header_badges_reuse_pd(_pd_c, pd_api_key)
     else:
@@ -3506,7 +3535,7 @@ def status_monitor_software_catalog_wall_data(
     _wall_slug = (
         f"software-catalog-{dde}" if dde != "production" else "software-catalog-production"
     )
-    out = {
+    return {
         "success": True,
         "timerange": timerange,
         "dd_env": dde,
@@ -3516,11 +3545,8 @@ def status_monitor_software_catalog_wall_data(
             "service_name_source": _source,
             "services_in_scope": len(services),
             "tiles_shown": len(statuses),
-            "low_signal_tiles": len(low_ser),
-            "not_shown": {
-                "inactive": n_inactive,
-                "unknown": n_unknown,
-            },
+            "dropped_inactive": n_inactive,
+            "dropped_unknown": n_unknown,
             "apm_environment": dde,
             "header_light": _apm_status_wall_header_light(),
             "eks_hints": _apm_status_wall_attach_eks(),
@@ -3541,11 +3567,130 @@ def status_monitor_software_catalog_wall_data(
                 },
                 "services": ser,
                 "region_columns": region_columns,
-                "low_signal_region_columns": low_signal_region_columns,
             }
         ],
     }
-    _write_sm_mem_cache(_software_catalog_wall_cache, cache_key, out)
+
+
+def _status_monitor_software_catalog_wall_data_all_envs(
+    timerange: int, force_refresh: bool
+) -> dict:
+    """
+    APM /apm-services: one `groups` section per env in SOFTWARE_CATALOG_WALL_APM_ENVS.
+    PagerDuty is fetched once and reused.
+    """
+    pre_pd: tuple[dict, list] | None = None
+    pd_api_key = os.getenv("PAGERDUTY_API_TOKEN")
+    if pd_api_key:
+        try:
+            pre_pd = get_pagerduty_status_counts(pd_api_key, force_refresh)
+        except Exception as e:
+            print(f"⚠️ Software catalog wall (all): PagerDuty fetch failed: {e}")
+
+    groups: list = []
+    per_env_sources: list = []
+    tot_in = 0
+    tot_ti = 0
+    tot_di = 0
+    tot_du = 0
+    monitors: dict = {}
+
+    with ThreadPoolExecutor(
+        max_workers=max(1, min(6, len(SOFTWARE_CATALOG_WALL_APM_ENVS)))
+    ) as ex:
+        results: list[dict] = list(
+            ex.map(
+                lambda d: _software_catalog_wall_payload_for_single_env(
+                    d, timerange, force_refresh, pre_pd=pre_pd
+                ),
+                list(SOFTWARE_CATALOG_WALL_APM_ENVS),
+            )
+        )
+    for i, dde in enumerate(SOFTWARE_CATALOG_WALL_APM_ENVS):
+        part = results[i]
+        if not part.get("success"):
+            print(
+                f"⚠️ APM wall (all envs): {dde} — {part.get('error', 'no group')}, skipping"
+            )
+            continue
+        if not monitors and part.get("monitors"):
+            monitors = part["monitors"]
+        g = part.get("groups") or []
+        if g:
+            groups.append(g[0])
+        s = part.get("source") or {}
+        per_env_sources.append(
+            {
+                "apm_environment": dde,
+                "service_name_source": s.get("service_name_source"),
+                "services_in_scope": s.get("services_in_scope", 0),
+                "tiles_shown": s.get("tiles_shown", 0),
+                "dropped_inactive": s.get("dropped_inactive", 0),
+                "dropped_unknown": s.get("dropped_unknown", 0),
+            }
+        )
+        tot_in += int(s.get("services_in_scope") or 0)
+        tot_ti += int(s.get("tiles_shown") or 0)
+        tot_di += int(s.get("dropped_inactive") or 0)
+        tot_du += int(s.get("dropped_unknown") or 0)
+
+    if not groups:
+        return {
+            "success": False,
+            "error": "No APM data for any environment (check bundled lists, Datadog keys, or pick one env in the menu).",
+            "timerange": timerange,
+            "dd_env": "all",
+            "groups": [],
+        }
+
+    return {
+        "success": True,
+        "timerange": timerange,
+        "dd_env": "all",
+        "monitors": monitors,
+        "source": {
+            "kind": "apm_status_wall_all",
+            "aggregated": True,
+            "environments": [g.get("mode") for g in groups if isinstance(g, dict)],
+            "services_in_scope": tot_in,
+            "tiles_shown": tot_ti,
+            "dropped_inactive": tot_di,
+            "dropped_unknown": tot_du,
+            "per_environment": per_env_sources,
+            "header_light": _apm_status_wall_header_light(),
+            "eks_hints": _apm_status_wall_attach_eks(),
+        },
+        "groups": groups,
+    }
+
+
+def status_monitor_software_catalog_wall_data(
+    timerange: int = 1, force_refresh: bool = False, dd_env: str = "all"
+) -> dict:
+    """
+    APM /apm-services: default `all` = one `groups` section per env; or a single `dd_env`
+    (production, goldendev, …) for a focused list only.
+    Same APM+PD+health rules. Inactive/unknown omitted.
+    """
+    global _software_catalog_wall_cache
+    dde = normalize_software_catalog_wall_dd_env(dd_env)
+    cache_version = "sc_wall_v18_all_envs_default"
+    apm_bucket = _apm_status_wall_cache_bucket_secs()
+    cache_key = f"{cache_version}_{dde}_{timerange}_{int(time.time() // apm_bucket)}"
+    hit = _read_sm_mem_cache(_software_catalog_wall_cache, cache_key, force_refresh)
+    if hit is not None:
+        return dict(hit)
+
+    if dde == "all":
+        out = _status_monitor_software_catalog_wall_data_all_envs(
+            timerange, force_refresh
+        )
+    else:
+        out = _software_catalog_wall_payload_for_single_env(
+            dde, timerange, force_refresh, pre_pd=None
+        )
+    if out.get("success") is not False and isinstance(out, dict) and "groups" in out:
+        _write_sm_mem_cache(_software_catalog_wall_cache, cache_key, out)
     return dict(out)
 
 

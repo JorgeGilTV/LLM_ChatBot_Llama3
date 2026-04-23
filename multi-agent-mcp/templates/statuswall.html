@@ -427,29 +427,6 @@
             text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
         /* Inactive/unknown (Software catalog wall) — same tile layout, green emphasis */
-        .sw-tile--low-signal {
-            border: 1px solid #4ade80;
-            background: linear-gradient(168deg, #d1fae5 0%, #a7f3d0 45%, #6ee7b7 100%);
-            box-shadow: 0 2px 8px rgba(20, 83, 45, 0.18);
-        }
-        .sw-tile--low-signal .sw-tile-icon {
-            color: #166534;
-            text-shadow: 0 1px 0 rgba(255,255,255,0.5);
-        }
-        .sw-tile--low-signal .sw-tile-name-compact {
-            color: #14532d;
-        }
-        .sw-low-signal-block {
-            margin-top: 10px;
-            padding-top: 8px;
-            border-top: 1px solid #334155;
-        }
-        .sw-low-signal-legend {
-            font-size: 12px;
-            color: #86efac;
-            font-weight: 700;
-            margin: 0 0 8px 2px;
-        }
         .sw-tile-icon {
             font-size: 13px;
             line-height: 1;
@@ -512,13 +489,14 @@
             </select>
             {% if wall_show_apm_env|default(false) %}
             <label for="sw-apm-dd-env" style="margin-left:10px">APM env</label>
-            <select id="sw-apm-dd-env" title="Datadog APM env tag">
-                <option value="production"{% if (wall_dd_env|default('production')) == 'production' %} selected{% endif %}>production</option>
-                <option value="goldendev"{% if (wall_dd_env|default('production')) == 'goldendev' %} selected{% endif %}>goldendev</option>
-                <option value="goldenqa"{% if (wall_dd_env|default('production')) == 'goldenqa' %} selected{% endif %}>goldenqa</option>
-                <option value="adt_prod"{% if (wall_dd_env|default('production')) == 'adt_prod' %} selected{% endif %}>ADT (adt_prod)</option>
-                <option value="qa"{% if (wall_dd_env|default('production')) == 'qa' %} selected{% endif %}>qa</option>
-                <option value="samsung_prod"{% if (wall_dd_env|default('production')) == 'samsung_prod' %} selected{% endif %}>Samsung (samsung_prod)</option>
+            <select id="sw-apm-dd-env" title="All envs, or a single APM tag">
+                <option value="all"{% if (wall_dd_env|default('all')) == 'all' %} selected{% endif %}>All (all envs)</option>
+                <option value="production"{% if (wall_dd_env|default('all')) == 'production' %} selected{% endif %}>production</option>
+                <option value="goldendev"{% if (wall_dd_env|default('all')) == 'goldendev' %} selected{% endif %}>goldendev</option>
+                <option value="goldenqa"{% if (wall_dd_env|default('all')) == 'goldenqa' %} selected{% endif %}>goldenqa</option>
+                <option value="adt_prod"{% if (wall_dd_env|default('all')) == 'adt_prod' %} selected{% endif %}>ADT (adt_prod)</option>
+                <option value="qa"{% if (wall_dd_env|default('all')) == 'qa' %} selected{% endif %}>qa</option>
+                <option value="samsung_prod"{% if (wall_dd_env|default('all')) == 'samsung_prod' %} selected{% endif %}>Samsung (samsung_prod)</option>
             </select>
             {% endif %}
             <button type="button" id="sw-refresh">Refresh</button>
@@ -546,34 +524,49 @@
     <script src="/static/js/samsung_status_widget.js?v=20260430-board-history"></script>
     <script src="/static/js/adt_status_widget.js?v=20260430-board-history"></script>
     <script>
-        const WALL_REFRESH_MS = 180000;
+        const WALL_REFRESH_MS = 300000; /* 5 min */
         let wallTipGlobalsBound = false;
 
-        /** WebKit throws "The string did not match the expected pattern" on invalid href / new URL. */
+        /** WebKit: invalid href or URL can throw (\"The string did not match the expected pattern\"). */
         function setSafeAnchorHref(anchor, href) {
             if (!anchor) return;
             if (!href || href === '#') {
                 anchor.href = '#';
                 return;
             }
-            var s = String(href).trim();
+            var s = String(href).replace(/[\r\n\0\u2028\u2029]/g, '').trim();
             if (!s) {
                 anchor.href = '#';
                 return;
             }
             try {
-                new URL(s, window.location.href);
                 anchor.href = s;
             } catch (_e) {
-                anchor.href = '#';
+                try {
+                    var u = new URL(s, document.baseURI || window.location.href);
+                    anchor.href = u.href;
+                } catch (_e2) {
+                    anchor.href = '#';
+                }
             }
         }
 
+        function swSanitizeAttrText(t) {
+            if (t == null) return '';
+            return String(t).replace(/\0/g, '');
+        }
+
         function swUpdateHistoryForDdEnv(ddVal) {
+            var v = String(ddVal);
             function run(u) {
-                u.searchParams.set('dd_env', String(ddVal));
-                if (u.searchParams.get('dd_env') === 'production') {
-                    u.searchParams.delete('dd_env');
+                u.searchParams.delete('dd_env');
+                if (v === 'all') {
+                    /* default: no ?dd_env (server treats as all) */
+                } else {
+                    u.searchParams.set('dd_env', v);
+                    if (u.searchParams.get('dd_env') === 'production') {
+                        u.searchParams.delete('dd_env');
+                    }
                 }
                 var next = u.pathname + (u.search || '');
                 history.replaceState(null, '', next);
@@ -583,10 +576,9 @@
             } catch (_e) {
                 try {
                     var sp = new URLSearchParams(window.location.search);
-                    if (String(ddVal) === 'production') {
-                        sp.delete('dd_env');
-                    } else {
-                        sp.set('dd_env', String(ddVal));
+                    sp.delete('dd_env');
+                    if (v !== 'all') {
+                        sp.set('dd_env', v);
                     }
                     if (sp.get('dd_env') === 'production') {
                         sp.delete('dd_env');
@@ -960,9 +952,7 @@
             head.appendChild(cluster);
         }
 
-        function appendTilesToGrid(grid, svcs, opts) {
-            opts = opts || {};
-            const lowSignal = opts.lowSignal === true;
+        function appendTilesToGrid(grid, svcs) {
             if (!svcs || !svcs.length) {
                 const empty = document.createElement('div');
                 empty.className = 'sw-meta';
@@ -980,11 +970,9 @@
                 setSafeAnchorHref(el, s.apm_url || '#');
                 el.target = '_blank';
                 el.rel = 'noopener';
-                el.setAttribute('title', nativeTitleSummary(s));
+                el.setAttribute('title', swSanitizeAttrText(nativeTitleSummary(s)));
                 el.className = 'sw-tile';
-                if (lowSignal) {
-                    el.classList.add('sw-tile--low-signal');
-                } else if (st === 'critical') {
+                if (st === 'critical') {
                     el.classList.add('sw-tile--crit', 'sw-tile--alert');
                 } else if (st === 'warning') {
                     el.classList.add('sw-tile--warn', 'sw-tile--alert');
@@ -996,9 +984,7 @@
 
                 const icon = document.createElement('div');
                 icon.className = 'sw-tile-icon';
-                if (lowSignal) {
-                    icon.textContent = (st === 'unknown') ? '?' : '○';
-                } else if (st === 'critical') icon.textContent = '✕';
+                if (st === 'critical') icon.textContent = '✕';
                 else if (st === 'warning') icon.textContent = '⚠';
                 else if (st === 'healthy') icon.textContent = '✓';
                 else if (st === 'inactive') icon.textContent = '○';
@@ -1084,21 +1070,13 @@
                 regionWrap.className = 'sw-region-grid';
                 const allSvcs = g.services || [];
                 const hasAny = allSvcs.length > 0;
-                const lowCols = g.low_signal_region_columns || null;
-                let hasLow = false;
-                if (lowCols) {
-                    for (const c of lowCols) {
-                        if ((c.services || []).length) { hasLow = true; break; }
-                    }
-                }
-                if (!hasAny && !hasLow) {
+                if (!hasAny) {
                     const empty = document.createElement('div');
                     empty.className = 'sw-meta';
                     empty.style.gridColumn = '1 / -1';
-                    empty.textContent = 'No services to display for this range.';
+                    empty.textContent = 'No services to display for this range (inactive/unknown are omitted).';
                     regionWrap.appendChild(empty);
                 } else {
-                    if (hasAny) {
                     let columns = g.region_columns;
                     if (!columns || !columns.length) {
                         columns = buildRegionColumnsFromServices(allSvcs);
@@ -1123,46 +1101,6 @@
                         colEl.appendChild(grid);
                         regionWrap.appendChild(colEl);
                     }
-                    } else {
-                        const note = document.createElement('div');
-                        note.className = 'sw-meta';
-                        note.style.cssText = 'grid-column: 1 / -1; margin-bottom: 6px;';
-                        note.textContent = 'No services with healthy / warning / critical in this window — only low-signal (green) tiles below.';
-                        regionWrap.appendChild(note);
-                    }
-                    if (hasLow) {
-                        const sub = document.createElement('div');
-                        sub.className = 'sw-low-signal-block';
-                        sub.style.cssText = 'grid-column: 1 / -1; width: 100%;';
-                        const leg = document.createElement('p');
-                        leg.className = 'sw-low-signal-legend';
-                        leg.textContent = 'Inactive / unknown in this time range (green tiles, still linked to APM):';
-                        sub.appendChild(leg);
-                        const lowGridWrap = document.createElement('div');
-                        lowGridWrap.className = 'sw-region-grid';
-                        for (const col of (lowCols || [])) {
-                            const colEl = document.createElement('div');
-                            colEl.className = 'sw-region-col';
-                            const hrow = document.createElement('div');
-                            hrow.className = 'sw-region-col-head';
-                            const ct = document.createElement('div');
-                            ct.className = 'sw-region-col-title';
-                            ct.textContent = col.label || '';
-                            const ch = document.createElement('span');
-                            ch.className = 'sw-region-col-hint';
-                            ch.textContent = col.subtitle || '';
-                            hrow.appendChild(ct);
-                            hrow.appendChild(ch);
-                            colEl.appendChild(hrow);
-                            const grid = document.createElement('div');
-                            grid.className = 'sw-tiles sw-tiles--region';
-                            appendTilesToGrid(grid, col.services || [], { lowSignal: true });
-                            colEl.appendChild(grid);
-                            lowGridWrap.appendChild(colEl);
-                        }
-                        sub.appendChild(lowGridWrap);
-                        regionWrap.appendChild(sub);
-                    }
                 }
                 section.appendChild(regionWrap);
                 root.appendChild(section);
@@ -1179,10 +1117,29 @@
             if (!a || !sel) return;
             var s = String(a.getAttribute('href') || a.href || '').trim();
             if (!s) return;
+            var v = String(sel.value || 'all');
+            var envTag = v === 'all' ? 'production' : v;
             var out = /env=/i.test(s) ? s.replace(
-                /env=[^&]*/i, 'env=' + encodeURIComponent(sel.value)
+                /env=[^&]*/i, 'env=' + encodeURIComponent(envTag)
             ) : s;
             setSafeAnchorHref(a, out);
+        }
+
+        function swRunExternalStatusWidgets() {
+            try {
+                if (typeof loadSamsungStatusWidget === 'function') {
+                    loadSamsungStatusWidget(false);
+                }
+            } catch (e) {
+                console.error('Status wall: Samsung widget', e);
+            }
+            try {
+                if (typeof loadAdtStatusWidget === 'function') {
+                    loadAdtStatusWidget(false);
+                }
+            } catch (e) {
+                console.error('Status wall: ADT widget', e);
+            }
         }
 
         async function loadWall(options) {
@@ -1203,30 +1160,46 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
                 });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'Request failed');
-                renderWall(data);
+                const text = await res.text();
+                let data = null;
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (pe) {
+                    const hint = (text || '').slice(0, 200);
+                    throw new Error(
+                        (res.ok ? 'Invalid JSON from server' : 'HTTP ' + res.status) + (hint ? ' — ' + hint : '')
+                    );
+                }
+                if (!res.ok) {
+                    throw new Error(
+                        (data && data.error) ? String(data.error) : 'HTTP ' + res.status + (text ? ' — ' + text.slice(0, 200) : '')
+                    );
+                }
+                if (data == null) {
+                    throw new Error('Empty response');
+                }
+                if (data.success === false) {
+                    throw new Error((data && data.error) ? String(data.error) : 'Request failed');
+                }
+                try {
+                    renderWall(data);
+                } catch (re) {
+                    console.error('Status wall render', re);
+                    throw new Error(re && re.message ? re.message : 'Render failed');
+                }
                 const t = new Date().toLocaleTimeString();
                 let line = 'Updated ' + t + ' · range ' + (data.timerange || timerange) + 'h';
                 if (data.source && (data.source.services_in_scope != null)) {
                     line += ' · ' + data.source.services_in_scope + ' services in scope';
                     if (data.source.tiles_shown != null) {
-                        line += ' · ' + data.source.tiles_shown + ' primary tiles';
-                    }
-                    if (data.source.low_signal_tiles != null && data.source.low_signal_tiles > 0) {
-                        line += ' · ' + data.source.low_signal_tiles + ' green (inactive/unknown)';
+                        line += ' · ' + data.source.tiles_shown + ' operational tiles';
                     }
                 }
                 if (ddEl && (data.dd_env != null) && (data.success !== false)) {
                     line += ' · env ' + data.dd_env;
                 }
-                statusEl.textContent = line + ' · auto-refresh 3 min';
-                if (typeof loadSamsungStatusWidget === 'function') {
-                    loadSamsungStatusWidget(false);
-                }
-                if (typeof loadAdtStatusWidget === 'function') {
-                    loadAdtStatusWidget(false);
-                }
+                statusEl.textContent = line + ' · auto-refresh 5 min';
+                setTimeout(swRunExternalStatusWidgets, 0);
             } catch (e) {
                 statusEl.classList.add('err');
                 statusEl.textContent = 'Error: ' + (e.message || e);

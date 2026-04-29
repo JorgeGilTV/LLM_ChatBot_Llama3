@@ -477,6 +477,24 @@ docker load -i oneview-goc-ai_v3.2.7-mcp.tar
 docker run -d --name goc-ai -p 8080:8080 oneview-goc-ai:latest
 ```
 
+## ⏱️ 504 / Status wall y APM Status Wall (`/statuswall`, `/apm-services`)
+
+Esas rutas hacen **POST** a `/api/statusmonitor/wall` o `/api/statusmonitor/software-catalog-wall` y el backend puede tardar **varios minutos** (muchas consultas a Datadog en paralelo). El **HTML 504** casi siempre lo genera un **proxy o balanceador delante** del contenedor, no Flask: el cliente corta a ~**60 s** mientras Gunicorn sigue trabajando.
+
+**Qué hacer**
+
+1. **Gunicorn** (si usas `gunicorn -c gunicorn_config.py`): el timeout del worker es configurable con **`GUNICORN_TIMEOUT`** (por defecto en el repo: **600 s**). Debe ser **≤** el del balanceador; si Gunicorn corta antes que el ALB, verás 502; si el ALB corta antes, **504**.
+2. **Application Load Balancer (AWS)**: sube el **Idle timeout** del listener (p. ej. a **600 s**). El valor por defecto **60 s** provoca 504 en `/api/statusmonitor/wall` y cargas grandes de Production.
+3. **Nginx** (u otro reverse proxy), por ejemplo:
+   - `proxy_read_timeout 600s;`
+   - `proxy_send_timeout 600s;`
+   - `fastcgi_read_timeout` si aplica
+4. **Reducir trabajo del Status wall** (sin tocar el ALB): `STATUS_MONITOR_WALL_ATTACH_EKS=0` omite consultas EKS por tile en `/statuswall` (menos llamadas a Datadog). Opcional: `APM_STATUS_WALL_ATTACH_EKS=0` afecta también el wall clásico cuando la variable específica no está definida (ver `.env.example`).
+5. **Reducir trabajo del dashboard por entorno** (`/statusmonitor/production`, etc.): `STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0` omite las búsquedas EKS por servicio en la página del Status Monitor (misma idea que el wall; los tooltips pueden no mostrar `kube_cluster_name`).
+6. **Solo prueba local** con `python app.py`: no hay proxy; si aun así falla, el cuello de botella es otro (red a Datadog, credenciales, etc.).
+
+Variables útiles: `GUNICORN_TIMEOUT=600`, `STATUS_MONITOR_WALL_ATTACH_EKS`, `STATUS_MONITOR_DASHBOARD_ATTACH_EKS`, `WEB_CONCURRENCY` (ver `gunicorn_config.py`).
+
 ## 📝 Notas
 
 - La base de datos SQLite se guarda en `/app/data` dentro del contenedor

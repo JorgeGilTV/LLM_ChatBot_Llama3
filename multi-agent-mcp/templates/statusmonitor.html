@@ -671,14 +671,12 @@
         </div>
         
         <div class="auto-refresh-info slack-exclude">
-            ⏰ Auto-refresh: environment hub every 5 min · full dashboard every 3 min · session cache reuses recent API data when you switch pages
+            ⏰ Auto-refresh: environment hub &amp; full dashboard every 6 min · session cache reuses recent API data when you switch pages
         </div>
     </div>
     
     <script src="/static/js/session_data_cache.js?v=20260328"></script>
     <script src="/static/js/slack_share.js?v=20260326-slack-en-blocks"></script>
-    <script src="/static/js/samsung_status_widget.js?v=20260430-board-history"></script>
-    <script src="/static/js/adt_status_widget.js?v=20260430-board-history"></script>
     <script>
         window.sendStatusMonitorToSlack = function () {
             if (typeof SlackShare === 'undefined') {
@@ -704,8 +702,8 @@
     </script>
     <script>
         let autoRefreshInterval = null;
-        const SM_HUB_SUMMARY_TTL_MS = 270000;
-        const SM_DASHBOARD_TTL_MS = 170000;
+        const SM_HUB_SUMMARY_TTL_MS = 350000; /* just under 6 min session cache */
+        const SM_DASHBOARD_TTL_MS = 350000;
 
         function smDashboardCacheKey(env, tr) {
             return 'sm_dashboard_' + (env == null || env === undefined ? 'null' : String(env)) + '_' + tr;
@@ -866,6 +864,20 @@
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/"/g, '&quot;');
+        }
+
+        /** Same idea as _sm_sanitize_href_for_wall (Python): bad URLs throw in WebKit on .href = … */
+        function smSafeHttpHref(href) {
+            if (href == null || href === '') return null;
+            var s = String(href).replace(/[\r\n\0\u2028\u2029]/g, '').trim();
+            if (!s || s === '#') return null;
+            try {
+                var u = new URL(s);
+                if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+                return u.href;
+            } catch (_e) {
+                return null;
+            }
         }
 
         let smHoverGlobalsBound = false;
@@ -1039,10 +1051,11 @@
                 chips.className = 'sm-hover-tip-chips';
                 if (d.pd_incident) {
                     let c;
-                    if (d.pd_incident_url) {
+                    const pdu = smSafeHttpHref(d.pd_incident_url);
+                    if (pdu) {
                         c = document.createElement('a');
                         c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                        c.href = d.pd_incident_url;
+                        c.href = pdu;
                         c.target = '_blank';
                         c.rel = 'noopener noreferrer';
                         c.textContent = 'PagerDuty';
@@ -1053,10 +1066,11 @@
                     }
                     chips.appendChild(c);
                 }
-                if (d.splunk_url) {
+                const splH = smSafeHttpHref(d.splunk_url);
+                if (splH) {
                     const sp = document.createElement('a');
                     sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
-                    sp.href = d.splunk_url;
+                    sp.href = splH;
                     sp.target = '_blank';
                     sp.rel = 'noopener noreferrer';
                     sp.textContent = 'Splunk';
@@ -1076,10 +1090,11 @@
                 }
                 const ddc2 = d.dd_monitor_alert_count != null ? Number(d.dd_monitor_alert_count) : 0;
                 if (ddc2 > 0) {
-                    if (d.dd_monitors_url) {
+                    const ddmH = smSafeHttpHref(d.dd_monitors_url);
+                    if (ddmH) {
                         const cdd = document.createElement('a');
                         cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                        cdd.href = d.dd_monitors_url;
+                        cdd.href = ddmH;
                         cdd.target = '_blank';
                         cdd.rel = 'noopener noreferrer';
                         cdd.textContent = ddc2 === 1 ? '1 DD monitor (Alert)' : ddc2 + ' DD monitors (Alert)';
@@ -1201,15 +1216,19 @@
         function initSmHoverTips(root) {
             if (!root) return;
             root.querySelectorAll('[data-sm-hover]').forEach(function(wrap) {
-                wrap.querySelectorAll('.sm-hover-tip').forEach(function(t) {
-                    t.remove();
-                });
-                const raw = wrap.getAttribute('data-sm-hover');
-                if (!raw) return;
-                const d = parseDataSmHover(raw);
-                if (!d) return;
-                wrap.appendChild(buildSmHoverTipFromData(d));
-                attachSmHoverBehavior(wrap);
+                try {
+                    wrap.querySelectorAll('.sm-hover-tip').forEach(function(t) {
+                        t.remove();
+                    });
+                    const raw = wrap.getAttribute('data-sm-hover');
+                    if (!raw) return;
+                    const d = parseDataSmHover(raw);
+                    if (!d) return;
+                    wrap.appendChild(buildSmHoverTipFromData(d));
+                    attachSmHoverBehavior(wrap);
+                } catch (err) {
+                    console.warn('Status monitor hover tip skipped:', err);
+                }
             });
             bindSmHoverGlobalHandlersOnce();
         }
@@ -1315,50 +1334,6 @@
                 });
         }
 
-        function loadSmHubSamsung() {
-            const slot = document.getElementById('sm-hub-samsung-slot');
-            if (!slot) {
-                return;
-            }
-            slot.innerHTML =
-                '<div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">' +
-                '<div style="margin-bottom:12px;"><h3 style="margin:0;font-size:15px;font-weight:700;color:#0c4a6e;">📱 Samsung</h3></div>' +
-                '<div id="ss-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">' +
-                '<div style="text-align:center;flex:1;"><div id="ss-triggered-count" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Triggered</div></div>' +
-                '<div style="text-align:center;flex:1;"><div id="ss-ack-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Ack</div></div>' +
-                '<div style="text-align:center;flex:1;"><div id="ss-resolved-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Resolved</div></div></div>' +
-                '<div id="ss-board-links" style="font-size:11px;color:#64748b;margin:10px 0;line-height:1.4;padding:6px 8px;border-radius:6px;background:#f0f9ff;border:1px solid #bae6fd;">Loading…</div>' +
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
-                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🔴 Active</h4><ul id="ss-active" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div>' +
-                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🟢 Resolved</h4><ul id="ss-resolved" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div></div>' +
-                '<div style="margin-top:8px;font-size:10px;color:#64748b;text-align:center;"><span id="ss-time">Last updated: --:--:--</span></div></div>';
-            if (typeof loadSamsungStatusWidget === 'function') {
-                loadSamsungStatusWidget(false);
-            }
-        }
-
-        function loadSmHubAdt() {
-            const slot = document.getElementById('sm-hub-adt-slot');
-            if (!slot) {
-                return;
-            }
-            slot.innerHTML =
-                '<div style="background:#fff;padding:14px;border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);">' +
-                '<div style="margin-bottom:12px;"><h3 style="margin:0;font-size:15px;font-weight:700;color:#3730a3;">🏠 ADT</h3></div>' +
-                '<div id="adt-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">' +
-                '<div style="text-align:center;flex:1;"><div id="adt-triggered-count" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Triggered</div></div>' +
-                '<div style="text-align:center;flex:1;"><div id="adt-ack-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Ack</div></div>' +
-                '<div style="text-align:center;flex:1;"><div id="adt-resolved-count-number" style="font-size:24px;font-weight:700;color:#fff;">0</div><div style="font-size:10px;color:rgba(255,255,255,0.9);font-weight:600;">Resolved</div></div></div>' +
-                '<div id="adt-board-links" style="font-size:11px;color:#64748b;margin:10px 0;line-height:1.4;padding:6px 8px;border-radius:6px;background:#eef2ff;border:1px solid #c7d2fe;">Loading…</div>' +
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
-                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🔴 Active</h4><ul id="adt-active" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div>' +
-                '<div><h4 style="font-size:12px;margin:0 0 6px 0;color:#64748b;font-weight:700;">🟢 Resolved</h4><ul id="adt-resolved" style="list-style:none;padding:0;margin:0;font-size:11px;max-height:160px;overflow-y:auto;"><li style="padding:6px;color:#999;background:#f8fafc;border-radius:4px;">Loading…</li></ul></div></div>' +
-                '<div style="margin-top:8px;font-size:10px;color:#64748b;text-align:center;"><span id="adt-time">Last updated: --:--:--</span></div></div>';
-            if (typeof loadAdtStatusWidget === 'function') {
-                loadAdtStatusWidget(false);
-            }
-        }
-
         function applyHubSummaryData(data) {
             const dashboard = document.getElementById('dashboard');
             if (data.success === false || (data.error && !data.environments)) {
@@ -1398,7 +1373,8 @@
                             '<span class="sm-hub-svc-st">' + escHubText(r.status) + '</span></div>';
                     }).join('') + '</div>';
                 }
-                const cardHtml = '<a class="sm-hub-card ' + cls + '" href="' + escHubText(e.href) + '">' +
+                const hubHref = smSafeHttpHref(e.href) || '#';
+                const cardHtml = '<a class="sm-hub-card ' + cls + '" href="' + escHubText(hubHref) + '">' +
                     '<div class="sm-hub-card-title">' + escHubText(e.label) + '</div>' +
                     ambRow +
                     '<div class="sm-hub-stats">' +
@@ -1439,14 +1415,10 @@
             dashboard.innerHTML =
                 '<div class="sm-hub-panel">' +
                 '<div id="sm-hub-splunk-slot" style="margin-bottom:16px;"></div>' +
-                '<div id="sm-hub-samsung-slot" style="margin-bottom:16px;"></div>' +
-                '<div id="sm-hub-adt-slot" style="margin-bottom:16px;"></div>' +
                 '<h2>Environment status</h2>' +
                 '<div class="sm-hub-sub">Datadog APM by environment. Each card: <strong>traffic light</strong> = overall APM status; <strong>monitors in Alert</strong> = total Datadog <code>status:alert</code> (service+env) across listed services. Same rules in drill-down: warning &gt;1% error, critical &gt;5%. <strong>Operational</strong> = healthy + warning + critical. <strong>Configured</strong> = all services in the list.</div>' +
                 '<div class="sm-hub-grid">' + cards + '</div></div>';
             loadSmHubSplunk();
-            loadSmHubSamsung();
-            loadSmHubAdt();
             initSmHoverTips(dashboard);
         }
 
@@ -1483,7 +1455,22 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ timerange: timerange, force_refresh: forceRefresh })
             })
-            .then(response => response.json())
+            .then(async function(response) {
+                const text = await response.text();
+                let data = {};
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (parseErr) {
+                    throw new Error(
+                        (response.status === 504 ? 'HTTP 504 Gateway Timeout — ' : 'HTTP ' + response.status + ' — ') +
+                            'invalid JSON' + (text ? ': ' + text.slice(0, 160) : '')
+                    );
+                }
+                if (!response.ok) {
+                    throw new Error((data && data.error) ? String(data.error) : ('HTTP ' + response.status));
+                }
+                return data;
+            })
             .then(data => {
                 if (!silentRefresh) {
                     loading.classList.remove('show');
@@ -1498,6 +1485,11 @@
                     loading.classList.remove('show');
                 }
                 console.error('Hub load error:', error);
+                const dash = document.getElementById('dashboard');
+                if (dash) {
+                    dash.innerHTML = '<div class="sm-hub-panel"><p style="color:#b91c1c;font-weight:600;">Error loading hub: ' +
+                        escHubText(error.message || String(error)) + '</p></div>';
+                }
             });
         }
 
@@ -1608,7 +1600,26 @@
                     force_refresh: forceRefresh
                 })
             })
-            .then(response => response.json())
+            .then(async function(response) {
+                const text = await response.text();
+                let data = {};
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (parseErr) {
+                    throw new Error(
+                        (response.status === 504 ? 'HTTP 504 Gateway Timeout — ' : 'HTTP ' + response.status + ' — ') +
+                            'invalid JSON (proxy timeout or HTML error page)' +
+                            (text ? ': ' + text.slice(0, 180) : '')
+                    );
+                }
+                if (!response.ok || data.success === false) {
+                    throw new Error((data && data.error) ? String(data.error) : ('HTTP ' + response.status));
+                }
+                if (!data.html || typeof data.html !== 'string') {
+                    throw new Error((data && data.error) ? String(data.error) : 'Empty dashboard HTML from server');
+                }
+                return data;
+            })
             .then(data => {
                 if (!silentRefresh) {
                     loading.classList.remove('show');
@@ -1616,20 +1627,27 @@
                 if (C && data.success && data.html) {
                     C.set(dck, { success: true, html: data.html }, SM_DASHBOARD_TTL_MS);
                 }
-                if (data.html) {
-                    applyDashboardHtml(data.html);
-                }
+                applyDashboardHtml(data.html);
             })
             .catch(error => {
                 if (!silentRefresh) {
                     loading.classList.remove('show');
                 }
                 console.error('Dashboard load error:', error);
+                const dash = document.getElementById('dashboard');
+                if (dash) {
+                    dash.innerHTML =
+                        '<div style="padding:28px 24px;max-width:720px;margin:0 auto;">' +
+                        '<p style="color:#b91c1c;font-weight:700;font-size:15px;margin:0 0 10px 0;">Status Monitor failed to load</p>' +
+                        '<p style="color:#475569;font-size:13px;line-height:1.5;margin:0;">' + escHubText(error.message || String(error)) + '</p>' +
+                        '<p style="color:#64748b;font-size:12px;margin:14px 0 0 0;">If you see <strong>504</strong>: set ALB/nginx idle timeout and <strong>GUNICORN_TIMEOUT</strong> to at least <strong>600s</strong>. Optional (skip slow EKS): <code>STATUS_MONITOR_WALL_ATTACH_EKS=0</code> for <code>/statuswall</code>, <code>STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0</code> for <code>/statusmonitor/&lt;env&gt;</code>. See DOCKER_DEPLOYMENT.md.</p>' +
+                        '</div>';
+                }
                 const errorDiv = document.createElement('div');
-                errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fee; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000;';
-                errorDiv.innerHTML = '❌ Error loading dashboard: ' + error.message;
+                errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fee; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; max-width:min(420px,92vw); font-size:12px;';
+                errorDiv.innerHTML = '❌ ' + escHubText(error.message || String(error));
                 document.body.appendChild(errorDiv);
-                setTimeout(() => errorDiv.remove(), 5000);
+                setTimeout(() => errorDiv.remove(), 12000);
             });
         }
         
@@ -1642,11 +1660,11 @@
                 clearInterval(autoRefreshInterval);
             }
             
-            // Auto-refresh every 3 minutes (lower browser + server load than 2 min)
+            // Auto-refresh every 6 minutes
             autoRefreshInterval = setInterval(() => {
                 console.log('🔄 Auto-refreshing dashboard...');
                 loadDashboard({ silentRefresh: true });
-            }, 180000);
+            }, 360000);
         }
         
         function startLiveClock() {
@@ -1673,7 +1691,7 @@
                 }
                 autoRefreshInterval = setInterval(() => {
                     loadHubSummary({ silentRefresh: true });
-                }, 300000);
+                }, 360000);
             } else {
                 loadDashboard();
                 setupAutoRefresh();

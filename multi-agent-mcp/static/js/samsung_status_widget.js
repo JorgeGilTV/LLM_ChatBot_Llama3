@@ -7,7 +7,7 @@
 (function () {
     const API = '/api/pagerduty/samsung-monitor';
     const CACHE_KEY = 'samsung_status_monitor_v1';
-    const TTL_MS = 170000;
+    const TTL_MS = 350000;
 
     function esc(s) {
         return String(s == null ? '')
@@ -60,10 +60,16 @@
                     data.status_dashboard_url_active || basePath + '?tab=active';
                 const uPending =
                     data.status_dashboard_url_pending || basePath + '?tab=pending';
+                const srcNote =
+                    data.source === 'scrape'
+                        ? ' <span style="font-size:9px;opacity:0.75;">(tabs scraped)</span>'
+                        : '';
                 boardLinks.innerHTML =
                     '<span style="opacity:0.85;font-weight:700;">External status</span> · board <code style="font-size:10px;">' +
                     esc(id) +
-                    '</code><br>' +
+                    '</code>' +
+                    srcNote +
+                    '<br>' +
                     aOpen(uResolved, 'Resolved') +
                     ' · ' +
                     aOpen(uOngoing, 'Ongoing') +
@@ -225,7 +231,7 @@
 
     function boot() {
         samsungIntervalTick();
-        setInterval(samsungIntervalTick, 180000);
+        setInterval(samsungIntervalTick, 360000);
     }
     document.addEventListener('DOMContentLoaded', function () {
         if (typeof requestIdleCallback === 'function') {

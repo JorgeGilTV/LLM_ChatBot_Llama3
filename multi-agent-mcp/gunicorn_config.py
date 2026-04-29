@@ -42,7 +42,13 @@ if worker_class == "sync":
     threads = 1
 
 worker_connections = 1000
-timeout = 120  # Long-running queries (Datadog, Splunk)
+# Status wall + APM wall can exceed several minutes (many Datadog calls). ALB/nginx often default to 60s and
+# return 504 first — raise those proxies in sync (see DOCKER_DEPLOYMENT.md "504").
+try:
+    timeout = int((os.getenv("GUNICORN_TIMEOUT") or "600").strip() or "600")
+except ValueError:
+    timeout = 600
+timeout = max(60, min(timeout, 3600))
 keepalive = 5
 
 # Logging

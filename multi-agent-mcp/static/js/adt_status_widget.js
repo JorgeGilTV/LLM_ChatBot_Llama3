@@ -7,7 +7,7 @@
 (function () {
     const API = '/api/pagerduty/adt-monitor';
     const CACHE_KEY = 'adt_status_monitor_v1';
-    const TTL_MS = 170000;
+    const TTL_MS = 350000;
 
     function esc(s) {
         return String(s == null ? '')
@@ -225,7 +225,7 @@
 
     function boot() {
         adtIntervalTick();
-        setInterval(adtIntervalTick, 180000);
+        setInterval(adtIntervalTick, 360000);
     }
     document.addEventListener('DOMContentLoaded', function () {
         if (typeof requestIdleCallback === 'function') {

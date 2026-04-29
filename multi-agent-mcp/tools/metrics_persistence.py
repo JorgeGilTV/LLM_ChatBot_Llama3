@@ -237,6 +237,21 @@ def init_database():
         CREATE INDEX IF NOT EXISTS idx_sm_api_cache_updated
         ON status_monitor_api_cache(cache_kind, updated_at)
     ''')
+
+    # Persisted EKS cluster names per (service, env) — avoids repeated Datadog metrics queries on every load
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS service_eks_clusters (
+            service_name TEXT NOT NULL,
+            environment TEXT NOT NULL,
+            clusters_json TEXT NOT NULL,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (service_name, environment)
+        )
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_service_eks_updated
+        ON service_eks_clusters(updated_at)
+    ''')
     
     conn.commit()
     conn.close()
@@ -836,6 +851,58 @@ def sm_api_cache_set(kind: str, key: str, payload: Any) -> None:
         conn.close()
     except Exception as e:
         print(f"⚠️ sm_api_cache_set ({kind}): {e}")
+
+
+def get_service_eks_clusters(service_name: str, environment: str) -> Optional[tuple[list[str], float]]:
+    """
+    Returns (cluster_names, updated_at_unix) if a row exists, else None.
+    Cluster names are non-empty strings; empty list is stored when DD returned no clusters.
+    """
+    try:
+        conn = _connect_db(timeout=30)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT clusters_json, updated_at FROM service_eks_clusters
+            WHERE service_name = ? AND environment = ?
+            """,
+            (service_name, environment),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        raw, updated_at = row
+        data = json.loads(raw)
+        if not isinstance(data, list):
+            return None
+        clusters = [str(x).strip() for x in data if x is not None and str(x).strip()]
+        return (clusters, float(updated_at))
+    except Exception as e:
+        print(f"⚠️ get_service_eks_clusters: {e}")
+        return None
+
+
+def set_service_eks_clusters(service_name: str, environment: str, clusters: list[str]) -> None:
+    """Upsert resolved cluster names for reuse across dashboard/wall loads."""
+    try:
+        blob = json.dumps([str(x).strip() for x in clusters if x is not None and str(x).strip()], ensure_ascii=False)
+        now = time.time()
+        conn = _connect_db(timeout=30)
+        conn.execute(
+            """
+            INSERT INTO service_eks_clusters (service_name, environment, clusters_json, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(service_name, environment) DO UPDATE SET
+                clusters_json = excluded.clusters_json,
+                updated_at = excluded.updated_at
+            """,
+            (service_name, environment, blob, now),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ set_service_eks_clusters: {e}")
 
 
 def clear_status_monitor_api_cache() -> None:

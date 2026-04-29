@@ -82,8 +82,12 @@ def query_splunk(search_query: str, timerange_hours: int, public_ip: str = "Unkn
             if line:
                 try:
                     result = json.loads(line)
-                    if result.get("result") and result.get("preview") == False:
-                        timeseries_data.append(result["result"])
+                    row = result.get("result")
+                    if not row:
+                        continue
+                    if result.get("preview") is True:
+                        continue
+                    timeseries_data.append(row)
                 except json.JSONDecodeError:
                     continue
         

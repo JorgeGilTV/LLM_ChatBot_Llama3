@@ -370,6 +370,23 @@ def statusmonitor_redmetrics_us_page():
     return render_template('statusmonitor.html', environment='redmetrics-us')
 
 
+@flask_app.route("/embed/splunk-samsung-latencies")
+def embed_splunk_samsung_latencies():
+    """
+    Samsung alarm-latency charts from Splunk REST (port 8089) + token — same stack as
+    the Samsung Dashboard project (samsung_splunk_api_latencies). No Splunk web login in browser.
+    """
+    from samsung_splunk_api_latencies import build_embed_for_flask
+
+    se = (os.environ.get("SPLUNK_EMBED_EARLIEST") or "-30d@d").strip()
+    sl = (os.environ.get("SPLUNK_EMBED_LATEST") or "now").strip()
+    try:
+        leg = int((os.environ.get("SPLUNK_EMBED_LEGACY_HOURS") or "720").strip() or "720")
+    except ValueError:
+        leg = 720
+    return build_embed_for_flask(leg, studio_earliest=se, studio_latest=sl)
+
+
 @flask_app.route('/statuswall')
 def statuswall_page():
     """Full-screen wall: all environments as status tiles only (no hub chrome)."""
@@ -1439,7 +1456,10 @@ def api_pagerduty_monitor():
 
 @flask_app.route('/api/pagerduty/samsung-monitor')
 def api_pagerduty_samsung_monitor():
-    """Samsung external status board: same UI data as monitor but scoped to SAMSUNG_STATUS_DASHBOARD_ID."""
+    """
+    Samsung external status board. Default: scrape public tab HTML (Ongoing / Pending / Resolved).
+    Set SAMSUNG_PAGERDUTY_USE_API=1 to use the Incidents REST API instead.
+    """
     bid = _samsung_status_dashboard_id()
     if not bid:
         return jsonify(
@@ -1449,7 +1469,31 @@ def api_pagerduty_samsung_monitor():
                 "hint": "Set SAMSUNG_STATUS_DASHBOARD_ID (default PRBJIO4) or remove it to use the default.",
             }
         )
-    return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(bid))
+    use_api = (os.getenv("SAMSUNG_PAGERDUTY_USE_API") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if use_api:
+        return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(bid))
+    try:
+        from tools.pagerduty_samsung_scrape import build_samsung_pagerduty_scrape_payload
+
+        pl = build_samsung_pagerduty_scrape_payload(bid)
+        pl["status_dashboard_id"] = bid
+        pl["status_dashboard_url"] = _pagerduty_external_status_incidents_url(bid)
+        pl["status_dashboard_url_active"] = _pagerduty_external_status_incidents_url(bid, tab="active")
+        pl["status_dashboard_url_resolved"] = _pagerduty_external_status_incidents_url(
+            bid, tab="resolved"
+        )
+        pl["status_dashboard_url_pending"] = _pagerduty_external_status_incidents_url(
+            bid, tab="pending"
+        )
+        return _jsonify_pagerduty_monitor(pl)
+    except Exception as e:
+        logging.warning("Samsung PagerDuty scrape failed, falling back to API: %s", e)
+        return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(bid))
 
 
 @flask_app.route('/api/pagerduty/adt-monitor')
@@ -1935,20 +1979,184 @@ def get_public_ip():
         logging.error(f"Error fetching public IP: {e}")
         return jsonify({'error': str(e)}), 500
 
-def _normalize_team_calendar_events(payload) -> list:
-    """Team Calendar /events.json may return a list or an object with nested arrays."""
-    if payload is None:
+
+_TEAM_CAL_SUBCAL_RESOLVE_TTL_S = 1800.0
+_team_cal_subcal_resolve_cache: dict = {}
+
+
+def _team_calendar_base_candidates() -> list:
+    """Bases for Team Calendars /events.json. Cloud often needs /wiki/rest/...; some tenants only respond without /wiki/."""
+    override = (os.getenv("DEPLOYMENTS_TEAM_CALENDAR_BASE") or "").strip().rstrip("/")
+    if override:
+        return [override]
+    h = (os.getenv("CONFLUENCE_ATLASSIAN_HOST") or "https://arlo.atlassian.net").strip().rstrip("/")
+    if not h.startswith("http"):
+        h = f"https://{h.lstrip('/')}"
+    return [
+        f"{h}/wiki/rest/calendar-services/1.0/calendar",
+        f"{h}/rest/calendar-services/1.0/calendar",
+    ]
+
+
+def _fetch_subcalendars_from_bases(bases, email, token) -> tuple[object, str] | tuple[None, list]:
+    """(json, base_used) on first HTTP 200, else (None, [status lines])."""
+    import requests
+
+    auth = (email, token)
+    lines = []
+    for base in bases:
+        url = f"{base.rstrip('/')}/subcalendars.json"
+        try:
+            r = requests.get(url, auth=auth, timeout=22)
+            lines.append(f"{base} -> {r.status_code}")
+            if r.status_code == 200:
+                return (r.json(), base)
+        except Exception as e:
+            lines.append(f"{base} -> err {e!s}")
+    return (None, lines)
+
+
+def _team_calendar_cst_range_iso(
+    now_cst, lookback_days: int, fetch_days_ahead: int
+) -> tuple[str, str, str, str]:
+    """(start_iso, end_iso, start_ymd, end_ymd) for Team Calendar; API expects ISO-8601 bounds."""
+    from datetime import timedelta
+
+    s = (now_cst - timedelta(days=lookback_days)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    e = (now_cst + timedelta(days=fetch_days_ahead)).replace(
+        hour=23, minute=59, second=59, microsecond=0
+    )
+    return s.isoformat(), e.isoformat(), s.strftime("%Y-%m-%d"), e.strftime("%Y-%m-%d")
+
+
+def _collect_subcalendars_for_match(obj) -> list:
+    """Flatten Team Calendars /subcalendars.json tree to [(id, name), ...]."""
+    out: list = []
+
+    def walk(node) -> None:
+        if node is None:
+            return
+        if isinstance(node, list):
+            for it in node:
+                walk(it)
+        elif isinstance(node, dict):
+            cid = node.get("id")
+            cname = node.get("name") or node.get("summary") or ""
+            if cid is not None and str(cname).strip():
+                out.append((str(cid), str(cname).strip()))
+            for ch in (
+                "childSubCalendars",
+                "childSubCals",
+                "subCalendars",
+                "items",
+                "children",
+            ):
+                if ch in node and node[ch] is not None:
+                    walk(node[ch])
+
+    walk(obj)
+    return out
+
+
+def _resolve_subcalendar_id_by_name(email: str, token: str, name_substr: str) -> Optional[str]:
+    """Query subcalendars.json; match first calendar whose name contains name_substr (case-insensitive)."""
+    if not name_substr or not email or not token:
+        return None
+    name_key = name_substr.strip().lower()
+    if not name_key:
+        return None
+    import time
+    import requests
+
+    ent = _team_cal_subcal_resolve_cache.get(name_key)
+    if ent and (time.monotonic() - ent[0]) < _TEAM_CAL_SUBCAL_RESOLVE_TTL_S:
+        return ent[1]
+
+    bases = _team_calendar_base_candidates()
+    data, used_or_lines = _fetch_subcalendars_from_bases(bases, email, token)
+    if data is None:
+        logging.warning("subcalendars.json: no 200 from any base: %s", used_or_lines)
+        return None
+    logging.info("subcalendars.json OK from base %s", used_or_lines)
+    try:
+        pairs = _collect_subcalendars_for_match(data)
+    except Exception as e:
+        logging.warning("subcalendars parse failed: %s", e)
+        return None
+
+    for cal_id, cal_name in pairs:
+        if name_key in cal_name.lower():
+            _team_cal_subcal_resolve_cache[name_key] = (time.monotonic(), cal_id)
+            logging.info("Resolved subCalendarId by name %r -> %s", name_substr, cal_id)
+            return cal_id
+    logging.warning(
+        "No subcalendar matched name containing %r (scanned %s names)",
+        name_substr,
+        len(pairs),
+    )
+    return None
+
+
+def _normalize_team_calendar_events(payload, _depth: int = 0) -> list:
+    """Team Calendar /events.json may return a list or nested objects; recurse into data/values."""
+    if payload is None or _depth > 6:
         return []
     if isinstance(payload, list):
+        if not payload:
+            return []
         return payload
     if isinstance(payload, dict):
-        for key in ("events", "data", "values", "results", "items", "eventList"):
+        for key in (
+            "events",
+            "allEvents",
+            "calendarEvents",
+            "data",
+            "values",
+            "results",
+            "items",
+            "rows",
+            "eventList",
+            "content",
+        ):
             v = payload.get(key)
             if isinstance(v, list):
                 return v
-        if payload.get("start") or payload.get("title"):
+            if isinstance(v, dict) and v:
+                inner = _normalize_team_calendar_events(v, _depth + 1)
+                if inner:
+                    return inner
+        if any(
+            k in payload
+            for k in (
+                "start",
+                "fromDateTime",
+                "startDate",
+                "startMillis",
+                "localStartDate",
+                "title",
+                "summary",
+                "name",
+                "what",
+            )
+        ):
             return [payload]
     return []
+
+
+def _flatten_team_calendar_event(event: dict) -> dict:
+    """Some payloads nest the real event under 'event' / 'payload' / 'item' (Jira/TC wrappers)."""
+    if not event:
+        return {}
+    base = dict(event)
+    for wrap in ("event", "item", "payload", "vevent", "value"):
+        w = event.get(wrap)
+        if isinstance(w, dict):
+            for k, v in w.items():
+                if v not in (None, "") and (k not in base or base.get(k) in (None, "")):
+                    base[k] = v
+    return base
 
 
 def _parse_team_calendar_datetime(val) -> Optional[datetime]:
@@ -1997,7 +2205,15 @@ def _parse_team_calendar_datetime(val) -> Optional[datetime]:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt
         except ValueError:
-            return None
+            pass
+        # e.g. "19-Jul-2023" (Confluence all-day in English)
+        for fmt in ("%d-%b-%Y", "%d-%B-%Y"):
+            try:
+                d0 = datetime.strptime(s, fmt).date()
+                return datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        return None
     return None
 
 
@@ -2005,6 +2221,7 @@ def _team_calendar_event_start_end(event: dict) -> tuple[Optional[datetime], Opt
     """Return (start, end) as timezone-aware UTC from various Team Calendar field names."""
     from datetime import timedelta
 
+    event = _flatten_team_calendar_event(event)
     start_dt = None
     end_dt = None
     for sk in (
@@ -2015,6 +2232,8 @@ def _team_calendar_event_start_end(event: dict) -> tuple[Optional[datetime], Opt
         "from",
         "begin",
         "startMillis",
+        "localStartDate",
+        "originalStartDate",
     ):
         if sk in event and event[sk] not in (None, ""):
             start_dt = _parse_team_calendar_datetime(event[sk])
@@ -2030,6 +2249,8 @@ def _team_calendar_event_start_end(event: dict) -> tuple[Optional[datetime], Opt
         "to",
         "finish",
         "endMillis",
+        "localEndDate",
+        "originalEndDate",
     ):
         if ek in event and event[ek] not in (None, ""):
             end_dt = _parse_team_calendar_datetime(event[ek])
@@ -2044,16 +2265,18 @@ def _team_calendar_event_start_end(event: dict) -> tuple[Optional[datetime], Opt
 
 def _grm_event_to_deployment(event: dict, cst) -> Optional[dict]:
     """Build one deployment dict from Team Calendar API event (start/end in ISO UTC)."""
+    fe = _flatten_team_calendar_event(event)
     title = (
-        event.get("title")
-        or event.get("summary")
-        or event.get("name")
+        fe.get("what")
+        or fe.get("title")
+        or fe.get("summary")
+        or fe.get("name")
         or "Untitled Deployment"
     )
     if not isinstance(title, str):
         title = str(title)
 
-    start_dt, end_dt = _team_calendar_event_start_end(event)
+    start_dt, end_dt = _team_calendar_event_start_end(fe)
     if start_dt is None:
         return None
 
@@ -2071,6 +2294,130 @@ def _grm_event_to_deployment(event: dict, cst) -> Optional[dict]:
     }
 
 
+def _load_team_calendar_events_for_id(
+    email: str,
+    token: str,
+    cst,
+    sub_calendar_id: str,
+    start_date_iso: str,
+    end_date_iso: str,
+    start_ymd: str,
+    end_ymd: str,
+) -> tuple[list, dict]:
+    """
+    Try each Team Calendars base URL and subCalendarId / calendarId. Confluence Cloud may 404 on
+    one path (e.g. /wiki/rest/...) and work on the other. If ISO window returns 200 with 0 events,
+    we also try YYYY-MM-DD (some Cloud builds only return data with date-only params).
+    """
+    import requests
+
+    bases = _team_calendar_base_candidates()
+    auth = (email, token)
+    common_iso = {
+        "start": start_date_iso,
+        "end": end_date_iso,
+        "userTimeZoneId": "America/Chicago",
+    }
+    common_ymd = {
+        "start": start_ymd,
+        "end": end_ymd,
+        "userTimeZoneId": "America/Chicago",
+    }
+    partial: dict = {
+        "primary_http_status": None,
+        "alt_http_status": None,
+        "saw_200": False,
+        "raw_events_primary": 0,
+        "raw_events_alt": 0,
+        "sample_event_keys": None,
+        "calendar_base_used": None,
+        "event_fetch_log": [],
+        "grm_date_mode_used": "iso",
+    }
+
+    def events_from_raw(raw) -> tuple[list, int]:
+        evs = _normalize_team_calendar_events(raw)
+        rows = []
+        for event in evs:
+            try:
+                row = _grm_event_to_deployment(event, cst)
+                if row:
+                    rows.append(row)
+            except Exception as e:
+                logging.error("Error parsing event: %s", e)
+        return rows, len(evs)
+
+    def _note_zero_payload(raw, label: str) -> None:
+        if not isinstance(partial.get("grm_zero_events_debug"), list):
+            partial["grm_zero_events_debug"] = []
+        d = [label, type(raw).__name__]
+        if isinstance(raw, dict):
+            d.append(list(raw.keys())[:20])
+        partial["grm_zero_events_debug"].append(d[:3])
+
+    def one_pass(common: dict, mode_label: str) -> list | None:
+        for param_name in ("subCalendarId", "calendarId"):
+            for base in bases:
+                url = f"{base.rstrip('/')}/events.json"
+                p = {**common, param_name: sub_calendar_id}
+                try:
+                    r = requests.get(url, auth=auth, params=p, timeout=25)
+                except Exception as e:
+                    partial["event_fetch_log"].append(
+                        f"{param_name} {mode_label} {base.split('//', 1)[-1][:24]} err {e!s}"
+                    )
+                    continue
+                if param_name == "subCalendarId" and partial["primary_http_status"] is None:
+                    partial["primary_http_status"] = r.status_code
+                if param_name == "calendarId" and partial["alt_http_status"] is None:
+                    partial["alt_http_status"] = r.status_code
+                partial["event_fetch_log"].append(
+                    f"{param_name} {mode_label} {base.split('//', 1)[-1][:32]} -> {r.status_code}"
+                )
+                if r.status_code != 200:
+                    continue
+                partial["saw_200"] = True
+                raw = r.json()
+                partial["grm_date_mode_used"] = "ymd" if mode_label == "ymd" else "iso"
+                partial["calendar_base_used"] = base
+                rows, nraw = events_from_raw(raw)
+                if param_name == "subCalendarId":
+                    partial["raw_events_primary"] = nraw
+                else:
+                    partial["raw_events_alt"] = nraw
+                evs = _normalize_team_calendar_events(raw)
+                if evs and isinstance(evs[0], dict):
+                    partial["sample_event_keys"] = list(evs[0].keys())[:25]
+                if nraw == 0:
+                    _note_zero_payload(raw, f"{param_name}/{mode_label}")
+                    continue
+                if rows:
+                    return rows
+        return None
+
+    out = one_pass(common_iso, "iso")
+    if out is not None:
+        return out, partial
+    out = one_pass(common_ymd, "ymd")
+    if out is not None:
+        return out, partial
+
+    if partial.get("saw_200"):
+        partial["empty_calendar_200"] = True
+    return [], partial
+
+
+def _deployments_subcalendar_fallback_name() -> str | None:
+    """
+    If the macro id returns 404, try resolving a subCalendar by this name (default GRM).
+    Set DEPLOYMENTS_SUBCALENDAR_ID_FALLBACK_NAME=0 to disable.
+    """
+    v = (os.getenv("DEPLOYMENTS_SUBCALENDAR_ID_FALLBACK_NAME", "GRM") or "").strip()
+    if not v or v.lower() in ("0", "false", "no", "off", "none"):
+        return None
+    return v
+
+
 def _deployments_int_env(name: str, default: int, lo: int, hi: int) -> int:
     try:
         v = int((os.getenv(name) or str(default)).strip())
@@ -2083,7 +2430,6 @@ def _deployments_int_env(name: str, default: int, lo: int, hi: int) -> int:
 def api_deployments_upcoming():
     """Endpoint for upcoming deployments from Confluence GRM Calendar (Team Calendars API)."""
     try:
-        import requests
         from datetime import datetime, timedelta, timezone
         from zoneinfo import ZoneInfo
 
@@ -2096,7 +2442,14 @@ def api_deployments_upcoming():
         
         email = (os.getenv("ATLASSIAN_EMAIL") or "").strip()
         token = (os.getenv("CONFLUENCE_TOKEN") or "").strip()
-        sub_calendar_id = (os.getenv("DEPLOYMENTS_SUBCALENDAR_ID") or "153256867").strip()
+        # Default = GRM subCalendarId from the calendar macro (ac:parameter name="id"), not the wiki page id.
+        sub_calendar_id_env = (os.getenv("DEPLOYMENTS_SUBCALENDAR_ID") or "fb3ba305-784d-4750-a244-db3d87683733").strip()
+        name_match = (os.getenv("DEPLOYMENTS_SUBCALENDAR_NAME") or "").strip()
+        sub_calendar_id = sub_calendar_id_env
+        if name_match and email and token:
+            maybe_id = _resolve_subcalendar_id_by_name(email, token, name_match)
+            if maybe_id:
+                sub_calendar_id = maybe_id
 
         if not email or not token:
             return jsonify(
@@ -2112,18 +2465,24 @@ def api_deployments_upcoming():
                 }
             )
 
-        auth = (email, token)
         today = datetime.now(timezone.utc)
 
         diag = {
             "sub_calendar_id": sub_calendar_id,
+            "sub_calendar_id_env": sub_calendar_id_env,
+            "name_match": name_match or None,
             "primary_http_status": None,
             "alt_http_status": None,
             "raw_events_primary": 0,
             "raw_events_alt": 0,
             "calendar_start_date": None,
             "calendar_end_date": None,
+            "api_start_param": None,
+            "api_end_param": None,
             "sample_event_keys": None,
+            "calendar_base_used": None,
+            "event_fetch_log": None,
+            "saw_200": None,
         }
 
         deployments = []
@@ -2140,102 +2499,94 @@ def api_deployments_upcoming():
         filter_hours_past = _deployments_int_env("DEPLOYMENTS_FILTER_HOURS_PAST", 2, 0, 168)
         max_rows = _deployments_int_env("DEPLOYMENTS_MAX_ROWS", 50, 5, 150)
         now_cst = datetime.now(cst)
-        start_date = (now_cst - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
-        end_date = (now_cst + timedelta(days=fetch_days_ahead)).strftime("%Y-%m-%d")
-        diag["calendar_start_date"] = start_date
-        diag["calendar_end_date"] = end_date
+        start_date_iso, end_date_iso, start_ymd, end_ymd = _team_calendar_cst_range_iso(
+            now_cst, lookback_days, fetch_days_ahead
+        )
+        start_date, end_date = start_ymd, end_ymd
+        diag["calendar_start_date"] = start_ymd
+        diag["calendar_end_date"] = end_ymd
+        diag["api_start_param"] = start_date_iso
+        diag["api_end_param"] = end_date_iso
         diag["fetch_days_ahead"] = fetch_days_ahead
         diag["filter_hours_future"] = filter_hours_future
         diag["filter_hours_past"] = filter_hours_past
         diag["max_rows"] = max_rows
 
-        # First try: Get events via Team Calendars REST API
+        # Team Calendars: ISO range + per-base /wiki vs non-wiki + subCalendarId / calendarId; optional name id fallback
+        partial: dict = {}
         try:
-            calendar_api_url = (
-                "https://arlo.atlassian.net/wiki/rest/calendar-services/1.0/calendar/events.json"
+            deployments, partial = _load_team_calendar_events_for_id(
+                email, token, cst, sub_calendar_id, start_date_iso, end_date_iso, start_ymd, end_ymd
             )
-
-            params = {
-                "start": start_date,
-                "end": end_date,
-                "subCalendarId": sub_calendar_id,
-                "userTimeZoneId": "America/Chicago",
-            }
-
-            logging.info(f"🔍 Team Calendar API: {calendar_api_url} params={params}")
-            cal_resp = requests.get(calendar_api_url, auth=auth, params=params, timeout=25)
-            diag["primary_http_status"] = cal_resp.status_code
-            logging.info(f"📡 Calendar API status: {cal_resp.status_code}")
-
-            if cal_resp.status_code == 200:
-                raw = cal_resp.json()
-                events = _normalize_team_calendar_events(raw)
-                diag["raw_events_primary"] = len(events)
-                logging.info(f"📅 Normalized {len(events)} event(s) from primary Calendar API")
-                if events and isinstance(events[0], dict):
-                    diag["sample_event_keys"] = list(events[0].keys())[:25]
-                    logging.info(f"📝 Sample event keys: {diag['sample_event_keys']}")
-
-                for event in events:
-                    try:
-                        row = _grm_event_to_deployment(event, cst)
-                        if row:
-                            deployments.append(row)
-                            logging.info(
-                                f"✓ Added: {row['service']} at "
-                                f"{row['timestamp'][:16]} → {row.get('end_timestamp', '')[:16]}"
-                            )
-                    except Exception as e:
-                        logging.error(f"Error parsing event: {e}")
-                        continue
-            else:
-                logging.warning(
-                    f"❌ Calendar API HTTP {cal_resp.status_code}: {(cal_resp.text or '')[:300]}"
-                )
-
+            for k in (
+                "primary_http_status",
+                "alt_http_status",
+                "saw_200",
+                "raw_events_primary",
+                "raw_events_alt",
+                "sample_event_keys",
+                "calendar_base_used",
+                "empty_calendar_200",
+            ):
+                if k in partial and partial[k] is not None:
+                    diag[k] = partial[k]
+            for k in ("grm_zero_events_debug", "grm_date_mode_used"):
+                if k in partial and partial[k] is not None:
+                    diag[k] = partial[k]
+            if partial.get("event_fetch_log"):
+                diag["event_fetch_log"] = partial["event_fetch_log"][:20]
+            logging.info(
+                "Team Calendar: bases=%s primary=%s alt=%s base_used=%s",
+                _team_calendar_base_candidates(),
+                partial.get("primary_http_status"),
+                partial.get("alt_http_status"),
+                partial.get("calendar_base_used"),
+            )
         except Exception as e:
-            logging.warning(f"⚠️ Team Calendar API failed: {e}, trying alternate params...")
+            logging.warning("Team Calendar API failed: %s", e)
 
-        # Second try: calendarId parameter (some installs expect this name)
-        if not deployments:
-            try:
-                space_calendar_url = (
-                    "https://arlo.atlassian.net/wiki/rest/calendar-services/1.0/calendar/events.json"
+        fb_name = _deployments_subcalendar_fallback_name()
+        if (
+            not deployments
+            and not partial.get("empty_calendar_200")
+            and fb_name
+            and email
+            and token
+        ):
+            alt_id = _resolve_subcalendar_id_by_name(email, token, fb_name)
+            if alt_id and alt_id != sub_calendar_id:
+                logging.info(
+                    "Calendar: retrying with name %r -> subCalendarId %s (macro id was not accepted)",
+                    fb_name,
+                    alt_id,
                 )
-                params_alt = {
-                    "calendarId": sub_calendar_id,
-                    "start": start_date,
-                    "end": end_date,
-                    "userTimeZoneId": "America/Chicago",
-                }
-                logging.info(f"🔍 Calendar API (alt): {params_alt}")
-                alt_resp = requests.get(
-                    space_calendar_url, auth=auth, params=params_alt, timeout=25
-                )
-                diag["alt_http_status"] = alt_resp.status_code
-                logging.info(f"📡 Alt Calendar API status: {alt_resp.status_code}")
-
-                if alt_resp.status_code == 200:
-                    alt_raw = alt_resp.json()
-                    alt_events = _normalize_team_calendar_events(alt_raw)
-                    diag["raw_events_alt"] = len(alt_events)
-                    logging.info(f"📅 Normalized {len(alt_events)} event(s) from alt API")
-
-                    for event in alt_events:
-                        try:
-                            row = _grm_event_to_deployment(event, cst)
-                            if row:
-                                deployments.append(row)
-                                logging.info(f"✓ Added from alt API: {row['service']}")
-                        except Exception as e:
-                            logging.error(f"Error parsing alt event: {e}")
-                            continue
-                else:
-                    logging.warning(
-                        f"Alt Calendar API HTTP {alt_resp.status_code}: {(alt_resp.text or '')[:300]}"
+                diag["subcalendar_fallback_name"] = fb_name
+                sub_calendar_id = alt_id
+                diag["sub_calendar_id"] = sub_calendar_id
+                try:
+                    deployments, partial2 = _load_team_calendar_events_for_id(
+                        email, token, cst, sub_calendar_id, start_date_iso, end_date_iso, start_ymd, end_ymd
                     )
-            except Exception as e:
-                logging.warning(f"Alt Calendar API failed: {e}")
+                    for k in (
+                        "primary_http_status",
+                        "alt_http_status",
+                        "saw_200",
+                        "raw_events_primary",
+                        "raw_events_alt",
+                        "sample_event_keys",
+                        "calendar_base_used",
+                        "empty_calendar_200",
+                    ):
+                        if k in partial2 and partial2[k] is not None:
+                            diag[k] = partial2[k]
+                    for k in ("grm_zero_events_debug", "grm_date_mode_used"):
+                        if k in partial2 and partial2[k] is not None:
+                            diag[k] = partial2[k]
+                    if partial2.get("event_fetch_log"):
+                        diag["event_fetch_log"] = partial2["event_fetch_log"][:20]
+                    diag["subcalendar_resolved_by_fallback_name"] = True
+                except Exception as e:
+                    logging.warning("Team Calendar retry after name match failed: %s", e)
 
         # Deduplicate (primary + alt may return the same events)
         if deployments:
@@ -2343,6 +2694,10 @@ def api_deployments_upcoming():
             },
             "diagnostics": {
                 "sub_calendar_id": sub_calendar_id,
+                "sub_calendar_id_env": diag.get("sub_calendar_id_env"),
+                "name_match": diag.get("name_match"),
+                "api_start_param": diag.get("api_start_param"),
+                "api_end_param": diag.get("api_end_param"),
                 "calendar_start_date": diag.get("calendar_start_date"),
                 "calendar_end_date": diag.get("calendar_end_date"),
                 "fetch_days_ahead": diag.get("fetch_days_ahead"),
@@ -2353,6 +2708,10 @@ def api_deployments_upcoming():
                 "alt_http_status": diag.get("alt_http_status"),
                 "raw_events_primary": diag.get("raw_events_primary"),
                 "raw_events_alt": diag.get("raw_events_alt"),
+                "saw_200": diag.get("saw_200"),
+                "calendar_base_used": diag.get("calendar_base_used"),
+                "event_fetch_log": diag.get("event_fetch_log"),
+                "subcalendar_resolved_by_fallback_name": diag.get("subcalendar_resolved_by_fallback_name"),
                 "rows_after_filter": len(upcoming),
                 "sample_event_keys": diag.get("sample_event_keys"),
             },
@@ -2361,28 +2720,30 @@ def api_deployments_upcoming():
             ps = diag.get("primary_http_status")
             alt_s = diag.get("alt_http_status")
             raw_total = (diag.get("raw_events_primary") or 0) + (diag.get("raw_events_alt") or 0)
-            ok_200 = ps == 200 or alt_s == 200
+            ok_200 = bool(diag.get("saw_200")) or ps == 200 or alt_s == 200
             if ps in (401, 403) or alt_s in (401, 403):
                 payload["warning"] = (
                     "Confluence API returned 401/403: the email/API token pair is invalid or the token "
                     "lacks Confluence access. Create an API token at id.atlassian.com and ensure "
                     "ATLASSIAN_EMAIL matches the Atlassian account."
                 )
-            elif ps == 404 or alt_s == 404:
+            elif (ps == 404 or alt_s == 404) and not ok_200:
                 payload["warning"] = (
-                    f"Calendar endpoint returned 404. Check DEPLOYMENTS_SUBCALENDAR_ID (current: {sub_calendar_id}) "
-                    "via Team Calendars subcalendars API in Confluence."
+                    f"Calendar API returned 404 (id may not be the Team Calendars subCalendarId). "
+                    f"Current: {sub_calendar_id}. The app tries /wiki/rest/ and /rest/; set "
+                    "DEPLOYMENTS_SUBCALENDAR_NAME=GRM or set DEPLOYMENTS_SUBCALENDAR_ID from subcalendars.json. "
+                    "Set DEPLOYMENTS_SUBCALENDAR_ID_FALLBACK_NAME=0 to skip auto name resolution."
                 )
             elif ok_200 and raw_total > 0:
                 payload["warning"] = (
-                    "Calendar returned events but none could be parsed into deployment rows "
-                    "(expected fields: start, title). Check server logs for a sample event."
+                    "Calendar returned events but none could be parsed into deployment rows. "
+                    "Confluence may use other field names; check server logs and diagnostics.sample_event_keys."
                 )
             elif ok_200 and raw_total == 0:
                 payload["warning"] = (
-                    "API returned OK but 0 events in the selected date range. "
-                    f"Verify DEPLOYMENTS_SUBCALENDAR_ID={sub_calendar_id} matches the GRM sub-calendar, "
-                    "or that deployments exist in Confluence for these dates."
+                    "API returned OK but 0 events in the selected range. Set DEPLOYMENTS_SUBCALENDAR_NAME "
+                    "to a substring of the GRM sub-calendar (from subcalendars.json) if the id differs "
+                    f"from the wiki page. Current subCalendarId: {sub_calendar_id}."
                 )
             elif ps is not None or alt_s is not None:
                 payload["warning"] = (

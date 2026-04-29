@@ -98,5 +98,5 @@
   ],
   "timezone": "America/Chicago",
   "last_updated": "2026-03-02T15:20:00-06:00",
-  "note": "Update this file manually to reflect current GRM Calendar deployments. Times are in CST. Confluence Calendar API currently returns 404 for subcalendar 153256867."
+  "note": "Update this file manually to reflect current GRM Calendar deployments. Times are in CST. subCalendarId in app is the calendar macro id (UUID), not the Confluence page id."
 }

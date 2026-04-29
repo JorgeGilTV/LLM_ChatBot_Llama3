@@ -19,6 +19,8 @@ from tools.metrics_persistence import (
     save_service_metrics,
     save_dashboard_snapshot,
     get_dashboard_history,
+    get_service_eks_clusters,
+    set_service_eks_clusters,
     sm_api_cache_get,
     sm_api_cache_set,
     clear_status_monitor_api_cache,
@@ -162,6 +164,15 @@ def _sm_sanitize_href_for_wall(value: str | None) -> str | None:
     return None
 
 
+def _sm_pagerduty_external_incidents_url() -> str:
+    """Public external-status-dashboard incidents URL (same default board as home PagerDuty widget)."""
+    dash_id = (os.getenv("PAGERDUTY_EXTERNAL_STATUS_DASHBOARD_ID") or "PRBJIO4").strip()
+    raw = (os.getenv("PAGERDUTY_SUBDOMAIN") or "arlo").strip()
+    raw = raw.replace("https://", "").replace("http://", "").split("/")[0]
+    sub = (raw.split(".")[0] if raw else "arlo") or "arlo"
+    return f"https://{sub}.pagerduty.com/external-status-dashboard/{dash_id}/incidents"
+
+
 def _dd_monitors_manage_url(service_name: str, environment: str, dd_site: str) -> str:
     """
     Monitors / Manage page, scoped like the UI: service + env, state Alert only
@@ -280,18 +291,19 @@ _mem_cache_saved_at = {}
 # Longer default TTL + env override reduces repeated full DD fan-out (CPU + rate limits)
 _cache_ttl = _status_monitor_int_env("STATUS_MONITOR_CACHE_SECS", 180, 60, 900)
 # SQLite-backed API cache (per-service DD health, PagerDuty, Arlo) — shared across hub/wall/dashboard
-_db_api_cache_ttl = _status_monitor_int_env("STATUS_MONITOR_DB_CACHE_SECS", 180, 30, 900)
+# Default 300s: reuse rows younger than 5 minutes instead of calling Datadog again
+_db_api_cache_ttl = _status_monitor_int_env("STATUS_MONITOR_DB_CACHE_SECS", 300, 30, 900)
 # User clicked Refresh: still reuse full response + DB rows if younger than this (seconds)
 _FORCE_REFRESH_GRACE_SECS = _status_monitor_int_env("STATUS_MONITOR_FORCE_REFRESH_GRACE_SECS", 30, 5, 300)
 # Extra live Datadog attempts when status is unknown (transient errors)
 _UNKNOWN_RETRY_COUNT = _status_monitor_int_env("STATUS_MONITOR_UNKNOWN_RETRIES", 2, 0, 5)
 
 # Parallel Datadog health checks per dashboard/hub mode (each task ~2 HTTP calls)
-STATUS_MONITOR_DD_MAX_WORKERS = _status_monitor_int_env("STATUS_MONITOR_DD_MAX_WORKERS", 10, 2, 32)
-STATUS_MONITOR_DD_MIN_WORKERS = _status_monitor_int_env("STATUS_MONITOR_DD_MIN_WORKERS", 3, 1, 16)
-# Hub: parallel tasks (1 batch main-3 + samsung + adt + red-us = 4 jobs). Higher = faster if DD allows.
-STATUS_MONITOR_HUB_PARALLEL_ENVS = _status_monitor_int_env("STATUS_MONITOR_HUB_PARALLEL_ENVS", 4, 1, 6)
-STATUS_MONITOR_EKS_MAX_WORKERS = _status_monitor_int_env("STATUS_MONITOR_EKS_MAX_WORKERS", 6, 1, 24)
+STATUS_MONITOR_DD_MAX_WORKERS = _status_monitor_int_env("STATUS_MONITOR_DD_MAX_WORKERS", 16, 2, 32)
+STATUS_MONITOR_DD_MIN_WORKERS = _status_monitor_int_env("STATUS_MONITOR_DD_MIN_WORKERS", 4, 1, 16)
+# Hub: parallel env batches (main + samsung + adt + red-us…). Higher = faster if DD rate limits allow.
+STATUS_MONITOR_HUB_PARALLEL_ENVS = _status_monitor_int_env("STATUS_MONITOR_HUB_PARALLEL_ENVS", 6, 1, 6)
+STATUS_MONITOR_EKS_MAX_WORKERS = _status_monitor_int_env("STATUS_MONITOR_EKS_MAX_WORKERS", 8, 1, 24)
 # APM Status Wall: longer in-memory bucket + optional skip EKS (EKS = many extra Datadog calls per tile)
 def _apm_status_wall_cache_bucket_secs() -> int:
     return _status_monitor_int_env("APM_STATUS_WALL_CACHE_SECS", 300, 60, 1200)
@@ -305,14 +317,41 @@ def _apm_status_wall_attach_eks() -> bool:
     return v in ("1", "true", "yes", "on", "")
 
 
+def _classic_status_wall_attach_eks() -> bool:
+    """
+    Classic /statuswall: per-tile EKS cluster lookups add many Datadog calls (common 504 behind 60s ALB).
+    STATUS_MONITOR_WALL_ATTACH_EKS=0 skips (tooltips omit cluster names; wall loads faster).
+    Unset: follows APM_STATUS_WALL_ATTACH_EKS so one knob can disable EKS on both walls.
+    """
+    v = (os.getenv("STATUS_MONITOR_WALL_ATTACH_EKS") or "").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    if v in ("1", "true", "yes", "on"):
+        return True
+    return _apm_status_wall_attach_eks()
+
+
+def _status_monitor_dashboard_attach_eks() -> bool:
+    """
+    /statusmonitor/<env>: per-service EKS cluster lookups add many aws/datadog calls (504 behind short ALB idle).
+    STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0 skips cluster rows (dashboard loads faster).
+    """
+    v = (os.getenv("STATUS_MONITOR_DASHBOARD_ATTACH_EKS") or "").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    if v in ("1", "true", "yes", "on"):
+        return True
+    return True
+
+
 def _apm_status_wall_header_light() -> bool:
-    """If true (default), APM /apm-services uses one PD call + skips Splunk + Samsung/ADT board PagerDuty fetches."""
+    """If true (default), APM /apm-services uses one PD call + omits full Splunk badge fetch (PagerDuty + stub Splunk)."""
     v = (os.getenv("APM_STATUS_WALL_HEADER_LIGHT") or "1").strip().lower()
     return v in ("1", "true", "yes", "on", "")
 
 
 def _wall_apm_header_badges_reuse_pd(pd_counts: dict, pd_api_key: str | None) -> dict:
-    """Pills for APM page without extra PagerDuty/Splunk; reuses org-wide PagerDuty counts from correlation fetch."""
+    """Pills for APM page with light load: reuses org-wide PagerDuty counts; Splunk stub when header_light."""
     if pd_api_key:
         pd_badge = _wall_pd_badge(pd_counts)
     else:
@@ -331,8 +370,6 @@ def _wall_apm_header_badges_reuse_pd(pd_counts: dict, pd_api_key: str | None) ->
     return {
         "pagerduty": pd_badge,
         "splunk": omitted,
-        "samsung": omitted,
-        "adt": omitted,
     }
 
 
@@ -678,10 +715,13 @@ earliest=-{timerange_hours}h latest=now
                 if line:
                     try:
                         result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            res_data = result["result"]
-                            results.append(res_data)
-                            total_count += int(res_data.get("count", 0))
+                        row = result.get("result")
+                        if not row:
+                            continue
+                        if result.get("preview") is True:
+                            continue
+                        results.append(row)
+                        total_count += int(row.get("count", 0))
                     except json.JSONDecodeError:
                         continue
             print(f"✅ Found {total_count} US Infra Exceptions")
@@ -740,8 +780,12 @@ earliest=-{timerange_hours}h latest=now
                 if line:
                     try:
                         result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            results.append(result["result"])
+                        row = result.get("result")
+                        if not row:
+                            continue
+                        if result.get("preview") is True:
+                            continue
+                        results.append(row)
                     except json.JSONDecodeError:
                         continue
             print(f"✅ Found {len(results)} Splunk outliers")
@@ -1543,16 +1587,61 @@ _EKS_ENV_TAG_VARIANTS = {
 }
 
 
-def _resolve_eks_cluster_names(service_name: str, service_env: str, timerange_hours: int) -> list:
-    """Try Datadog env tag variants (same as dashboard EKS lookup) until clusters are found."""
+def _eks_cluster_cache_max_age_secs() -> float:
+    """Non-empty cluster lists: reuse DB without calling Datadog until this age (default 30 days)."""
+    try:
+        return max(60.0, float((os.getenv("STATUS_MONITOR_EKS_CLUSTER_CACHE_SECS") or "2592000").strip()))
+    except ValueError:
+        return 2592000.0
+
+
+def _eks_cluster_empty_retry_secs() -> float:
+    """Empty cluster result: retry Datadog after this age (default 1 hour)."""
+    try:
+        return max(60.0, float((os.getenv("STATUS_MONITOR_EKS_CLUSTER_EMPTY_RETRY_SECS") or "3600").strip()))
+    except ValueError:
+        return 3600.0
+
+
+def _resolve_eks_cluster_names(
+    service_name: str,
+    service_env: str,
+    timerange_hours: int,
+    force_refresh: bool = False,
+) -> tuple[list, bool]:
+    """
+    Resolve kube_cluster_name via Datadog metrics. Persists results in SQLite (service_eks_clusters)
+    so we do not query DD on every load. Returns (cluster_names, used_database_only).
+    """
+    now = time.time()
+    if not force_refresh:
+        row = get_service_eks_clusters(service_name, service_env)
+        if row is not None:
+            clusters, updated_at = row
+            age = now - updated_at
+            max_age = _eks_cluster_cache_max_age_secs()
+            empty_retry = _eks_cluster_empty_retry_secs()
+            if clusters:
+                if age < max_age:
+                    return clusters, True
+            elif age < empty_retry:
+                return [], True
+
     for env_tag in _EKS_ENV_TAG_VARIANTS.get(service_env, [service_env]):
         found = get_service_clusters_from_metrics(service_name, env_tag, timerange_hours=timerange_hours)
         if found:
-            return found
-    return []
+            set_service_eks_clusters(service_name, service_env, found)
+            return found, False
+    set_service_eks_clusters(service_name, service_env, [])
+    return [], False
 
 
-def _attach_eks_clusters_wall(statuses: list, timerange: int, eks_cache: dict | None = None) -> None:
+def _attach_eks_clusters_wall(
+    statuses: list,
+    timerange: int,
+    eks_cache: dict | None = None,
+    force_refresh: bool = False,
+) -> None:
     """Populate eks_clusters on wall rows (healthy / warning / critical) for tooltips."""
     if not statuses:
         return
@@ -1575,7 +1664,7 @@ def _attach_eks_clusters_wall(statuses: list, timerange: int, eks_cache: dict | 
             if cached:
                 names = cache[key]
         if not cached:
-            resolved = _resolve_eks_cluster_names(svc, env, thr)
+            resolved, _db = _resolve_eks_cluster_names(svc, env, thr, force_refresh)
             with lock:
                 if key not in cache:
                     cache[key] = resolved
@@ -1837,7 +1926,7 @@ def _sm_fetch_one_service_health_cached(
     )
     if out.get("status") == "unknown" and _UNKNOWN_RETRY_COUNT > 0:
         for attempt in range(_UNKNOWN_RETRY_COUNT):
-            delay = 0.35 * (attempt + 1)
+            delay = 0.22 * (attempt + 1)
             time.sleep(delay)
             retry_out = get_service_health_status(
                 service, env, dd_api_key, dd_app_key, dd_site, from_time, current_time, False
@@ -2382,10 +2471,24 @@ def _hub_collect_main_three_envs_batched(timerange: int, pd_incidents_preloaded,
         all_statuses, services_union, envs_for_pd, None, pd_incidents, silent=pd_incidents_preloaded is not None
     )
     out = {"production": [], "goldendev": [], "goldenqa": []}
+
+    def _hub_main_three_bucket_key(env) -> str | None:
+        """Map DD env tag onto hub keys so Status wall / hub batch never drops rows on alias mismatch."""
+        if env is None:
+            return None
+        s = str(env).strip().lower()
+        if s in ("production", "prod"):
+            return "production"
+        if s == "goldendev":
+            return "goldendev"
+        if s == "goldenqa":
+            return "goldenqa"
+        return None
+
     for s in all_statuses:
-        env = s.get("environment")
-        if env in out:
-            out[env].append(s)
+        key = _hub_main_three_bucket_key(s.get("environment"))
+        if key in out:
+            out[key].append(s)
     return out
 
 
@@ -2591,12 +2694,14 @@ def _wall_pd_semaphore_badge(counts: dict, label: str, scope_note: str) -> dict:
     """
     tr = int(counts.get("triggered") or 0)
     ack = int(counts.get("acknowledged") or 0)
+    href = _sm_pagerduty_external_incidents_url()
     if tr > 0:
         return {
             "label": label,
             "status": "critical",
             "short": f"{tr} trg",
             "detail": f"{tr} triggered, {ack} ack ({scope_note})",
+            "href": href,
         }
     if ack > 0:
         return {
@@ -2604,12 +2709,14 @@ def _wall_pd_semaphore_badge(counts: dict, label: str, scope_note: str) -> dict:
             "status": "warning",
             "short": f"{ack} ack",
             "detail": f"{ack} acknowledged ({scope_note})",
+            "href": href,
         }
     return {
         "label": label,
         "status": "ok",
         "short": "OK",
         "detail": f"No active incidents ({scope_note})",
+        "href": href,
     }
 
 
@@ -2661,78 +2768,8 @@ def _wall_split_services_by_region(services: list) -> tuple[list, list]:
     return arlo_global, arlo_eu
 
 
-def _samsung_status_dashboard_id_env() -> str | None:
-    """Same rules as app._samsung_status_dashboard_id (external status board id)."""
-    v = os.getenv("SAMSUNG_STATUS_DASHBOARD_ID")
-    if v is None:
-        return "PRBJIO4"
-    s = str(v).strip()
-    if not s or s.lower() in ("off", "false", "no", "0", "none", "*"):
-        return None
-    return s
-
-
-def _wall_samsung_badge(pd_api_key: str | None) -> dict:
-    """Samsung board pill — same traffic-light rules + PD path as main PagerDuty semaphore."""
-    if not pd_api_key:
-        return {
-            "label": "Samsung",
-            "status": "unknown",
-            "short": "—",
-            "detail": "PAGERDUTY_API_TOKEN not set",
-        }
-    bid = _samsung_status_dashboard_id_env()
-    if not bid:
-        return {
-            "label": "Samsung",
-            "status": "unknown",
-            "short": "—",
-            "detail": "Samsung board disabled (SAMSUNG_STATUS_DASHBOARD_ID)",
-        }
-    try:
-        counts, _ = get_pagerduty_status_counts(pd_api_key, False, bid)
-        return _wall_pd_semaphore_badge(counts, "Samsung", f"Samsung board {bid}")
-    except Exception as e:
-        return {"label": "Samsung", "status": "unknown", "short": "—", "detail": str(e)[:200]}
-
-
-def _adt_status_dashboard_id_env() -> str | None:
-    """Same rules as app._adt_status_dashboard_id."""
-    v = os.getenv("ADT_STATUS_DASHBOARD_ID")
-    if v is None:
-        return "PK1QF1G"
-    s = str(v).strip()
-    if not s or s.lower() in ("off", "false", "no", "0", "none", "*"):
-        return None
-    return s
-
-
-def _wall_adt_badge(pd_api_key: str | None) -> dict:
-    """ADT board pill — same traffic-light rules + PD path as main PagerDuty semaphore."""
-    if not pd_api_key:
-        return {
-            "label": "ADT",
-            "status": "unknown",
-            "short": "—",
-            "detail": "PAGERDUTY_API_TOKEN not set",
-        }
-    bid = _adt_status_dashboard_id_env()
-    if not bid:
-        return {
-            "label": "ADT",
-            "status": "unknown",
-            "short": "—",
-            "detail": "ADT board disabled (ADT_STATUS_DASHBOARD_ID)",
-        }
-    try:
-        counts, _ = get_pagerduty_status_counts(pd_api_key, False, bid)
-        return _wall_pd_semaphore_badge(counts, "ADT", f"ADT board {bid}")
-    except Exception as e:
-        return {"label": "ADT", "status": "unknown", "short": "—", "detail": str(e)[:200]}
-
-
 def _wall_fetch_monitor_badges(timerange: int, force_refresh: bool) -> dict:
-    """PagerDuty + Splunk P0 + Samsung + ADT external boards for Status wall headers."""
+    """PagerDuty + Splunk P0 badges for Status wall / APM wall section headers."""
     pd_badge = {
         "label": "PagerDuty",
         "status": "unknown",
@@ -2771,14 +2808,9 @@ def _wall_fetch_monitor_badges(timerange: int, force_refresh: bool) -> dict:
             "detail": str(e)[:200],
         }
 
-    samsung_badge = _wall_samsung_badge(pd_api_key)
-    adt_badge = _wall_adt_badge(pd_api_key)
-
     return {
         "pagerduty": pd_badge,
         "splunk": spl_badge,
-        "samsung": samsung_badge,
-        "adt": adt_badge,
     }
 
 
@@ -2841,15 +2873,19 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
     unknown are omitted so the screen stays focused on live APM signal + issues.
     """
     global _wall_data_cache
-    cache_version = "wall_v17_sanitize_hrefs"
+    cache_version = "wall_v19_parallel_badges_eks_flag"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_wall_data_cache, cache_key, force_refresh)
     if hit is not None:
         return dict(hit)
 
-    statuses_by_mode = _hub_collect_statuses_by_mode(timerange, "Status wall", force_refresh)
+    # Overlap hub Datadog fan-out with PD+Splunk badge fetch (saves wall-clock vs sequential).
+    with ThreadPoolExecutor(max_workers=2) as _wall_pool:
+        f_hub = _wall_pool.submit(_hub_collect_statuses_by_mode, timerange, "Status wall", force_refresh)
+        f_badges = _wall_pool.submit(_wall_fetch_monitor_badges, timerange, force_refresh)
+        statuses_by_mode = f_hub.result()
+        monitors = f_badges.result()
     dd_site = os.getenv("DD_SITE", "datadoghq.com")
-    monitors = _wall_fetch_monitor_badges(timerange, force_refresh)
     groups = []
     eks_wall_cache = {}
     for g in WALL_DISPLAY_GROUPS:
@@ -2865,7 +2901,8 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
             if s.get("status") in ("healthy", "warning", "critical")
         ]
         statuses.sort(key=_wall_service_sort_key)
-        _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache)
+        if _classic_status_wall_attach_eks():
+            _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache, force_refresh)
 
         h = sum(1 for s in statuses if s.get("status") == "healthy")
         w = sum(1 for s in statuses if s.get("status") == "warning")
@@ -3492,7 +3529,7 @@ def _software_catalog_wall_payload_for_single_env(
     statuses.sort(key=_wall_service_sort_key)
     if _apm_status_wall_attach_eks():
         eks_wall_cache: dict = {}
-        _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache)
+        _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache, force_refresh)
 
     h = sum(1 for s in statuses if s.get("status") == "healthy")
     w = sum(1 for s in statuses if s.get("status") == "warning")
@@ -3842,6 +3879,60 @@ def _splunk_p0_semaphore_bar_html(spl_by_id: dict) -> str:
     )
 
 
+def _samsung_splunk_embed_aside_html() -> str:
+    """
+    Right column for Samsung status monitor: Splunk latency charts (REST + token) via
+    /embed/splunk-samsung-latencies (same as Samsung Dashboard). Falls back to Splunk web link.
+    """
+    tok = (os.environ.get("SPLUNK_TOKEN") or "").strip()
+    splunk_web = (os.environ.get("SPLUNK_WEB_BASE") or "https://arlo.splunkcloud.com").rstrip("/")
+    dash_path = (
+        os.environ.get("SPLUNK_DASHBOARD_PATH") or "/en-US/app/search/samsung_alarm_latencies?tab=layout_1"
+    ).strip()
+    splunk_ui = splunk_web + (dash_path if dash_path.startswith("/") else "/" + dash_path)
+    try:
+        h = int((os.environ.get("SAMSUNG_SPLUNK_IFRAME_HEIGHT") or os.environ.get("DASHBOARD_IFRAME_HEIGHT") or "2800").strip() or "2800")
+    except ValueError:
+        h = 2800
+    h = max(400, min(h, 20000))
+    try:
+        from samsung_splunk_api_latencies import any_panel_configured
+
+        api_ready = bool(tok) and bool(any_panel_configured())
+    except Exception:
+        api_ready = bool(tok)
+    if api_ready:
+        u_iframe = "/embed/splunk-samsung-latencies"
+        u_esc = html.escape(splunk_ui, quote=True)
+        return f"""
+        <aside class="sm-splunk-embed-side" aria-label="Splunk Samsung latencies" style="position:sticky;top:8px;align-self:start;min-width:0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#0b0c12;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <div style="padding:8px 10px;border-bottom:1px solid #e2e8f0;background:linear-gradient(180deg,#f0f9ff 0%,#e0f2fe 100%);">
+                <div style="font-size:11px;font-weight:800;color:#0c4a6e;">Splunk — Samsung latencies</div>
+                <div style="font-size:9px;color:#64748b;margin-top:2px;">API (REST) · same charts as the Samsung dashboard</div>
+            </div>
+            <div style="position:relative;line-height:0;background:#0b0c12;">
+                <div id="samsung-splunk-embed-load" class="samsung-splunk-embed-load" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0369a1;font-size:12px;font-weight:600;padding:16px;text-align:center;line-height:1.45;">Loading Splunk charts (REST)…<br><span style="font-size:10px;font-weight:500;opacity:0.9">May take 20s–2m with several panels.</span></div>
+                <iframe class="samsung-spl-iframe" title="Splunk Samsung latencies" src="{html.escape(u_iframe, quote=True)}" style="width:100%;height:{h}px;border:0;display:block;background:#0b0c12;vertical-align:top;" loading="eager" onload="var e=document.getElementById('samsung-splunk-embed-load');if(e) e.style.display='none';"></iframe>
+            </div>
+            <p style="margin:0;padding:6px 10px;font-size:9px;color:#64748b;background:#f8fafc;border-top:1px solid #e2e8f0;">
+                <a href="{u_esc}" target="_blank" rel="noopener" style="color:#0284c7;font-weight:600;">Open dashboard in Splunk</a>
+            </p>
+        </aside>"""
+    hint = "Add <code>SPLUNK_TOKEN</code> and (optional) <code>spl/samsung_studio_dashboard.json</code> or Studio/SPL env vars (see <code>.env.example</code>)."
+    if tok and not api_ready:
+        hint = (
+            "Token set — configure a panel source: <code>SPLUNK_SAMSUNG_STUDIO_JSON</code>, "
+            "or <code>SPLUNK_SAMSUNG_SPL_PROD</code> / <code>SPLUNK_FETCH_STUDIO_FROM_REST</code> (see <code>.env.example</code>)."
+        )
+    u_esc2 = html.escape(splunk_ui, quote=True)
+    return f"""
+        <aside class="sm-splunk-embed-side" aria-label="Splunk" style="position:sticky;top:8px;min-width:0;padding:12px 14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;box-shadow:0 1px 3px rgba(0,0,0,0.06);max-height:min(80vh,520px);overflow:auto;">
+            <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:8px;">Splunk — Samsung latencies</div>
+            <p style="margin:0 0 10px 0;font-size:10px;color:#64748b;line-height:1.5;">{hint}</p>
+            <a href="{u_esc2}" target="_blank" rel="noopener" style="display:inline-block;padding:8px 12px;background:#0ea5e9;color:#fff;border-radius:8px;font-size:10px;font-weight:700;text-decoration:none;">Open in Splunk (browser)</a>
+        </aside>"""
+
+
 def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_refresh: bool = False) -> str:
     """
     Generate Status Monitor Dashboard HTML
@@ -3856,7 +3947,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     global _status_cache
     
     # Check cache first - include version to invalidate cache when logic changes
-    cache_version = "v3.4.15_bundled_status_monitor_lists"  # Change this when logic changes
+    cache_version = "v3.4.20_samsung_layout_compact"  # Change this when logic changes
     cache_key = f"{cache_version}_{timerange}_{environment}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_status_cache, cache_key, force_refresh)
     if hit is not None:
@@ -4214,6 +4305,64 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
             border-radius: 10px;
             padding: 10px 10px 12px;
         }
+        /* Samsung page: less wide sidebar, main column gets more width for Splunk */
+        .sm-outer-grid {
+            display: grid;
+            grid-template-columns: minmax(188px, 21%) minmax(0, 1fr);
+            gap: 14px;
+            margin-bottom: 16px;
+            align-items: start;
+        }
+        .sm-page-samsung .sm-sidebar-col {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 0;
+        }
+        /* Samsung tab: service tiles (left), Splunk embed (right) — bias toward charts */
+        .sm-samsung-splunk-layout {
+            display: grid;
+            grid-template-columns: minmax(200px, 27%) minmax(340px, 1fr);
+            gap: 12px;
+            align-items: start;
+            width: 100%;
+        }
+        @media (max-width: 1200px) {
+            .sm-samsung-splunk-layout {
+                grid-template-columns: 1fr;
+            }
+            .sm-splunk-embed-side {
+                position: static !important;
+            }
+        }
+        .sm-splunk-embed-side { min-width: 0; }
+        .sm-samsung-splunk-layout .samsung-spl-iframe { vertical-align: top; }
+        /* Command center: empty attention queue = one compact row (no full table chrome) */
+        .cc-strip--samsung-attn-empty .cc-attention-table thead {
+            display: none;
+        }
+        .cc-strip--samsung-attn-empty .cc-attention-table {
+            margin-top: 4px;
+        }
+        .cc-strip--samsung-attn-empty .cc-attention-table tbody td {
+            padding: 6px 10px;
+            border-bottom: none;
+            font-size: 10px;
+        }
+        .cc-strip.cc-strip--compact-samsung {
+            padding: 10px 12px;
+            margin-bottom: 12px;
+        }
+        .cc-strip--compact-samsung .cc-kpi-grid {
+            margin-bottom: 8px;
+            gap: 6px;
+        }
+        .cc-strip--compact-samsung .cc-kpi {
+            padding: 8px 10px;
+        }
+        .cc-strip--compact-samsung .cc-kpi-val {
+            font-size: 22px;
+        }
         </style>
         <div style='max-width: 100%; margin: 0; padding: 0;'>
         """
@@ -4278,56 +4427,70 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
             f"— not shown in service bands"
         )
     
-    # EKS cluster lookup: all operational tiles (healthy / warning / critical) — same as Status wall
-    # so hover tooltips show kube_cluster_name + region (z1/z2) instead of empty clusters.
-    eks_tr_h = max(1, int(timerange))
-    operational_ct = sum(
-        1 for s in all_statuses if s.get("status") in ("healthy", "warning", "critical")
-    )
-    skip_eks_ct = sum(1 for s in all_statuses if s.get("status") in ("inactive", "unknown"))
-    print(
-        f"☸️  EKS cluster lookup: {operational_ct} operational service(s), "
-        f"{skip_eks_ct} skipped (inactive/unknown), timerange={eks_tr_h}h (parallel)..."
-    )
+    # EKS cluster lookup: optional (heavy); disable with STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0 to avoid 504 behind short ALB idle.
     cluster_service_map = {}
+    if _status_monitor_dashboard_attach_eks():
+        eks_tr_h = max(1, int(timerange))
+        operational_ct = sum(
+            1 for s in all_statuses if s.get("status") in ("healthy", "warning", "critical")
+        )
+        skip_eks_ct = sum(1 for s in all_statuses if s.get("status") in ("inactive", "unknown"))
+        print(
+            f"☸️  EKS cluster lookup: {operational_ct} operational service(s), "
+            f"{skip_eks_ct} skipped (inactive/unknown), timerange={eks_tr_h}h (parallel)..."
+        )
 
-    def fetch_clusters_for_service(status_obj):
-        """Fetch EKS clusters for a single service"""
-        service_name = status_obj["service"]
-        service_env = status_obj["environment"]
-        if status_obj.get("status") in ("inactive", "unknown"):
-            return (status_obj, [], service_name, service_env)
-        cluster_names = _resolve_eks_cluster_names(service_name, service_env, eks_tr_h)
-        return (status_obj, cluster_names, service_name, service_env)
-    
-    # Use ThreadPoolExecutor to fetch clusters in parallel
-    eks_attached = 0
-    with ThreadPoolExecutor(max_workers=STATUS_MONITOR_EKS_MAX_WORKERS) as executor:
-        futures = [executor.submit(fetch_clusters_for_service, status_obj) for status_obj in all_statuses]
-        
-        for future in as_completed(futures):
-            try:
-                status_obj, cluster_names, service_name, service_env = future.result()
-                
-                if cluster_names:
-                    status_obj['eks_clusters'] = cluster_names
-                    status_obj['eks_cluster_count'] = len(cluster_names)
-                    eks_attached += 1
-                    
-                    # Track which services run on which clusters
-                    for cluster_name in cluster_names:
-                        if cluster_name not in cluster_service_map:
-                            cluster_service_map[cluster_name] = []
-                        cluster_service_map[cluster_name].append(f"{service_name} ({service_env})")
-                    
-            except Exception as e:
-                print(f"   ❌ Error fetching clusters: {e}")
-    print(f"☸️  EKS: kube_cluster_name resolved for {eks_attached} / {operational_ct} operational service(s).")
-    
-    if cluster_service_map:
-        print(f"☸️  EKS Summary (All Environments):")
-        for cluster_name, services in sorted(cluster_service_map.items()):
-            print(f"   • {cluster_name}: {len(services)} services")
+        def fetch_clusters_for_service(status_obj):
+            """Fetch EKS clusters for a single service"""
+            service_name = status_obj["service"]
+            service_env = status_obj["environment"]
+            if status_obj.get("status") in ("inactive", "unknown"):
+                return (status_obj, [], service_name, service_env, None)
+            cluster_names, from_db = _resolve_eks_cluster_names(
+                service_name, service_env, eks_tr_h, force_refresh
+            )
+            return (status_obj, cluster_names, service_name, service_env, from_db)
+
+        eks_attached = 0
+        eks_cluster_rows_db = 0
+        eks_cluster_rows_live = 0
+        with ThreadPoolExecutor(max_workers=STATUS_MONITOR_EKS_MAX_WORKERS) as executor:
+            futures = [executor.submit(fetch_clusters_for_service, status_obj) for status_obj in all_statuses]
+
+            for future in as_completed(futures):
+                try:
+                    status_obj, cluster_names, service_name, service_env, from_db = future.result()
+                    if from_db is True:
+                        eks_cluster_rows_db += 1
+                    elif from_db is False:
+                        eks_cluster_rows_live += 1
+
+                    if cluster_names:
+                        status_obj["eks_clusters"] = cluster_names
+                        status_obj["eks_cluster_count"] = len(cluster_names)
+                        eks_attached += 1
+
+                        for cluster_name in cluster_names:
+                            if cluster_name not in cluster_service_map:
+                                cluster_service_map[cluster_name] = []
+                            cluster_service_map[cluster_name].append(f"{service_name} ({service_env})")
+
+                except Exception as e:
+                    print(f"   ❌ Error fetching clusters: {e}")
+        print(
+            f"☸️  EKS: kube_cluster_name resolved for {eks_attached} / {operational_ct} operational service(s) "
+            f"(rows from SQLite={eks_cluster_rows_db}, live Datadog={eks_cluster_rows_live})."
+        )
+
+        if cluster_service_map:
+            print(f"☸️  EKS Summary (All Environments):")
+            for cluster_name, services in sorted(cluster_service_map.items()):
+                print(f"   • {cluster_name}: {len(services)} services")
+    else:
+        print(
+            "☸️  EKS cluster lookup skipped (STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0) — "
+            "tooltips omit kube_cluster_name; set to 1 after raising ALB/nginx idle timeout."
+        )
     
     # Get Splunk outliers (DISABLED)
     # print(f"📊 Fetching Splunk outliers...")
@@ -4432,11 +4595,16 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     </div>
     """
     
-    # Main layout container
-    output += """
+    # Main layout container (Samsung: narrower sidebar + class hooks for compact CSS)
+    if environment == "samsung":
+        output += """
     <!-- Main Container: Sidebar + Content -->
+    <div class="sm-page-samsung sm-outer-grid">
+        <div class="sm-sidebar-col">
+    """
+    else:
+        output += """
     <div style='display: grid; grid-template-columns: 260px 1fr; gap: 24px; margin-bottom: 20px;'>
-        <!-- Left Sidebar -->
         <div style='display: flex; flex-direction: column; gap: 16px;'>
     """
     
@@ -4461,6 +4629,8 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         pd_status_icon = '🟢'
         pd_status_text = 'HEALTHY'
         pd_blink_class = ''  # No blink when healthy
+
+    pd_sem_link_esc = html.escape(_sm_pagerduty_external_incidents_url(), quote=True)
 
     spl_tools_list = spl_data.get("tools") if spl_data.get("success") else []
     spl_by_id = {t.get("id"): t for t in (spl_tools_list or [])}
@@ -4609,7 +4779,8 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         def _clusters_for_attention_row(status_obj):
             service_name = status_obj['service']
             service_env = status_obj['environment']
-            return _resolve_eks_cluster_names(service_name, service_env, 1)
+            names, _db = _resolve_eks_cluster_names(service_name, service_env, 1, force_refresh)
+            return names
 
         with ThreadPoolExecutor(max_workers=min(12, len(attn_missing_clusters))) as attn_cl_ex:
             fut_map = {
@@ -4735,8 +4906,13 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
             </tr>"""
     
     err_kpi_color = '#f87171' if overall_error_rate > 1 else '#fbbf24' if overall_error_rate > 0.3 else '#4ade80'
+    cc_strip_classes = "cc-strip"
+    if environment == "samsung":
+        cc_strip_classes += " cc-strip--compact-samsung"
+        if not attention_merged:
+            cc_strip_classes += " cc-strip--samsung-attn-empty"
     command_center_html = f"""
-            <div class="cc-strip">
+            <div class="{cc_strip_classes}">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
                     <div>
                         <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;">Command center</div>
@@ -4773,7 +4949,6 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                 </table>
             </div>
     """
-    
     # First: Overall Summary
     output += f"""
             <!-- Overall Summary -->
@@ -4840,10 +5015,12 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
             
             <!-- PagerDuty Status -->
             <div style='background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); border: 1px solid #e5e7eb;'>
-                <div style='margin-bottom: 12px;'>
+                <div style='display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;'>
                     <h3 style='font-size: 15px; font-weight: 700; color: #111827; margin: 0; letter-spacing: -0.02em;'>🚨 PagerDuty</h3>
+                    <a href="{pd_sem_link_esc}" target="_blank" rel="noopener noreferrer" title="Open PagerDuty external status (incidents)" style="font-size:10px;font-weight:800;color:#2563eb;text-decoration:none;white-space:nowrap;">Incidents ↗</a>
                 </div>
-                <div class='{pd_blink_class}' style='display: flex; justify-content: space-between; gap: 12px; padding: 12px; background: {pd_bg_color}; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);'>
+                <a href="{pd_sem_link_esc}" target="_blank" rel="noopener noreferrer" title="Open PagerDuty incidents" style="text-decoration:none;display:block;border-radius:8px;color:inherit;">
+                <div class='{pd_blink_class}' style='display: flex; justify-content: space-between; gap: 12px; padding: 12px; background: {pd_bg_color}; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); cursor:pointer;'>
                     <div style='text-align: center; flex: 1;'>
                         <div style='font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.01em;'>{pd_triggered}</div>
                         <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Triggered</div>
@@ -4857,80 +5034,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                         <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Resolved</div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Samsung external board: semaphore + full incident lists (API paginates board scope) -->
-            <div style='background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); border: 1px solid #e5e7eb;'>
-                <div style='margin-bottom: 12px;'>
-                    <h3 style='font-size: 15px; font-weight: 700; color: #0c4a6e; margin: 0; letter-spacing: -0.02em;'>📱 Samsung</h3>
-                </div>
-                <div id='ss-summary' class='pd-status-summary' style='display: flex; justify-content: space-between; gap: 12px; padding: 12px; background: #10b981; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);'>
-                    <div style='text-align: center; flex: 1;'>
-                        <div id='ss-triggered-count' style='font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.01em;'>0</div>
-                        <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Triggered</div>
-                    </div>
-                    <div style='text-align: center; flex: 1;'>
-                        <div id='ss-ack-count-number' style='font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.01em;'>0</div>
-                        <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Ack</div>
-                    </div>
-                    <div style='text-align: center; flex: 1;'>
-                        <div id='ss-resolved-count-number' style='font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.01em;'>0</div>
-                        <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Resolved</div>
-                    </div>
-                </div>
-                <div id='ss-board-links' style='font-size: 11px; color: #64748b; margin: 10px 0; line-height: 1.4; padding: 6px 8px; border-radius: 6px; background: #f0f9ff; border: 1px solid #bae6fd;'>Loading…</div>
-                <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 10px;'>
-                    <div>
-                        <h4 style='font-size: 12px; margin: 0 0 6px 0; color: #64748b; font-weight: 700;'>🔴 Active</h4>
-                        <ul id='ss-active' style='list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 200px; overflow-y: auto;'>
-                            <li style='padding: 6px; color: #999; background: #f8fafc; border-radius: 4px;'>Loading…</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 style='font-size: 12px; margin: 0 0 6px 0; color: #64748b; font-weight: 700;'>🟢 Resolved</h4>
-                        <ul id='ss-resolved' style='list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 200px; overflow-y: auto;'>
-                            <li style='padding: 6px; color: #999; background: #f8fafc; border-radius: 4px;'>Loading…</li>
-                        </ul>
-                    </div>
-                </div>
-                <div style='margin-top: 8px; font-size: 10px; color: #64748b; text-align: center;'><span id='ss-time'>Last updated: --:--:--</span></div>
-            </div>
-
-            <!-- ADT external board -->
-            <div style='background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); border: 1px solid #e5e7eb;'>
-                <div style='margin-bottom: 12px;'>
-                    <h3 style='font-size: 15px; font-weight: 700; color: #3730a3; margin: 0; letter-spacing: -0.02em;'>🏠 ADT</h3>
-                </div>
-                <div id='adt-summary' class='pd-status-summary' style='display: flex; justify-content: space-between; gap: 12px; padding: 12px; background: #10b981; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);'>
-                    <div style='text-align: center; flex: 1;'>
-                        <div id='adt-triggered-count' style='font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.01em;'>0</div>
-                        <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Triggered</div>
-                    </div>
-                    <div style='text-align: center; flex: 1;'>
-                        <div id='adt-ack-count-number' style='font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.01em;'>0</div>
-                        <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Ack</div>
-                    </div>
-                    <div style='text-align: center; flex: 1;'>
-                        <div id='adt-resolved-count-number' style='font-size: 24px; font-weight: 700; color: white; letter-spacing: -0.01em;'>0</div>
-                        <div style='font-size: 10px; color: rgba(255,255,255,0.9); font-weight: 600;'>Resolved</div>
-                    </div>
-                </div>
-                <div id='adt-board-links' style='font-size: 11px; color: #64748b; margin: 10px 0; line-height: 1.4; padding: 6px 8px; border-radius: 6px; background: #eef2ff; border: 1px solid #c7d2fe;'>Loading…</div>
-                <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 10px;'>
-                    <div>
-                        <h4 style='font-size: 12px; margin: 0 0 6px 0; color: #64748b; font-weight: 700;'>🔴 Active</h4>
-                        <ul id='adt-active' style='list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 200px; overflow-y: auto;'>
-                            <li style='padding: 6px; color: #999; background: #f8fafc; border-radius: 4px;'>Loading…</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 style='font-size: 12px; margin: 0 0 6px 0; color: #64748b; font-weight: 700;'>🟢 Resolved</h4>
-                        <ul id='adt-resolved' style='list-style: none; padding: 0; margin: 0; font-size: 11px; max-height: 200px; overflow-y: auto;'>
-                            <li style='padding: 6px; color: #999; background: #f8fafc; border-radius: 4px;'>Loading…</li>
-                        </ul>
-                    </div>
-                </div>
-                <div style='margin-top: 8px; font-size: 10px; color: #64748b; text-align: center;'><span id='adt-time'>Last updated: --:--:--</span></div>
+                </a>
             </div>
 
             <!-- Splunk P0 predict outliers (same 72h window as home Splunk monitor) -->
@@ -5162,10 +5266,11 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     }
     
     # Adjust grid columns based on number of environments
-    # For Samsung, we'll stack sections vertically (no grid, just block layout)
+    # Samsung: two columns — service mosaics (left) + Splunk REST viewer (right)
     if environment == 'samsung':
         output += """
-    <div style='display: flex; flex-direction: column; gap: 12px;'>
+    <div class="sm-samsung-splunk-layout">
+    <div class="sm-samsung-groups" style="display: flex; flex-direction: column; gap: 12px; min-width:0;">
     """
     else:
         num_cols = len(environments)
@@ -5398,7 +5503,19 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         </div>
         """
     
-    output += """
+    if environment == "samsung":
+        output += """
+    </div>
+    """
+        output += _samsung_splunk_embed_aside_html()
+        output += """
+    </div>
+    </div>
+    </div>
+    </div>
+    """
+    else:
+        output += """
     </div>
     </div>
     </div>

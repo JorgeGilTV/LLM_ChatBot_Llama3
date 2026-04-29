@@ -44,6 +44,20 @@ function ensureHtml2Canvas() {
     return _html2canvasPromise;
 }
 
+/** Home hub / env tiles: WebKit throws on anchor.href = malformed URL (\"string did not match expected pattern\"). */
+function sanitizeHttpHrefForDom(href) {
+    if (href == null || href === '') return null;
+    const s = String(href).replace(/[\r\n\0\u2028\u2029]/g, '').trim();
+    if (!s || s === '#') return null;
+    try {
+        const u = new URL(s);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+        return u.href;
+    } catch (_e) {
+        return null;
+    }
+}
+
 // ============================================
 // THEME TOGGLE
 // ============================================
@@ -881,8 +895,8 @@ function newChat() {
 
 /** Home page environment strip — same API as /statusmonitor hub */
 const HOME_ENV_HUB_TIMERANGE = 1;
-const HOME_ENV_HUB_REFRESH_MS = 300000; // 5 minutes
-const HUB_SUMMARY_CACHE_TTL_MS = 270000; // slightly under 5 min home refresh
+const HOME_ENV_HUB_REFRESH_MS = 360000; // 6 minutes
+const HUB_SUMMARY_CACHE_TTL_MS = 350000; // slightly under 6 min home refresh
 
 function renderHomeEnvironmentHubFromPayload(data, grid, meta, fromSessionCache) {
     if (data.success === false || (data.error && !data.environments)) {
@@ -907,7 +921,7 @@ function renderHomeEnvironmentHubFromPayload(data, grid, meta, fromSessionCache)
                 cell.className = 'env-hub-cell';
                 const a = document.createElement('a');
                 a.className = 'env-hub-tile ' + cls;
-                a.href = e.href || '#';
+                a.href = sanitizeHttpHrefForDom(e.href) || '#';
                 a.target = '_blank';
                 a.rel = 'noopener';
                 const title = document.createElement('div');
@@ -994,9 +1008,9 @@ function renderHomeEnvironmentHubFromPayload(data, grid, meta, fromSessionCache)
             meta.textContent =
                 'Session cache (fewer API calls) · ' +
                 ts +
-                ' · auto-refresh every 5 min';
+                ' · auto-refresh every 6 min';
         } else {
-            meta.textContent = 'Last updated: ' + ts + ' · auto-refresh every 5 min';
+            meta.textContent = 'Last updated: ' + ts + ' · auto-refresh every 6 min';
         }
     }
 }
@@ -1093,6 +1107,11 @@ function applyPagerDutyMonitorPayload(data) {
                         aOpen(uPend, 'Pending') +
                         ' · ' +
                         aOpen(base, 'All incidents');
+                    const pdBarWrap = document.getElementById('pd-summary-wrap');
+                    if (pdBarWrap) {
+                        pdBarWrap.href = base;
+                        pdBarWrap.title = 'Open PagerDuty incidents (board ' + id + ')';
+                    }
                 }
             }
             
@@ -1181,9 +1200,9 @@ function applyPagerDutyMonitorPayload(data) {
             }
 }
 
-const SIDEBAR_WIDGET_CACHE_TTL_MS = 170000;
+const SIDEBAR_WIDGET_CACHE_TTL_MS = 350000;
 /** Confluence Team Calendar API is often slow; cache deployments longer to avoid repeated waits. */
-const DEPLOYMENTS_WIDGET_CACHE_TTL_MS = 300000;
+const DEPLOYMENTS_WIDGET_CACHE_TTL_MS = 350000;
 
 function setDeploymentsLoading(loading) {
     const summary = document.getElementById('deployments-summary');
@@ -1753,11 +1772,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(runSidebarMonitors, 0);
     }
     
-    // Auto-refresh status every 3 minutes (180000ms)
-    setInterval(loadStatusMonitor, 180000);
-    setInterval(loadPagerDutyMonitor, 180000);
-    setInterval(loadSplunkOutliersMonitor, 180000);
-    setInterval(loadUpcomingDeployments, 300000);
+    // Auto-refresh status widgets every 6 minutes
+    setInterval(loadStatusMonitor, 360000);
+    setInterval(loadPagerDutyMonitor, 360000);
+    setInterval(loadSplunkOutliersMonitor, 360000);
+    setInterval(loadUpcomingDeployments, 360000);
     
     // Update timestamp initially
     updateLastUpdateTime();

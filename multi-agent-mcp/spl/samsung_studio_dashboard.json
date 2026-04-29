@@ -1,0 +1,698 @@
+{
+    "title": "Alarm Creation Latencies",
+    "description": "RapidSOS processing time and end-to-end alarm creation latency percentiles (P50, P95, P99) across PROD, QA, and DEV environments.",
+    "inputs": {},
+    "defaults": {
+        "dataSources": {}
+    },
+    "visualizations": {
+        "viz_e2e_alarm_time_dev": {
+            "dataSources": {
+                "primary": "ds_e2e_alarm_time_dev"
+            },
+            "description": "P50, P95, P99 end-to-end alarm creation latency from validation to 200 response in DEV.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "E2E Alarm Creation Latency — DEV (pp-samsung-dev, hmsguard-samsung-dev)",
+            "type": "splunk.line"
+        },
+        "viz_e2e_alarm_time_prod": {
+            "dataSources": {
+                "primary": "ds_e2e_alarm_time_prod"
+            },
+            "description": "P50, P95, P99 end-to-end alarm creation latency from validation to 200 response in PROD.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "E2E Alarm Creation Latency — PROD (pp-samsung-prod, hmsguard-samsung-prod)",
+            "type": "splunk.line"
+        },
+        "viz_e2e_alarm_time_qa": {
+            "dataSources": {
+                "primary": "ds_e2e_alarm_time_qa"
+            },
+            "description": "P50, P95, P99 end-to-end alarm creation latency from validation to 200 response in QA.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "E2E Alarm Creation Latency — QA (pp-samsung-qa, hmsguard-samsung-qa)",
+            "type": "splunk.line"
+        },
+        "viz_hourly_latency_dev": {
+            "dataSources": {
+                "primary": "ds_hourly_latency_dev"
+            },
+            "description": "P50, P95, P99, Avg alarm creation latency aggregated by hour of day (UTC) over last 30 days in DEV.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Hour of Day (UTC)",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "E2E Latency by Hour of Day — DEV (pp-samsung-dev, hmsguard-samsung-dev)",
+            "type": "splunk.line"
+        },
+        "viz_hourly_latency_prod": {
+            "dataSources": {
+                "primary": "ds_hourly_latency_prod"
+            },
+            "description": "P50, P95, P99, Avg alarm creation latency aggregated by hour of day (UTC) over last 30 days in PROD.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Hour of Day (UTC)",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "E2E Latency by Hour of Day — PROD (pp-samsung-prod, hmsguard-samsung-prod)",
+            "type": "splunk.line"
+        },
+        "viz_hourly_latency_qa": {
+            "dataSources": {
+                "primary": "ds_hourly_latency_qa"
+            },
+            "description": "P50, P95, P99, Avg alarm creation latency aggregated by hour of day (UTC) over last 30 days in QA.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Hour of Day (UTC)",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "E2E Latency by Hour of Day — QA (pp-samsung-qa, hmsguard-samsung-qa)",
+            "type": "splunk.line"
+        },
+        "viz_processing_time_dev": {
+            "dataSources": {
+                "primary": "ds_processing_time_dev"
+            },
+            "description": "P50, P95, P99 processing time from OAuth proxy validation to RapidSOS trigger callflow in DEV. Time range: dashboard global.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Processing Time (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Processing Time — DEV (pp-samsung-dev, hmsguard-samsung-dev)",
+            "type": "splunk.line"
+        },
+        "viz_processing_time_prod": {
+            "dataSources": {
+                "primary": "ds_processing_time_prod"
+            },
+            "description": "P50, P95, P99 processing time from OAuth proxy validation to RapidSOS trigger callflow in PROD. Time range: dashboard global.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Processing Time (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Processing Time — PROD (pp-samsung-prod, hmsguard-samsung-prod)",
+            "type": "splunk.line"
+        },
+        "viz_processing_time_qa": {
+            "dataSources": {
+                "primary": "ds_processing_time_qa"
+            },
+            "description": "P50, P95, P99 processing time from OAuth proxy validation to RapidSOS trigger callflow in QA. Time range: dashboard global.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Processing Time (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Processing Time — QA (pp-samsung-qa, hmsguard-samsung-qa)",
+            "type": "splunk.line"
+        },
+        "viz_hourly_rapidsos_roundtrip_dev": {
+            "dataSources": {
+                "primary": "ds_hourly_rapidsos_roundtrip_dev"
+            },
+            "description": "P50, P95, P99, Avg RapidSOS HTTP round-trip aggregated by hour of day (UTC) over last 30 days in DEV.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Hour of Day (UTC)",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Round-Trip by Hour of Day — DEV (hmsguard-samsung-dev)",
+            "type": "splunk.line"
+        },
+        "viz_hourly_rapidsos_roundtrip_prod": {
+            "dataSources": {
+                "primary": "ds_hourly_rapidsos_roundtrip_prod"
+            },
+            "description": "P50, P95, P99, Avg RapidSOS HTTP round-trip aggregated by hour of day (UTC) over last 30 days in PROD.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Hour of Day (UTC)",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Round-Trip by Hour of Day — PROD (hmsguard-samsung-prod)",
+            "type": "splunk.line"
+        },
+        "viz_hourly_rapidsos_roundtrip_qa": {
+            "dataSources": {
+                "primary": "ds_hourly_rapidsos_roundtrip_qa"
+            },
+            "description": "P50, P95, P99, Avg RapidSOS HTTP round-trip aggregated by hour of day (UTC) over last 30 days in QA.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Hour of Day (UTC)",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Round-Trip by Hour of Day — QA (hmsguard-samsung-qa)",
+            "type": "splunk.line"
+        },
+        "viz_rapidsos_roundtrip_dev": {
+            "dataSources": {
+                "primary": "ds_rapidsos_roundtrip_dev"
+            },
+            "description": "P50, P95, P99 RapidSOS HTTP round-trip time extracted from Feign response elapsed time in DEV.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Round-Trip Latency — DEV (hmsguard-samsung-dev)",
+            "type": "splunk.line"
+        },
+        "viz_rapidsos_roundtrip_prod": {
+            "dataSources": {
+                "primary": "ds_rapidsos_roundtrip_prod"
+            },
+            "description": "P50, P95, P99 RapidSOS HTTP round-trip time extracted from Feign response elapsed time in PROD.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Round-Trip Latency — PROD (hmsguard-samsung-prod)",
+            "type": "splunk.line"
+        },
+        "viz_rapidsos_roundtrip_qa": {
+            "dataSources": {
+                "primary": "ds_rapidsos_roundtrip_qa"
+            },
+            "description": "P50, P95, P99 RapidSOS HTTP round-trip time extracted from Feign response elapsed time in QA.",
+            "options": {
+                "legendDisplay": "top",
+                "seriesColors": [
+                    "#53a051",
+                    "#f8be34",
+                    "#dc4e41",
+                    "#0877a6"
+                ],
+                "xAxisTitleText": "Time",
+                "yAxisAbbreviation": "off",
+                "yAxisTitleText": "Latency (s)"
+            },
+            "showLastUpdated": true,
+            "showProgressBar": true,
+            "title": "RapidSOS Round-Trip Latency — QA (hmsguard-samsung-qa)",
+            "type": "splunk.line"
+        },
+        "viz_section_e2e_alarm_time": {
+            "options": {
+                "markdown": "## End-to-End Alarm Creation Latency (OAuth Proxy → Alarm Created Response)"
+            },
+            "type": "splunk.markdown"
+        },
+        "viz_section_hourly_latency": {
+            "options": {
+                "markdown": "## E2E Alarm Creation Latency by Hour of Day (last 30 days)"
+            },
+            "type": "splunk.markdown"
+        },
+        "viz_section_hourly_rapidsos_roundtrip": {
+            "options": {
+                "markdown": "## RapidSOS HTTP Round-Trip Latency by Hour of Day (last 30 days)"
+            },
+            "type": "splunk.markdown"
+        },
+        "viz_section_processing_time": {
+            "options": {
+                "markdown": "## RapidSOS Processing Time (OAuth Proxy → RapidSOS Trigger)"
+            },
+            "type": "splunk.markdown"
+        },
+        "viz_section_rapidsos_roundtrip": {
+            "options": {
+                "markdown": "## RapidSOS HTTP Round-Trip Latency (Feign POST → Response)"
+            },
+            "type": "splunk.markdown"
+        }
+    },
+    "dataSources": {
+        "ds_e2e_alarm_time_dev": {
+            "name": "E2E Alarm Creation Latency - DEV",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-dev \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=pp-samsung-dev \"SuccessOnlyFeignDecoder- Successfully decoded response\" \"partners/users/alarm\" \"status=[200]\" \"method=[POST]\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats max(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | bin t1 span=1d as _time | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_e2e_alarm_time_prod": {
+            "name": "E2E Alarm Creation Latency - PROD",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-prod \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=pp-samsung-prod \"SuccessOnlyFeignDecoder- Successfully decoded response\" \"partners/users/alarm\" \"status=[200]\" \"method=[POST]\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats max(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | bin t1 span=1d as _time | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_e2e_alarm_time_qa": {
+            "name": "E2E Alarm Creation Latency - QA",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-qa \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=pp-samsung-qa \"SuccessOnlyFeignDecoder- Successfully decoded response\" \"partners/users/alarm\" \"status=[200]\" \"method=[POST]\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats max(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | bin t1 span=1d as _time | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_hourly_latency_dev": {
+            "name": "Hourly E2E Latency - DEV",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-dev \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=pp-samsung-dev \"SuccessOnlyFeignDecoder- Successfully decoded response\" \"partners/users/alarm\" \"status=[200]\" \"method=[POST]\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats max(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | eval hour=strftime(t1, \"%H\") | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by hour | sort hour"
+            },
+            "type": "ds.search"
+        },
+        "ds_hourly_latency_prod": {
+            "name": "Hourly E2E Latency - PROD",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-prod \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=pp-samsung-prod \"SuccessOnlyFeignDecoder- Successfully decoded response\" \"partners/users/alarm\" \"status=[200]\" \"method=[POST]\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats max(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | eval hour=strftime(t1, \"%H\") | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by hour | sort hour"
+            },
+            "type": "ds.search"
+        },
+        "ds_hourly_latency_qa": {
+            "name": "Hourly E2E Latency - QA",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-qa \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=pp-samsung-qa \"SuccessOnlyFeignDecoder- Successfully decoded response\" \"partners/users/alarm\" \"status=[200]\" \"method=[POST]\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats max(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | eval hour=strftime(t1, \"%H\") | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by hour | sort hour"
+            },
+            "type": "ds.search"
+        },
+        "ds_processing_time_dev": {
+            "name": "RapidSOS Processing Time - DEV",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-dev \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=hmsguard-samsung-dev \"AlertsApi - [AlertsApi#triggerCallflow] ---> POST\" \"rapidsos.com\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | bin t1 span=1d as _time | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_processing_time_prod": {
+            "name": "RapidSOS Processing Time - PROD",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-prod \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=hmsguard-samsung-prod \"AlertsApi - [AlertsApi#triggerCallflow] ---> POST\" \"rapidsos.com\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | bin t1 span=1d as _time | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_processing_time_qa": {
+            "name": "RapidSOS Processing Time - QA",
+            "options": {
+                "query": "index=client_prod namespace=pp-samsung-qa \"EmergencyAlarmServiceImpl- Validating CreateAlarmRequest\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t1 by alarm_id | join alarm_id [search index=client_prod namespace=hmsguard-samsung-qa \"AlertsApi - [AlertsApi#triggerCallflow] ---> POST\" \"rapidsos.com\" earliest=-30d@d latest=now | rex \"\\[(?P<alarm_id>(?:xc!)?[a-fA-F0-9\\-]{36}[^\\]]*)\\]\" | stats min(_time) as t2 by alarm_id] | eval delta_s=round(t2-t1, 3) | bin t1 span=1d as _time | stats p50(delta_s) as \"P50 (s)\" p95(delta_s) as \"P95 (s)\" p99(delta_s) as \"P99 (s)\" avg(delta_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_hourly_rapidsos_roundtrip_dev": {
+            "name": "Hourly RapidSOS Round-Trip - DEV",
+            "options": {
+                "query": "index=client_prod namespace=hmsguard-samsung-dev \"AlertsApi#triggerCallflow\" \"<--- HTTP\" earliest=-30d@d latest=now | rex \"\\((?P<elapsed_ms>\\d+)ms\\)\" | eval latency_s=round(elapsed_ms/1000, 3) | eval hour=strftime(_time, \"%H\") | stats p50(latency_s) as \"P50 (s)\" p95(latency_s) as \"P95 (s)\" p99(latency_s) as \"P99 (s)\" avg(latency_s) as \"Avg (s)\" by hour | sort hour"
+            },
+            "type": "ds.search"
+        },
+        "ds_hourly_rapidsos_roundtrip_prod": {
+            "name": "Hourly RapidSOS Round-Trip - PROD",
+            "options": {
+                "query": "index=client_prod namespace=hmsguard-samsung-prod \"AlertsApi#triggerCallflow\" \"<--- HTTP\" earliest=-30d@d latest=now | rex \"\\((?P<elapsed_ms>\\d+)ms\\)\" | eval latency_s=round(elapsed_ms/1000, 3) | eval hour=strftime(_time, \"%H\") | stats p50(latency_s) as \"P50 (s)\" p95(latency_s) as \"P95 (s)\" p99(latency_s) as \"P99 (s)\" avg(latency_s) as \"Avg (s)\" by hour | sort hour"
+            },
+            "type": "ds.search"
+        },
+        "ds_hourly_rapidsos_roundtrip_qa": {
+            "name": "Hourly RapidSOS Round-Trip - QA",
+            "options": {
+                "query": "index=client_prod namespace=hmsguard-samsung-qa \"AlertsApi#triggerCallflow\" \"<--- HTTP\" earliest=-30d@d latest=now | rex \"\\((?P<elapsed_ms>\\d+)ms\\)\" | eval latency_s=round(elapsed_ms/1000, 3) | eval hour=strftime(_time, \"%H\") | stats p50(latency_s) as \"P50 (s)\" p95(latency_s) as \"P95 (s)\" p99(latency_s) as \"P99 (s)\" avg(latency_s) as \"Avg (s)\" by hour | sort hour"
+            },
+            "type": "ds.search"
+        },
+        "ds_rapidsos_roundtrip_dev": {
+            "name": "RapidSOS Round-Trip - DEV",
+            "options": {
+                "query": "index=client_prod namespace=hmsguard-samsung-dev \"AlertsApi#triggerCallflow\" \"<--- HTTP\" earliest=-30d@d latest=now | rex \"\\((?P<elapsed_ms>\\d+)ms\\)\" | eval latency_s=round(elapsed_ms/1000, 3) | bin _time span=1d | stats p50(latency_s) as \"P50 (s)\" p95(latency_s) as \"P95 (s)\" p99(latency_s) as \"P99 (s)\" avg(latency_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_rapidsos_roundtrip_prod": {
+            "name": "RapidSOS Round-Trip - PROD",
+            "options": {
+                "query": "index=client_prod namespace=hmsguard-samsung-prod \"AlertsApi#triggerCallflow\" \"<--- HTTP\" earliest=-30d@d latest=now | rex \"\\((?P<elapsed_ms>\\d+)ms\\)\" | eval latency_s=round(elapsed_ms/1000, 3) | bin _time span=1d | stats p50(latency_s) as \"P50 (s)\" p95(latency_s) as \"P95 (s)\" p99(latency_s) as \"P99 (s)\" avg(latency_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        },
+        "ds_rapidsos_roundtrip_qa": {
+            "name": "RapidSOS Round-Trip - QA",
+            "options": {
+                "query": "index=client_prod namespace=hmsguard-samsung-qa \"AlertsApi#triggerCallflow\" \"<--- HTTP\" earliest=-30d@d latest=now | rex \"\\((?P<elapsed_ms>\\d+)ms\\)\" | eval latency_s=round(elapsed_ms/1000, 3) | bin _time span=1d | stats p50(latency_s) as \"P50 (s)\" p95(latency_s) as \"P95 (s)\" p99(latency_s) as \"P99 (s)\" avg(latency_s) as \"Avg (s)\" by _time"
+            },
+            "type": "ds.search"
+        }
+    },
+    "layout": {
+        "layoutDefinitions": {
+            "layout_1": {
+                "options": {
+                    "height": 5560,
+                    "width": 1440
+                },
+                "structure": [
+                    {
+                        "item": "viz_section_processing_time",
+                        "position": {
+                            "h": 60,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 0
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_processing_time_prod",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 70
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_processing_time_qa",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 380
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_processing_time_dev",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 690
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_section_e2e_alarm_time",
+                        "position": {
+                            "h": 60,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 1020
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_e2e_alarm_time_prod",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 1090
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_e2e_alarm_time_qa",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 1400
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_e2e_alarm_time_dev",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 1710
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_section_rapidsos_roundtrip",
+                        "position": {
+                            "h": 60,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 2040
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_rapidsos_roundtrip_prod",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 2110
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_rapidsos_roundtrip_qa",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 2420
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_rapidsos_roundtrip_dev",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 2730
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_section_hourly_rapidsos_roundtrip",
+                        "position": {
+                            "h": 60,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 3060
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_hourly_rapidsos_roundtrip_prod",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 3130
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_hourly_rapidsos_roundtrip_qa",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 3440
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_hourly_rapidsos_roundtrip_dev",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 3750
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_section_hourly_latency",
+                        "position": {
+                            "h": 60,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 4080
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_hourly_latency_prod",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 4150
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_hourly_latency_qa",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 4460
+                        },
+                        "type": "block"
+                    },
+                    {
+                        "item": "viz_hourly_latency_dev",
+                        "position": {
+                            "h": 300,
+                            "w": 1440,
+                            "x": 0,
+                            "y": 4770
+                        },
+                        "type": "block"
+                    }
+                ],
+                "type": "absolute"
+            }
+        },
+        "tabs": {
+            "items": [
+                {
+                    "label": "New tab",
+                    "layoutId": "layout_1"
+                }
+            ]
+        }
+    }
+}

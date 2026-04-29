@@ -22,10 +22,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (includes data/metrics_history.db when built from a tree that has it)
 COPY . .
 
-# Create directories for logs and data persistence
+# Ensure dirs exist; DB file may be baked in for faster cold starts (override with volume mount at runtime)
 RUN mkdir -p /app/logs /app/data
 
 # Expose port

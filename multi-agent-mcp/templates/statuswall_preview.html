@@ -230,6 +230,19 @@
             const n = Number(v);
             return Number.isFinite(n) ? n.toFixed(2) : String(v);
         }
+        /** Avoid WebKit throw: \"The string did not match the expected pattern\" on bad .href */
+        function smSafeHttpHref(href) {
+            if (href == null || href === '') return null;
+            const s = String(href).replace(/[\r\n\0\u2028\u2029]/g, '').trim();
+            if (!s || s === '#') return null;
+            try {
+                const u = new URL(s);
+                if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+                return u.href;
+            } catch (_e) {
+                return null;
+            }
+        }
         function wallReasonFallback(s) {
             if (s.status_reason) return s.status_reason;
             const ddcR = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
@@ -326,10 +339,11 @@
             chips.className = 'sm-hover-tip-chips';
             if (s.pd_incident) {
                 let c;
-                if (s.pd_incident_url) {
+                const pdu = smSafeHttpHref(s.pd_incident_url);
+                if (pdu) {
                     c = document.createElement('a');
                     c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    c.href = s.pd_incident_url;
+                    c.href = pdu;
                     c.target = '_blank';
                     c.rel = 'noopener noreferrer';
                     c.textContent = 'PagerDuty';
@@ -340,10 +354,11 @@
                 }
                 chips.appendChild(c);
             }
-            if (s.splunk_url) {
+            const splH = smSafeHttpHref(s.splunk_url);
+            if (splH) {
                 const sp = document.createElement('a');
                 sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
-                sp.href = s.splunk_url;
+                sp.href = splH;
                 sp.target = '_blank';
                 sp.rel = 'noopener noreferrer';
                 sp.textContent = 'Splunk';
@@ -363,10 +378,11 @@
             }
             const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
             if (wddc > 0) {
-                if (s.dd_monitors_url) {
+                const ddmH = smSafeHttpHref(s.dd_monitors_url);
+                if (ddmH) {
                     const cdd = document.createElement('a');
                     cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    cdd.href = s.dd_monitors_url;
+                    cdd.href = ddmH;
                     cdd.target = '_blank';
                     cdd.rel = 'noopener noreferrer';
                     cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
@@ -434,8 +450,6 @@
             timerange: 1,
             monitors: {
                 pagerduty: { label: 'PagerDuty', status: 'warning', short: '2 trg', detail: 'Mock — 2 triggered (24h)' },
-                samsung: { label: 'Samsung', status: 'ok', short: 'OK', detail: 'Mock — Samsung board' },
-                adt: { label: 'ADT', status: 'ok', short: 'OK', detail: 'Mock — ADT board' },
                 splunk: { label: 'Splunk', status: 'ok', short: 'OK', detail: 'Mock — P0 predict OK' },
             },
             groups: [
@@ -539,7 +553,7 @@
             if (!monitors || typeof monitors !== 'object') return;
             const cluster = document.createElement('div');
             cluster.className = 'sw-monitor-cluster';
-            ['pagerduty', 'samsung', 'adt', 'splunk'].forEach(function (k) {
+            ['pagerduty', 'splunk'].forEach(function (k) {
                 const m = monitors[k];
                 if (!m || !m.label) return;
                 const pill = document.createElement('span');

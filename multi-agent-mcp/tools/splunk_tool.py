@@ -57,14 +57,19 @@ def execute_splunk_query(
             response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(30, 180))
         
         if response.status_code == 200:
-            # Parse JSON results from export endpoint
+            # Parse JSON lines from export (NDJSON). Splunk often omits "preview" on final rows;
+            # requiring preview==False dropped all rows — only skip streaming preview rows.
             results = []
             for line in response.text.strip().split('\n'):
                 if line:
                     try:
                         result = json.loads(line)
-                        if result.get("result") and result.get("preview") == False:
-                            results.append(result["result"])
+                        row = result.get("result")
+                        if not row:
+                            continue
+                        if result.get("preview") is True:
+                            continue
+                        results.append(row)
                     except json.JSONDecodeError:
                         continue
             return query_key, results, None

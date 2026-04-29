@@ -85,8 +85,8 @@ recovered-from-docker-tar/
 # Local archive, presentations, dist — not part of the running app
 old/
 
-# Do not bake host metrics DB into the image
-data/*.db
+# metrics_history.db: include in image when present (docker-build-export.sh / delivery with cache seed).
+# Omit journal sidecars from context if any appear on host
 data/*.db-journal
 
 # Presentation files

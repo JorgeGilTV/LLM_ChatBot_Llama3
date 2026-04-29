@@ -451,12 +451,20 @@
             padding: 0 2px;
         }
         .sw-loading { padding: 40px 20px; text-align: center; color: #94a3b8; }
-        /* Monitor pills cluster (PagerDuty, Samsung, ADT, Splunk) — same row as section title, left area */
+        /* Monitor pills cluster (PagerDuty, Splunk) — same row as section title, left area */
         .sw-monitor-cluster {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             gap: 8px;
+        }
+        a.sw-monitor-pill {
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+        }
+        a.sw-monitor-pill:hover {
+            filter: brightness(1.08);
         }
     </style>
 </head>
@@ -503,28 +511,13 @@
         </div>
         <span class="sw-meta" id="sw-status">Loading…</span>
     </header>
-    <!-- Off-screen: semaphore-only DOM for Samsung/ADT JS (wall shows status as pills in section heads). -->
-    <div id="sw-external-pd-widgets-host" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" aria-hidden="true">
-        <div id="ss-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;">
-            <div style="text-align:center;flex:1;"><div id="ss-triggered-count">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Triggered</div></div>
-            <div style="text-align:center;flex:1;"><div id="ss-ack-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Ack</div></div>
-            <div style="text-align:center;flex:1;"><div id="ss-resolved-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Resolved</div></div>
-        </div>
-        <div id="adt-summary" class="pd-status-summary" style="display:flex;justify-content:space-between;gap:12px;padding:12px;background:#10b981;border-radius:8px;">
-            <div style="text-align:center;flex:1;"><div id="adt-triggered-count">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Triggered</div></div>
-            <div style="text-align:center;flex:1;"><div id="adt-ack-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Ack</div></div>
-            <div style="text-align:center;flex:1;"><div id="adt-resolved-count-number">0</div><div style="font-size:10px;color:#fff;font-weight:600;">Resolved</div></div>
-        </div>
-    </div>
     <main class="sw-main" id="sw-root">
         <div class="sw-loading" id="sw-loading">Querying Datadog and PagerDuty…</div>
     </main>
     <script src="/static/js/session_data_cache.js?v=20260328"></script>
     <script src="/static/js/slack_share.js?v=20260326-slack-en-blocks"></script>
-    <script src="/static/js/samsung_status_widget.js?v=20260430-board-history"></script>
-    <script src="/static/js/adt_status_widget.js?v=20260430-board-history"></script>
     <script>
-        const WALL_REFRESH_MS = 300000; /* 5 min */
+        const WALL_REFRESH_MS = 360000; /* 6 min */
         let wallTipGlobalsBound = false;
 
         /** WebKit: invalid href or URL can throw (\"The string did not match the expected pattern\"). */
@@ -935,18 +928,44 @@
             ];
         }
 
+        function swWallSafePdHref(href) {
+            if (!href || typeof href !== 'string') return null;
+            try {
+                var u = new URL(href.trim());
+                if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+                return u.href;
+            } catch (_e) {
+                return null;
+            }
+        }
+
         function appendMonitorPills(head, monitors) {
             if (!monitors || typeof monitors !== 'object') return;
             const cluster = document.createElement('div');
             cluster.className = 'sw-monitor-cluster';
-            /* Same visual order as status monitor left column: PagerDuty → Samsung → ADT → Splunk */
-            ['pagerduty', 'samsung', 'adt', 'splunk'].forEach(function (k) {
+            /* PagerDuty then Splunk (same order as status monitor when both present) */
+            ['pagerduty', 'splunk'].forEach(function (k) {
                 const m = monitors[k];
                 if (!m || !m.label) return;
+                const txt = m.label + ': ' + (m.short != null ? m.short : '');
+                if (k === 'pagerduty' && m.href) {
+                    const safe = swWallSafePdHref(m.href);
+                    if (safe) {
+                        const a = document.createElement('a');
+                        a.className = 'sw-monitor-pill sw-monitor-pill--' + (m.status || 'unknown');
+                        a.href = safe;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        a.title = (m.detail || '') + ' — open PagerDuty';
+                        a.textContent = txt;
+                        cluster.appendChild(a);
+                        return;
+                    }
+                }
                 const pill = document.createElement('span');
                 pill.className = 'sw-monitor-pill sw-monitor-pill--' + (m.status || 'unknown');
                 pill.title = m.detail || '';
-                pill.textContent = m.label + ': ' + (m.short != null ? m.short : '');
+                pill.textContent = txt;
                 cluster.appendChild(pill);
             });
             head.appendChild(cluster);
@@ -1125,23 +1144,6 @@
             setSafeAnchorHref(a, out);
         }
 
-        function swRunExternalStatusWidgets() {
-            try {
-                if (typeof loadSamsungStatusWidget === 'function') {
-                    loadSamsungStatusWidget(false);
-                }
-            } catch (e) {
-                console.error('Status wall: Samsung widget', e);
-            }
-            try {
-                if (typeof loadAdtStatusWidget === 'function') {
-                    loadAdtStatusWidget(false);
-                }
-            } catch (e) {
-                console.error('Status wall: ADT widget', e);
-            }
-        }
-
         async function loadWall(options) {
             const forceRefresh = options && options.forceRefresh === true;
             const trEl = document.getElementById('sw-timerange');
@@ -1161,6 +1163,9 @@
                     body: JSON.stringify(body),
                 });
                 const text = await res.text();
+                if (res.status === 504) {
+                    throw new Error('HTTP 504 — Gateway Time-out');
+                }
                 let data = null;
                 try {
                     data = text ? JSON.parse(text) : {};
@@ -1198,11 +1203,20 @@
                 if (ddEl && (data.dd_env != null) && (data.success !== false)) {
                     line += ' · env ' + data.dd_env;
                 }
-                statusEl.textContent = line + ' · auto-refresh 5 min';
-                setTimeout(swRunExternalStatusWidgets, 0);
+                statusEl.textContent = line + ' · auto-refresh 6 min';
             } catch (e) {
                 statusEl.classList.add('err');
-                statusEl.textContent = 'Error: ' + (e.message || e);
+                var msg = (e && e.message) ? String(e.message) : String(e);
+                if (msg.indexOf('504') >= 0 || /Gateway Time-?out/i.test(msg)) {
+                    statusEl.textContent =
+                        'Error: HTTP 504 (gateway timeout). The wall API can take 2–4 minutes. ' +
+                        'Increase your load balancer / reverse proxy idle & read timeout to ≥600s, ' +
+                        'and set GUNICORN_TIMEOUT=600 (or higher) for Gunicorn. ' +
+                        'Optional: STATUS_MONITOR_WALL_ATTACH_EKS=0 skips EKS lookups on /statuswall (faster). ' +
+                        'Details: DOCKER_DEPLOYMENT.md (section 504 / Status wall).';
+                } else {
+                    statusEl.textContent = 'Error: ' + msg;
+                }
             }
         }
 

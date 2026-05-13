@@ -509,6 +509,95 @@ Variables útiles: `GUNICORN_TIMEOUT=600`, `STATUS_MONITOR_WALL_ATTACH_EKS`, `ST
 - Base de datos SQLite local (no accesible desde fuera)
 - HTTPS/TLS debe configurarse en el balanceador de carga o proxy reverso
 
+## ☁️ OneView GOC en ECS — actualizar imagen sin Illuminati
+
+Puedes **construir en local**, **subir a ECR**, **registrar una nueva revisión** de la task definition con esa imagen y **redesplegar** el servicio. Así no dependes de Illuminati u otra pipeline intermedia.
+
+### 0. Valores que necesitas (reemplaza en los comandos)
+
+| Variable | Ejemplo / dónde mirar |
+|----------|------------------------|
+| `AWS_REGION` | `us-west-2` |
+| `ACCOUNT_ID` | `aws sts get-caller-identity --query Account --output text` |
+| `ECR_REPO` | Nombre del repo (p. ej. el que crea Terraform o el de tu org) |
+| `IMAGE_TAG` | **Recomendado:** tag inmutable `3.2.20-mcp` o hash Git; `latest` también funciona con matices (ver abajo) |
+| `ECS_CLUSTER` | Nombre o ARN del clúster |
+| `ECS_SERVICE` | Nombre del servicio ECS |
+| `TASK_FAMILY` | `family` de la task definition actual |
+
+**Arquitectura:** si el servicio en Fargate es **ARM64** (p. ej. `runtime_platform` ARM), la imagen debe construirse para `linux/arm64` (ver `BUILD_PLATFORM=linux/arm64` en `docker-build-export.sh` o `linux/amd64` si el servicio es x86).
+
+### 1. Construir la imagen (desde `multi-agent-mcp/`)
+
+```bash
+cd multi-agent-mcp
+# ARM64 (Fargate Graviton)
+docker build --platform linux/arm64 -t oneview-goc-ai:"$IMAGE_TAG" -t oneview-goc-ai:latest .
+# o el script que genera .tar y tag de release:
+# BUILD_PLATFORM=linux/arm64 ./docker-build-export.sh
+```
+
+### 2. Autenticar Docker contra ECR y publicar
+
+```bash
+export AWS_REGION=us-west-2
+export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+
+aws ecr get-login-password --region "$AWS_REGION" | \
+  docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+docker tag oneview-goc-ai:"$IMAGE_TAG" "${ECR_URI}:${IMAGE_TAG}"
+docker tag oneview-goc-ai:"$IMAGE_TAG" "${ECR_URI}:latest"
+docker push "${ECR_URI}:${IMAGE_TAG}"
+docker push "${ECR_URI}:latest"
+```
+
+### 3. Nueva revisión de task definition + redeploy
+
+**Opción A — Tag nuevo (recomendado):** evita dudas de caché de capas con el mismo `latest`.
+
+1. Descarga la definición actual, cambia solo `image` y registra:
+
+```bash
+aws ecs describe-task-definition --region "$AWS_REGION" --task-definition "$TASK_FAMILY" \
+  --query 'taskDefinition' | \
+  jq --arg IMG "${ECR_URI}:${IMAGE_TAG}" \
+  'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy) | .containerDefinitions[0].image = $IMG' \
+  > /tmp/taskdef.json
+
+aws ecs register-task-definition --region "$AWS_REGION" --cli-input-json file:///tmp/taskdef.json
+```
+
+2. Anota el **número de revisión** en la salida (p. ej. `123`) y actualiza el servicio:
+
+```bash
+aws ecs update-service --region "$AWS_REGION" \
+  --cluster "$ECS_CLUSTER" \
+  --service "$ECS_SERVICE" \
+  --task-definition "${TASK_FAMILY}:${NEW_REVISION}" \
+  --force-new-deployment
+```
+
+**Opción B — Solo `latest` ya empujado:** si la task definition ya apunta a `.../repo:latest`, basta con forzar despliegue para que los tasks vuelvan a resolver imagen (en la práctica muchos equipos siguen con **Opción A** y un tag explícito):
+
+```bash
+aws ecs update-service --region "$AWS_REGION" \
+  --cluster "$ECS_CLUSTER" \
+  --service "$ECS_SERVICE" \
+  --force-new-deployment
+```
+
+### 4. Comprobar
+
+```bash
+aws ecs describe-services --region "$AWS_REGION" --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+  --query 'services[0].deployments' --output table
+curl -sS "https://<tu-host>/api/health"
+```
+
+**Variables de entorno (secretos):** no van en la imagen; deben seguir viniendo de la task definition ( `secrets` / SSM / Secrets Manager) o del servicio, según tengáis montado en ECS.
+
 ---
 
 **Generado**: 2026-03-10

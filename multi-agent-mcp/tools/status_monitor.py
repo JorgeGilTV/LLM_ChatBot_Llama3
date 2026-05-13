@@ -27,7 +27,7 @@ from tools.metrics_persistence import (
 )
 
 # Import Datadog dashboard utilities
-from tools.datadog_dashboards import datadog_ui_origin, get_dashboard_details
+from tools.datadog_dashboards import datadog_rest_api_base, datadog_ui_origin, get_dashboard_details
 from tools.status_monitor_service_lists import (
     ADT_MONITOR_SERVICES,
     GENERAL_MONITOR_SERVICES,
@@ -134,6 +134,8 @@ def _sm_status_shows_issue_links(svc: dict) -> bool:
         return True
     if int(svc.get("dd_monitor_alert_count") or 0) > 0:
         return True
+    if int(svc.get("dd_monitor_alert_suffix_count") or 0) > 0:
+        return True
     if svc.get("pd_incident"):
         return True
     if svc.get("traffic_drop"):
@@ -173,11 +175,34 @@ def _sm_pagerduty_external_incidents_url() -> str:
     return f"https://{sub}.pagerduty.com/external-status-dashboard/{dash_id}/incidents"
 
 
+def _sm_dd_monitor_name_suffix_ab(name: str) -> bool:
+    """
+    True if monitor name ends with -a or -b (case-insensitive).
+
+    Ops treat those suffixes as non-critical/noise; aligns with Datadog Manage
+    filters such as NOT ("-A" OR "-B").
+    """
+    n = (name or "").strip()
+    if len(n) < 2:
+        return False
+    return n[-2:].lower() in ("-a", "-b")
+
+
 def _dd_monitors_manage_url(service_name: str, environment: str, dd_site: str) -> str:
     """
-    Monitors / Manage page, scoped like the UI: service + env, state Alert only
-    (same family as the org filter: …/monitors/manage?q=… status:alert).
+    Monitors / Manage page: service + env, Alert state, excluding -a/-b suffix monitors
+    (same idea as org filters using NOT ("-A" OR "-B")).
     """
+    sn = (service_name or "").strip()
+    if not sn:
+        return ""
+    env = (environment or "").strip() or "production"
+    q = f'service:"{sn}" env:{env} status:alert NOT ("-A" OR "-B")'
+    return f"{datadog_ui_origin(dd_site)}/monitors/manage?q={quote(q, safe='')}"
+
+
+def _dd_monitors_manage_url_all_alerts(service_name: str, environment: str, dd_site: str) -> str:
+    """Manage UI: all Alert monitors for service+env (includes -a/-b tier)."""
     sn = (service_name or "").strip()
     if not sn:
         return ""
@@ -218,6 +243,19 @@ def _sm_merge_status_with_dd_alerts(current: str, alert_name_count: int) -> str:
     return _sm_status_from_rank(max(_sm_rank_for_status(current), r_dd))
 
 
+def _sm_bump_min_warning_for_dd_suffix_alerts(current: str, suffix_alert_count: int) -> str:
+    """
+    -a / -b tier monitors are not promoted to critical red, but should show as warning (yellow)
+    when they are the only Datadog alert signal.
+    """
+    n = int(suffix_alert_count or 0)
+    if n <= 0:
+        return current
+    if _sm_rank_for_status(current) >= 2:
+        return current
+    return "warning"
+
+
 def _sm_dd_monitor_alerts_enabled() -> bool:
     v = (os.getenv("STATUS_MONITOR_DD_MONITOR_ALERTS") or "1").strip().lower()
     return v not in ("0", "false", "no", "off")
@@ -250,13 +288,24 @@ def _sm_hover_service_payload(svc: dict, env: str, page_environment: str | None 
     if not isinstance(dda, list):
         dda = []
     dda = dda[:32]
+    dda_suf = list(svc.get("dd_monitor_alerts_suffix_ab") or [])
+    if not isinstance(dda_suf, list):
+        dda_suf = []
+    dda_suf = dda_suf[:32]
     dd_n = int(svc.get("dd_monitor_alert_count") or len(dda) or 0)
+    dd_n_suf = int(svc.get("dd_monitor_alert_suffix_count") or len(dda_suf) or 0)
     ddm = (svc.get("dd_monitors_url") or "").strip()
     if not ddm and svc.get("service") and env:
         ddm = _dd_monitors_manage_url(
             str(svc.get("service") or ""), str(env or ""), os.getenv("DD_SITE", "datadoghq.com")
         )
     ddm = ddm if ddm else None
+    ddm_all = (svc.get("dd_monitors_url_all_alerts") or "").strip()
+    if not ddm_all and svc.get("service") and env and dd_n_suf > 0:
+        ddm_all = _dd_monitors_manage_url_all_alerts(
+            str(svc.get("service") or ""), str(env or ""), os.getenv("DD_SITE", "datadoghq.com")
+        )
+    ddm_all = ddm_all if ddm_all else None
     return {
         "type": "service",
         "service": svc.get("service"),
@@ -277,7 +326,10 @@ def _sm_hover_service_payload(svc: dict, env: str, page_environment: str | None 
         "high_latency": bool(svc.get("high_latency")),
         "dd_monitor_alerts": dda,
         "dd_monitor_alert_count": dd_n,
+        "dd_monitor_alerts_suffix_ab": dda_suf,
+        "dd_monitor_alert_suffix_count": dd_n_suf,
         "dd_monitors_url": ddm,
+        "dd_monitors_url_all_alerts": ddm_all,
     }
 
 
@@ -356,7 +408,7 @@ def _wall_apm_header_badges_reuse_pd(pd_counts: dict, pd_api_key: str | None) ->
         pd_badge = _wall_pd_badge(pd_counts)
     else:
         pd_badge = {
-            "label": "PagerDuty",
+            "label": "PD",
             "status": "unknown",
             "short": "—",
             "detail": "PAGERDUTY_API_TOKEN not set",
@@ -810,18 +862,19 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
     Returns a dict, or None on total API failure (same as legacy “uncached failed”):
       allow_error_override: bool | None — None = no matches / no usable states (keep APM);
         True = all non-problem; False = any Alert/Warn
-      alert_names: list[str] — unique monitor names with overall_state Alert (Manage UI: status:alert)
+      alert_names: list[str] — Alert monitors excluding -a/-b suffix (drive red/critical merge).
+      alert_names_suffix_ab: list[str] — Alert monitors with -a/-b suffix (yellow/warning only).
     """
     import requests
 
-    cache_key = (service_name, environment, dd_site, "msearch_v2")
+    cache_key = (service_name, environment, dd_site, "msearch_v4_ab_suffix_warn")
     now = time.time()
     with _DD_MONITOR_SEARCH_LOCK:
         hit = _DD_MONITOR_SEARCH_CACHE.get(cache_key)
         if hit and now - hit[0] < _DD_MONITOR_SEARCH_TTL:
             return hit[1]
 
-    url = f"https://{dd_site}/api/v1/monitor/search"
+    url = f"{datadog_rest_api_base(dd_site)}/api/v1/monitor/search"
     headers = {"DD-API-KEY": dd_api_key, "DD-APPLICATION-KEY": dd_app_key}
     bad_states = frozenset({"Alert", "Warn"})
     ok_states = frozenset({"OK", "No Data", "Skipped", "Ignored", "Unknown"})
@@ -829,6 +882,7 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
     query_str = f'service:"{service_name}" env:{environment}'
     collected = []
     alert_keyed: dict[str, str] = {}
+    alert_keyed_suffix: dict[str, str] = {}
     page = 0
     per_page = 100
 
@@ -862,14 +916,24 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
                 if st is None and isinstance(m.get("status"), str):
                     st = m["status"]
                 st = (st or "").strip() if isinstance(st, str) else ""
+                raw_name = (m.get("name") or "").strip()
+                mid = m.get("id")
+                skip_ab = _sm_dd_monitor_name_suffix_ab(raw_name)
                 if st:
-                    collected.append(st)
-                if st == "Alert":
-                    mid = m.get("id")
-                    key = f"id:{mid}" if mid is not None else f"n:{m.get('name') or ''}"
-                    name = (m.get("name") or "").strip() or (f"monitor {mid}" if mid is not None else "monitor")
+                    eff = st
+                    if st == "Alert" and skip_ab:
+                        eff = "OK"
+                    collected.append(eff)
+                if st == "Alert" and not skip_ab:
+                    key = f"id:{mid}" if mid is not None else f"n:{raw_name}"
+                    disp = raw_name or (f"monitor {mid}" if mid is not None else "monitor")
                     if key not in alert_keyed:
-                        alert_keyed[key] = name
+                        alert_keyed[key] = disp
+                elif st == "Alert" and skip_ab:
+                    key = f"id:{mid}" if mid is not None else f"n:{raw_name}"
+                    disp = raw_name or (f"monitor {mid}" if mid is not None else "monitor")
+                    if key not in alert_keyed_suffix:
+                        alert_keyed_suffix[key] = disp
             if not monitors or len(monitors) < per_page:
                 break
             page += 1
@@ -879,7 +943,7 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
         return None
 
     if not collected:
-        out = {"allow_error_override": None, "alert_names": []}
+        out = {"allow_error_override": None, "alert_names": [], "alert_names_suffix_ab": []}
         _store(out)
         return out
     if any(s in bad_states for s in collected):
@@ -889,7 +953,12 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
     else:
         allow = False
     alert_names = sorted(alert_keyed.values(), key=str.lower)
-    out = {"allow_error_override": allow, "alert_names": alert_names}
+    alert_names_suffix_ab = sorted(alert_keyed_suffix.values(), key=str.lower)
+    out = {
+        "allow_error_override": allow,
+        "alert_names": alert_names,
+        "alert_names_suffix_ab": alert_names_suffix_ab,
+    }
     _store(out)
     return out
 
@@ -937,7 +1006,7 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
         dd_query_reachable = False
         
         # Try each pattern until we get data
-        dd_query_url = f"https://{dd_site}/api/v1/query"
+        dd_query_url = f"{datadog_rest_api_base(dd_site)}/api/v1/query"
         for hits_metric, errors_metric, latency_metric in metric_patterns:
             hits_query = f"sum:{hits_metric}{{service:{service_name},env:{environment}}}.as_count()"
             err_query = f"sum:{errors_metric}{{service:{service_name},env:{environment}}}.as_count()"
@@ -1013,7 +1082,7 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
                                     print(f"   🔍 Trying latency metric ({pattern_name}): {lat_metric_pattern}")
                                     
                                     lat_response = requests.get(
-                                        f"https://{dd_site}/api/v1/query",
+                                        dd_query_url,
                                         headers=headers,
                                         params=params,
                                         timeout=5
@@ -1060,7 +1129,7 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
                                 print(f"   📊 Fetching 7-day baseline for traffic comparison...")
                                 
                                 baseline_response = requests.get(
-                                    f"https://{dd_site}/api/v1/query",
+                                    dd_query_url,
                                     headers=headers,
                                     params=params,
                                     timeout=8
@@ -1142,8 +1211,10 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
                 service_name, environment, dd_api_key, dd_app_key, dd_site
             )
         alert_names: list = []
+        suffix_alert_names: list = []
         if _sm_dd_monitor_alerts_enabled() and isinstance(dd_info, dict):
             alert_names = list(dd_info.get("alert_names") or [])
+            suffix_alert_names = list(dd_info.get("alert_names_suffix_ab") or [])
 
         dd_monitor_override = False
         if _sm_dd_monitor_error_override_enabled() and status in ("critical", "warning") and (er_critical or er_warning):
@@ -1162,7 +1233,17 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
             if status != "healthy":
                 dd_monitor_override = False
 
+        if _sm_dd_monitor_alerts_enabled() and suffix_alert_names:
+            status = _sm_bump_min_warning_for_dd_suffix_alerts(status, len(suffix_alert_names))
+            if status != "healthy":
+                dd_monitor_override = False
+
         dd_m_url = _dd_monitors_manage_url(service_name, environment, dd_site)
+        dd_m_url_all = (
+            _dd_monitors_manage_url_all_alerts(service_name, environment, dd_site)
+            if suffix_alert_names
+            else None
+        )
         
         # Calculate traffic variance for context
         traffic_variance = None
@@ -1190,7 +1271,10 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
             'dd_monitor_override': dd_monitor_override,
             'dd_monitor_alerts': alert_names,
             'dd_monitor_alert_count': len(alert_names),
+            'dd_monitor_alerts_suffix_ab': suffix_alert_names,
+            'dd_monitor_alert_suffix_count': len(suffix_alert_names),
             'dd_monitors_url': dd_m_url or None,
+            'dd_monitors_url_all_alerts': dd_m_url_all or None,
         }
         
     except Exception as e:
@@ -1210,7 +1294,10 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
             'dd_monitor_override': False,
             'dd_monitor_alerts': [],
             'dd_monitor_alert_count': 0,
+            'dd_monitor_alerts_suffix_ab': [],
+            'dd_monitor_alert_suffix_count': 0,
             'dd_monitors_url': _dd_monitors_manage_url(service_name, environment, dd_site) or None,
+            'dd_monitors_url_all_alerts': None,
         }
 
 
@@ -1535,7 +1622,7 @@ def get_service_clusters_from_metrics(service_name: str, env: str, timerange_hou
             
             try:
                 response = requests.get(
-                    f"https://{dd_site}/api/v1/query",
+                    f"{datadog_rest_api_base(dd_site)}/api/v1/query",
                     headers={
                         "DD-API-KEY": dd_api_key,
                         "DD-APPLICATION-KEY": dd_app_key
@@ -2540,7 +2627,11 @@ def _hub_build_status_reason_lines(statuses_for_card: list, overall: str, max_li
         lines.append(f"Traffic drop vs baseline on {td_count} service(s).")
 
     def _dd_n(x):
-        return int(x.get("dd_monitor_alert_count") or 0) or len(x.get("dd_monitor_alerts") or [])
+        n_c = int(x.get("dd_monitor_alert_count") or 0) or len(x.get("dd_monitor_alerts") or [])
+        n_s = int(x.get("dd_monitor_alert_suffix_count") or 0) or len(
+            x.get("dd_monitor_alerts_suffix_ab") or []
+        )
+        return n_c + n_s
 
     dd_one = [s for s in statuses_for_card if _dd_n(s) == 1]
     dd_mul = [s for s in statuses_for_card if _dd_n(s) > 1]
@@ -2561,12 +2652,17 @@ def _hub_build_status_reason_lines(statuses_for_card: list, overall: str, max_li
 
 def _hub_dd_alerts_rollup(statuses: list) -> tuple[int, int]:
     """
-    Total Datadog monitor Alert count across services, and how many services have ≥1.
+    Total Datadog monitor Alert count across services (critical-tier + -a/-b tier),
+    and how many services have ≥1 firing monitor.
     """
     tot = 0
     n_svcs = 0
     for s in statuses or []:
-        n = int(s.get("dd_monitor_alert_count") or 0) or len(s.get("dd_monitor_alerts") or [])
+        n_c = int(s.get("dd_monitor_alert_count") or 0) or len(s.get("dd_monitor_alerts") or [])
+        n_s = int(s.get("dd_monitor_alert_suffix_count") or 0) or len(
+            s.get("dd_monitor_alerts_suffix_ab") or []
+        )
+        n = n_c + n_s
         if n > 0:
             n_svcs += 1
         tot += n
@@ -2633,12 +2729,17 @@ def _wall_status_reason_plain(s: dict) -> str:
     """Plain-text alert context for status wall tooltip (same signals as command center reasons)."""
     parts = []
     n_dd = int(s.get("dd_monitor_alert_count") or 0) or len(s.get("dd_monitor_alerts") or [])
-    if n_dd == 1:
-        parts.append("1 Datadog monitor in Alert")
-    elif n_dd > 1:
-        parts.append(f"{n_dd} Datadog monitors in Alert")
+    n_suf = int(s.get("dd_monitor_alert_suffix_count") or 0) or len(
+        s.get("dd_monitor_alerts_suffix_ab") or []
+    )
+    if n_dd >= 1:
+        parts.append(f"{n_dd} DD")
+    if n_suf >= 1 and n_dd == 0:
+        parts.append(f"{n_suf} DD")
+    elif n_suf >= 1 and n_dd >= 1:
+        parts.append(f"+{n_suf} DD")
     if s.get("pd_incident"):
-        parts.append("PagerDuty incident")
+        parts.append("PD incident")
     if s.get("traffic_drop"):
         parts.append("Traffic drop vs 7d")
     if s.get("high_latency"):
@@ -2666,8 +2767,8 @@ def _wall_status_reason_plain(s: dict) -> str:
         else:
             parts.append("—")
     text = " · ".join(parts)
-    if s.get("dd_monitor_override") and n_dd == 0 and "override" not in text.lower():
-        text = f"{text} · Datadog monitors OK (override)"
+    if s.get("dd_monitor_override") and n_dd == 0 and n_suf == 0 and "override" not in text.lower():
+        text = f"{text} · DD monitors OK (override)"
     return text
 
 
@@ -2722,26 +2823,26 @@ def _wall_pd_semaphore_badge(counts: dict, label: str, scope_note: str) -> dict:
 
 def _wall_pd_badge(counts: dict) -> dict:
     """Compact status for Status wall header (PagerDuty incidents, last 24h API window)."""
-    return _wall_pd_semaphore_badge(counts, "PagerDuty", "24h")
+    return _wall_pd_semaphore_badge(counts, "PD", "24h")
 
 
 def _wall_splunk_badge(payload: dict) -> dict:
     """P0 predict / outliers summary from splunk_outliers_monitor_payload."""
     if not payload.get("success"):
         err = payload.get("error") or "unavailable"
-        return {"label": "Splunk", "status": "unknown", "short": "—", "detail": err}
+        return {"label": "SPL", "status": "unknown", "short": "—", "detail": err}
     tools = payload.get("tools") or []
     tot = sum(int(t.get("total_outliers") or 0) for t in tools)
     th = int(payload.get("timerange_hours") or 0)
     if tot > 0:
         return {
-            "label": "Splunk",
+            "label": "SPL",
             "status": "warning",
             "short": f"{tot} out",
             "detail": f"P0 predict: {tot} outliers ({th}h)",
         }
     return {
-        "label": "Splunk",
+        "label": "SPL",
         "status": "ok",
         "short": "OK",
         "detail": f"P0 predict: no outliers ({th}h)",
@@ -2768,10 +2869,17 @@ def _wall_split_services_by_region(services: list) -> tuple[list, list]:
     return arlo_global, arlo_eu
 
 
+def _wall_filter_nonempty_region_columns(region_columns: list | None) -> list:
+    """Omit region buckets with no services (e.g. hide Arlo EU when all tiles are Oregon)."""
+    if not region_columns:
+        return []
+    return [c for c in region_columns if c.get("services")]
+
+
 def _wall_fetch_monitor_badges(timerange: int, force_refresh: bool) -> dict:
     """PagerDuty + Splunk P0 badges for Status wall / APM wall section headers."""
     pd_badge = {
-        "label": "PagerDuty",
+        "label": "PD",
         "status": "unknown",
         "short": "—",
         "detail": "PAGERDUTY_API_TOKEN not set",
@@ -2783,14 +2891,14 @@ def _wall_fetch_monitor_badges(timerange: int, force_refresh: bool) -> dict:
             pd_badge = _wall_pd_badge(counts)
         except Exception as e:
             pd_badge = {
-                "label": "PagerDuty",
+                "label": "PD",
                 "status": "unknown",
                 "short": "—",
                 "detail": str(e)[:200],
             }
 
     spl_badge = {
-        "label": "Splunk",
+        "label": "SPL",
         "status": "unknown",
         "short": "—",
         "detail": "SPLUNK_TOKEN not set",
@@ -2798,11 +2906,12 @@ def _wall_fetch_monitor_badges(timerange: int, force_refresh: bool) -> dict:
     try:
         from tools.splunk_tool import splunk_outliers_monitor_payload
 
-        spl = splunk_outliers_monitor_payload(max(4, int(timerange)))
+        # P0 semaphore: default P0 lookback (splunk_p0_default_timerange_hours), not the wall’s DD timerange
+        spl = splunk_outliers_monitor_payload()
         spl_badge = _wall_splunk_badge(spl)
     except Exception as e:
         spl_badge = {
-            "label": "Splunk",
+            "label": "SPL",
             "status": "unknown",
             "short": "—",
             "detail": str(e)[:200],
@@ -2834,6 +2943,15 @@ def _wall_serialize_status(
         ddm = b if b else None
     if ddm:
         ddm = _sm_sanitize_href_for_wall(ddm) or None
+    n_suf_w = int(s.get("dd_monitor_alert_suffix_count") or 0) or len(
+        s.get("dd_monitor_alerts_suffix_ab") or []
+    )
+    ddm_all = (s.get("dd_monitors_url_all_alerts") or "").strip() or None
+    if not ddm_all and n_suf_w > 0 and svc and env:
+        b_all = _dd_monitors_manage_url_all_alerts(str(svc), str(env), dd_site)
+        ddm_all = b_all if b_all else None
+    if ddm_all:
+        ddm_all = _sm_sanitize_href_for_wall(ddm_all) or None
     return {
         "service": svc,
         "environment": env,
@@ -2853,7 +2971,11 @@ def _wall_serialize_status(
         "dd_monitor_alerts": list(s.get("dd_monitor_alerts") or [])[:32],
         "dd_monitor_alert_count": int(s.get("dd_monitor_alert_count") or 0)
         or len(s.get("dd_monitor_alerts") or []),
+        "dd_monitor_alerts_suffix_ab": list(s.get("dd_monitor_alerts_suffix_ab") or [])[:32],
+        "dd_monitor_alert_suffix_count": int(s.get("dd_monitor_alert_suffix_count") or 0)
+        or len(s.get("dd_monitor_alerts_suffix_ab") or []),
         "dd_monitors_url": ddm,
+        "dd_monitors_url_all_alerts": ddm_all,
         "status_reason": _wall_status_reason_plain(s),
         "eks_clusters": list(s.get("eks_clusters") or []),
         "p99_latency": s.get("p99_latency"),
@@ -2873,7 +2995,7 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
     unknown are omitted so the screen stays focused on live APM signal + issues.
     """
     global _wall_data_cache
-    cache_version = "wall_v19_parallel_badges_eks_flag"
+    cache_version = "wall_v21_dd_suffix_warning"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_wall_data_cache, cache_key, force_refresh)
     if hit is not None:
@@ -2942,6 +3064,7 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
                     "services": ar_eu,
                 },
             ]
+        region_columns = _wall_filter_nonempty_region_columns(region_columns)
         groups.append(
             {
                 "slug": g["slug"],
@@ -3004,7 +3127,7 @@ def _fetch_software_catalog_service_names_from_api(
     max_entities = max(10, min(int(max_entities), 500))
     import requests
 
-    base = f"https://{dd_site}/api/v2/catalog/entity"
+    base = f"{datadog_rest_api_base(dd_site)}/api/v2/catalog/entity"
     headers = {
         "DD-API-KEY": dd_api_key,
         "DD-APPLICATION-KEY": dd_app_key,
@@ -3126,22 +3249,37 @@ def _bundled_samsung_apm_path() -> str:
     )
 
 
-# APM Software Catalog /apm-services: "all" loads one group per environment (order preserved).
+# APM Software Catalog /apm-services: "all" = one block per environment below (order preserved).
+# Golden (goldendev, goldenqa) is not included here — use dd_env=golden or ?tab=golden on /apm-services.
 SOFTWARE_CATALOG_WALL_APM_ENVS: tuple[str, ...] = (
     "production",
+    "samsung_prod",
+    "adt_prod",
+)
+
+# APM Golden tab only: goldendev then goldenqa.
+SOFTWARE_CATALOG_WALL_GOLDEN_ENVS: tuple[str, ...] = (
     "goldendev",
     "goldenqa",
-    "adt_prod",
-    "qa",
-    "samsung_prod",
 )
+
+
+def _apm_wall_group_label(dd_env: str) -> str:
+    """Short section title for each env block (no repeated 'APM Status Wall' prefix)."""
+    return {
+        "production": "Production",
+        "samsung_prod": "Samsung",
+        "adt_prod": "ADT",
+        "qa": "QA",
+        "goldendev": "Golden dev",
+        "goldenqa": "Golden QA",
+    }.get(dd_env, dd_env.replace("_", " ").title())
 
 
 def normalize_software_catalog_wall_dd_env(raw: str | None) -> str:
     """
-    APM / Software UI env: "all" (all listed envs in one view), or production, goldendev, …, samsung_prod.
+    APM / Software UI env: "all" (main envs only), "golden" (goldendev + goldenqa), or one concrete env.
     Aliases: gqa, adt, env-qa, samsung. Other values fall back to production.
-    Unset / empty / missing defaults to "all" for the combined wall.
     """
     s = (raw or "").strip().lower()
     if s in (
@@ -3171,6 +3309,8 @@ def normalize_software_catalog_wall_dd_env(raw: str | None) -> str:
         return "qa"
     if s in ("samsung", "samsung_prod", "samsung-prod", "samsungprod"):
         return "samsung_prod"
+    if s in ("golden", "golden_tab", "golden-envs", "golden_envs"):
+        return "golden"
     return "production"
 
 
@@ -3191,6 +3331,11 @@ def resolve_software_catalog_wall_service_names(
         return (
             [],
             "invalid: use a concrete env, not 'all' (all is handled by the APM wall aggregator)",
+        )
+    if _dd_env == "golden":
+        return (
+            [],
+            "invalid: use goldendev/goldenqa or the golden tab aggregator (dd_env=golden)",
         )
 
     raw = (os.getenv("SOFTWARE_CATALOG_SERVICE_NAMES") or "").strip()
@@ -3560,15 +3705,12 @@ def _software_catalog_wall_payload_for_single_env(
             "services": ar_eu,
         },
     ]
+    region_columns = _wall_filter_nonempty_region_columns(region_columns)
     if _apm_status_wall_header_light():
         monitors = _wall_apm_header_badges_reuse_pd(_pd_c, pd_api_key)
     else:
         monitors = _wall_fetch_monitor_badges(timerange, force_refresh)
-    _wall_label = (
-        "APM Status Wall (Samsung / samsung_prod)"
-        if dde == "samsung_prod"
-        else (f"APM Status Wall ({dde})" if dde != "production" else "APM Status Wall (production)")
-    )
+    _wall_label = _apm_wall_group_label(dde)
     _wall_slug = (
         f"software-catalog-{dde}" if dde != "production" else "software-catalog-production"
     )
@@ -3701,6 +3843,98 @@ def _status_monitor_software_catalog_wall_data_all_envs(
     }
 
 
+def _status_monitor_software_catalog_wall_data_golden_envs(
+    timerange: int, force_refresh: bool
+) -> dict:
+    """
+    APM /apm-services Golden tab: goldendev then goldenqa only.
+    """
+    pre_pd: tuple[dict, list] | None = None
+    pd_api_key = os.getenv("PAGERDUTY_API_TOKEN")
+    if pd_api_key:
+        try:
+            pre_pd = get_pagerduty_status_counts(pd_api_key, force_refresh)
+        except Exception as e:
+            print(f"⚠️ Software catalog wall (golden): PagerDuty fetch failed: {e}")
+
+    groups: list = []
+    per_env_sources: list = []
+    tot_in = 0
+    tot_ti = 0
+    tot_di = 0
+    tot_du = 0
+    monitors: dict = {}
+
+    golden_envs = SOFTWARE_CATALOG_WALL_GOLDEN_ENVS
+    with ThreadPoolExecutor(
+        max_workers=max(1, min(4, len(golden_envs)))
+    ) as ex:
+        results: list[dict] = list(
+            ex.map(
+                lambda d: _software_catalog_wall_payload_for_single_env(
+                    d, timerange, force_refresh, pre_pd=pre_pd
+                ),
+                list(golden_envs),
+            )
+        )
+    for i, dde in enumerate(golden_envs):
+        part = results[i]
+        if not part.get("success"):
+            print(
+                f"⚠️ APM wall (golden): {dde} — {part.get('error', 'no group')}, skipping"
+            )
+            continue
+        if not monitors and part.get("monitors"):
+            monitors = part["monitors"]
+        g = part.get("groups") or []
+        if g:
+            groups.append(g[0])
+        s = part.get("source") or {}
+        per_env_sources.append(
+            {
+                "apm_environment": dde,
+                "service_name_source": s.get("service_name_source"),
+                "services_in_scope": s.get("services_in_scope", 0),
+                "tiles_shown": s.get("tiles_shown", 0),
+                "dropped_inactive": s.get("dropped_inactive", 0),
+                "dropped_unknown": s.get("dropped_unknown", 0),
+            }
+        )
+        tot_in += int(s.get("services_in_scope") or 0)
+        tot_ti += int(s.get("tiles_shown") or 0)
+        tot_di += int(s.get("dropped_inactive") or 0)
+        tot_du += int(s.get("dropped_unknown") or 0)
+
+    if not groups:
+        return {
+            "success": False,
+            "error": "No APM data for Golden environments (check bundled lists and Datadog keys).",
+            "timerange": timerange,
+            "dd_env": "golden",
+            "groups": [],
+        }
+
+    return {
+        "success": True,
+        "timerange": timerange,
+        "dd_env": "golden",
+        "monitors": monitors,
+        "source": {
+            "kind": "apm_status_wall_golden",
+            "aggregated": True,
+            "environments": [g.get("mode") for g in groups if isinstance(g, dict)],
+            "services_in_scope": tot_in,
+            "tiles_shown": tot_ti,
+            "dropped_inactive": tot_di,
+            "dropped_unknown": tot_du,
+            "per_environment": per_env_sources,
+            "header_light": _apm_status_wall_header_light(),
+            "eks_hints": _apm_status_wall_attach_eks(),
+        },
+        "groups": groups,
+    }
+
+
 def status_monitor_software_catalog_wall_data(
     timerange: int = 1, force_refresh: bool = False, dd_env: str = "all"
 ) -> dict:
@@ -3711,7 +3945,7 @@ def status_monitor_software_catalog_wall_data(
     """
     global _software_catalog_wall_cache
     dde = normalize_software_catalog_wall_dd_env(dd_env)
-    cache_version = "sc_wall_v18_all_envs_default"
+    cache_version = "sc_wall_v20_main_no_qa"
     apm_bucket = _apm_status_wall_cache_bucket_secs()
     cache_key = f"{cache_version}_{dde}_{timerange}_{int(time.time() // apm_bucket)}"
     hit = _read_sm_mem_cache(_software_catalog_wall_cache, cache_key, force_refresh)
@@ -3720,6 +3954,10 @@ def status_monitor_software_catalog_wall_data(
 
     if dde == "all":
         out = _status_monitor_software_catalog_wall_data_all_envs(
+            timerange, force_refresh
+        )
+    elif dde == "golden":
+        out = _status_monitor_software_catalog_wall_data_golden_envs(
             timerange, force_refresh
         )
     else:
@@ -3739,7 +3977,7 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
     (Summary panel), for the same timerange — not aggregate-only queries.
     """
     global _hub_summary_cache
-    cache_version = "hub_v15_dd_alerts_rollup"
+    cache_version = "hub_v17_dd_suffix_warning"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_hub_summary_cache, cache_key, force_refresh)
     if hit is not None:
@@ -4505,23 +4743,23 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     infra_exceptions_count = 0  # Disabled temporarily
     infra_exceptions_details = []
 
+    from tools.splunk_tool import splunk_outliers_monitor_payload, splunk_p0_default_timerange_hours
+
     spl_data: dict = {
         "success": False,
         "tools": [],
         "error": None,
-        "timerange_hours": 72,
+        "timerange_hours": splunk_p0_default_timerange_hours(),
     }
     try:
-        from tools.splunk_tool import splunk_outliers_monitor_payload
-
-        spl_data = splunk_outliers_monitor_payload(72)
+        spl_data = splunk_outliers_monitor_payload()
     except Exception as e:
         print(f"⚠️ Splunk outliers (status monitor sidebar): {e}")
         spl_data = {
             "success": False,
             "tools": [],
             "error": str(e),
-            "timerange_hours": 72,
+            "timerange_hours": splunk_p0_default_timerange_hours(),
         }
 
     print(f"☁️ Fetching AWS cost snapshot...")
@@ -4816,7 +5054,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     def _attention_reason_text(s):
         parts = []
         if s.get('pd_incident'):
-            parts.append('PagerDuty incident')
+            parts.append('PD incident')
         if s.get('traffic_drop'):
             parts.append('Traffic drop vs 7d')
         if s.get('high_latency'):
@@ -5419,7 +5657,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                     f"{svc['requests']:,} req · ERR {svc['error_rate']}%",
                 ]
                 if svc.get('pd_incident'):
-                    tip_bits.append('PagerDuty')
+                    tip_bits.append('PD')
                 if svc.get('high_latency') and svc.get('p95_latency'):
                     tip_bits.append(f"P95 {svc['p95_latency']:.0f}ms")
                 if svc.get('traffic_drop'):

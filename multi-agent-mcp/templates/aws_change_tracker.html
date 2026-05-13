@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Change Tracker — Who Changed What</title>
+    <style>
+        :root {
+            --bg: #0b1120;
+            --panel: #111b2e;
+            --card: #152238;
+            --border: #1e3a5f;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --link: #38bdf8;
+            --accent: #14b8a6;
+            --accent2: #0d9488;
+            --danger: #f87171;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.45;
+        }
+        a { color: var(--link); }
+        a:hover { text-decoration: underline; }
+        .wrap { max-width: 920px; margin: 0 auto; padding: 28px 20px 48px; }
+        .page-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.65rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+        .page-title .ico {
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #1e3a5f, #0f172a);
+            border: 1px solid var(--border);
+        }
+        .subnav { font-size: 13px; margin-bottom: 22px; }
+        .subnav a { margin-right: 16px; font-weight: 600; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 22px 24px 26px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+        }
+        .card h2 { font-size: 1.2rem; margin-bottom: 4px; }
+        .card .what { font-size: 13px; color: var(--link); margin-bottom: 16px; font-weight: 600; }
+        .steps {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .step {
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--muted);
+        }
+        .step strong { display: block; color: var(--text); font-size: 13px; margin-bottom: 2px; }
+        details.tips {
+            margin-bottom: 18px;
+            padding: 10px 12px;
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.6);
+            font-size: 12px;
+            color: var(--muted);
+        }
+        details.tips summary { cursor: pointer; font-weight: 700; color: var(--text); }
+        .field { margin-bottom: 14px; }
+        label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+        label .req { color: var(--danger); }
+        .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            color: var(--text);
+            font-size: 14px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.25);
+        }
+        .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 640px) { .row2 { grid-template-columns: 1fr; } }
+        .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        button {
+            padding: 10px 18px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .btn-primary { background: var(--accent); color: #042f2e; }
+        .btn-primary:hover { background: var(--accent2); }
+        .btn-secondary { background: #334155; color: var(--text); }
+        .btn-secondary:hover { background: #475569; }
+        .back { display: inline-block; margin-bottom: 18px; font-size: 13px; font-weight: 600; }
+        #status { margin-top: 14px; font-size: 13px; color: var(--muted); }
+        #status.err { color: #fecaca; }
+        .results { margin-top: 22px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+        th { background: var(--panel); color: #cbd5e1; font-weight: 700; }
+        tr:nth-child(even) td { background: rgba(15, 23, 42, 0.35); }
+        #about { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+        #about h3 { color: var(--text); font-size: 14px; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <a class="back" href="/">← Back to OneView</a>
+
+        <div class="page-title">
+            <span class="ico" aria-hidden="true"></span>
+            <span>AWS Change Tracker</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:10px;">Who Changed What</p>
+        <div class="subnav">
+            <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-delegated-administrator.html" target="_blank" rel="noopener">CloudTrail S3 import → EventBridge + SNS alerts →</a>
+            <a href="#about">About this tool</a>
+        </div>
+
+        <div class="card">
+            <h2>Find Changes</h2>
+            <div class="what">What this form does</div>
+            <div class="steps">
+                <div class="step"><strong>1</strong>Resource</div>
+                <div class="step"><strong>2</strong>Region &amp; Time</div>
+                <div class="step"><strong>3</strong>Search</div>
+            </div>
+
+            <details class="tips">
+                <summary>Tips for better results</summary>
+                <ul style="margin:10px 0 0 18px;line-height:1.55;">
+                    <li>Use the <strong>exact</strong> resource name as shown in the console (S3 bucket names are case-sensitive).</li>
+                    <li>CloudTrail <code>lookup_events</code> allows <strong>one</strong> lookup attribute; this tool uses <code>ResourceName</code>, then filters by account and resource type.</li>
+                    <li>Run the app with IAM credentials that have <code>cloudtrail:LookupEvents</code> in the trail region.</li>
+                    <li>If you see zero rows, try a shorter lookback or confirm the resource had API activity in that region.</li>
+                </ul>
+            </details>
+
+            <form id="ct-form" autocomplete="off">
+                <div class="field">
+                    <label>Resource name or ID <span class="req">*</span></label>
+                    <input name="resource_name" id="resource_name" type="text" placeholder="e.g. my-bucket, i-0abc123, my-lambda" required>
+                    <div class="hint">Exact console name or ID (case-sensitive).</div>
+                </div>
+                <div class="field">
+                    <label>Resource type <span class="req">*</span></label>
+                    <select name="resource_type" id="resource_type" required>
+                        <option value="" disabled selected>Choose resource type</option>
+                        {% for val, label in resource_type_options %}
+                        <option value="{{ val|e }}">{{ label|e }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="hint">Must match the kind of resource in the name field (for example S3 bucket + S3 Bucket).</div>
+                </div>
+                <div class="row2">
+                    <div class="field">
+                        <label>AWS Region <span class="req">*</span></label>
+                        <input name="region" id="region" type="text" placeholder="e.g. us-east-1" required>
+                        <div class="hint">Resource and trail region.</div>
+                    </div>
+                    <div class="field">
+                        <label>AWS account ID <span class="req">*</span></label>
+                        <input name="account_id" id="account_id" type="text" placeholder="123456789012" pattern="\d{12}" maxlength="12" required>
+                        <div class="hint">12-digit account where the API call was recorded.</div>
+                    </div>
+                </div>
+                <div class="row2">
+                    <div class="field">
+                        <label>Look back (days)</label>
+                        <input name="lookback_days" id="lookback_days" type="number" min="1" max="90" value="7">
+                        <div class="hint">1–90 days.</div>
+                    </div>
+                    <div class="field">
+                        <label>Max events</label>
+                        <input name="max_events" id="max_events" type="number" min="0" max="10000" value="50">
+                        <div class="hint">0 = up to 10,000 in range (paginated).</div>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Import CSV or Excel (optional)</label>
+                    <input type="file" id="csv_file" accept=".csv,.txt,text/csv">
+                    <div class="hint">Console export; upload ignores resource/region fields and only parses rows in the browser.</div>
+                </div>
+                <div class="actions">
+                    <button type="submit" class="btn-primary">Search</button>
+                    <button type="button" class="btn-secondary" id="btn-clear">Clear form</button>
+                    <button type="button" class="btn-primary" id="btn-upload">Analyze upload</button>
+                </div>
+            </form>
+            <div id="status"></div>
+            <div class="results" id="results"></div>
+        </div>
+
+        <section id="about">
+            <h3>About this tool</h3>
+            <p>This page is independent from the main OneView chat. It calls AWS CloudTrail <code>LookupEvents</code> in the region you specify, using the default credential chain (environment role, profile, etc.).</p>
+            <p style="margin-top:8px;">No data is stored on the server beyond normal request logs; CSV analysis is done in memory and returned as JSON.</p>
+        </section>
+    </div>
+    <script>
+        (function() {
+            const form = document.getElementById('ct-form');
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+
+            function setStatus(msg, isErr) {
+                statusEl.textContent = msg || '';
+                statusEl.classList.toggle('err', !!isErr);
+            }
+
+            function esc(s) {
+                if (s == null) return '';
+                return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            }
+
+            function renderEvents(events) {
+                if (!events || !events.length) {
+                    resultsEl.innerHTML = '<p style="color:var(--muted);margin-top:12px;">No matching events in this window.</p>';
+                    return;
+                }
+                let h = '<table><thead><tr><th>Time</th><th>Event</th><th>User</th><th>Read-only</th><th>Account</th><th>Event ID</th></tr></thead><tbody>';
+                for (const e of events) {
+                    h += '<tr><td>' + esc(e.EventTime) + '</td><td>' + esc(e.EventName) + '</td><td>' + esc(e.Username)
+                        + '</td><td>' + esc(e.ReadOnly) + '</td><td>' + esc(e.recipientAccountId) + '</td><td style="font-family:monospace;font-size:11px;">' + esc(e.EventId) + '</td></tr>';
+                }
+                h += '</tbody></table>';
+                resultsEl.innerHTML = h;
+            }
+
+            function renderCsv(data) {
+                const cols = data.columns || [];
+                const rows = data.rows || [];
+                if (!cols.length) {
+                    resultsEl.innerHTML = '<p style="color:var(--muted);">No columns detected.</p>';
+                    return;
+                }
+                let h = '<table><thead><tr>';
+                for (const c of cols) h += '<th>' + esc(c) + '</th>';
+                h += '</tr></thead><tbody>';
+                for (const r of rows) {
+                    h += '<tr>';
+                    for (const c of cols) h += '<td>' + esc(r[c]) + '</td>';
+                    h += '</tr>';
+                }
+                h += '</tbody></table>';
+                if (data.truncated) h += '<p style="margin-top:10px;color:var(--muted);font-size:12px;">Showing first 500 rows only.</p>';
+                resultsEl.innerHTML = h;
+            }
+
+            form.addEventListener('submit', async function(ev) {
+                ev.preventDefault();
+                setStatus('Searching CloudTrail…', false);
+                resultsEl.innerHTML = '';
+                const payload = {
+                    resource_name: document.getElementById('resource_name').value.trim(),
+                    resource_type: document.getElementById('resource_type').value,
+                    region: document.getElementById('region').value.trim(),
+                    account_id: document.getElementById('account_id').value.trim(),
+                    lookback_days: parseInt(document.getElementById('lookback_days').value, 10) || 7,
+                    max_events: parseInt(document.getElementById('max_events').value, 10)
+                };
+                if (Number.isNaN(payload.max_events)) payload.max_events = 50;
+                try {
+                    const res = await fetch('/api/aws/cloudtrail/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json().catch(function() { return {}; });
+                    if (!res.ok) {
+                        setStatus(data.error || ('HTTP ' + res.status), true);
+                        return;
+                    }
+                    setStatus('Found ' + (data.count || 0) + ' event(s).', false);
+                    renderEvents(data.events || []);
+                } catch (e) {
+                    setStatus(String(e.message || e), true);
+                }
+            });
+
+            document.getElementById('btn-clear').addEventListener('click', function() {
+                form.reset();
+                document.getElementById('lookback_days').value = '7';
+                document.getElementById('max_events').value = '50';
+                resultsEl.innerHTML = '';
+                setStatus('', false);
+            });
+
+            document.getElementById('btn-upload').addEventListener('click', async function() {
+                const inp = document.getElementById('csv_file');
+                if (!inp.files || !inp.files[0]) {
+                    setStatus('Choose a CSV file first.', true);
+                    return;
+                }
+                setStatus('Parsing file…', false);
+                resultsEl.innerHTML = '';
+                const fd = new FormData();
+                fd.append('file', inp.files[0]);
+                try {
+                    const res = await fetch('/api/aws/cloudtrail/analyze-upload', { method: 'POST', body: fd });
+                    const data = await res.json().catch(function() { return {}; });
+                    if (!res.ok) {
+                        setStatus(data.error || ('HTTP ' + res.status), true);
+                        return;
+                    }
+                    setStatus('Parsed ' + (data.row_count || 0) + ' row(s), ' + (data.columns || []).length + ' column(s).', false);
+                    renderCsv(data);
+                } catch (e) {
+                    setStatus(String(e.message || e), true);
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

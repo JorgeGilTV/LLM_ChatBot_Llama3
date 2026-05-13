@@ -23,6 +23,17 @@ def splunk_display_timezone() -> str:
     return (os.getenv("SPLUNK_DISPLAY_TIMEZONE") or splunk_search_timezone()).strip()
 
 
+def splunk_p0_job_timezone() -> str:
+    """
+    Pacific-aligned TZ for P0 Splunk REST jobs, bucket boundaries, chart labels, and outliers.
+
+    Use IANA zones (America/Los_Angeles = PST/PDT). Override with SPLUNK_P0_TIMEZONE,
+    else SPLUNK_SEARCH_TIMEZONE, else Pacific.
+    """
+    raw = (os.getenv("SPLUNK_P0_TIMEZONE") or os.getenv("SPLUNK_SEARCH_TIMEZONE") or "America/Los_Angeles").strip()
+    return raw or "America/Los_Angeles"
+
+
 def execute_splunk_query(
     query_key,
     query_data,
@@ -52,9 +63,17 @@ def execute_splunk_query(
         
         # Increased connect timeout to 30 seconds for Splunk Cloud
         response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(30, 180))
+        # Keep timezone for PST/PDT bucket alignment unless Splunk rejects the parameter itself.
         if response.status_code == 400 and tz:
-            data.pop("timezone", None)
-            response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(30, 180))
+            body_low = (response.text or "").lower()
+            if any(
+                x in body_low
+                for x in ("timezone", "time zone", "invalid time", "unrecognized argument")
+            ):
+                data_retry = {k: v for k, v in data.items() if k != "timezone"}
+                response = requests.post(
+                    search_url, headers=headers, data=data_retry, verify=True, timeout=(30, 180)
+                )
         
         if response.status_code == 200:
             # Parse JSON lines from export (NDJSON). Splunk often omits "preview" on final rows;
@@ -149,6 +168,129 @@ def _splunk_float(val, default=None):
         return default
 
 
+def _splunk_row_epoch_seconds(tr) -> float | None:
+    """
+    Splunk export sometimes returns _time as epoch float/string; other builds use ISO text.
+    If we drop all rows here, charts show empty even when Splunk returned data.
+    """
+    if tr is None or tr == "":
+        return None
+    if isinstance(tr, (int, float)):
+        return float(tr)
+    s = str(tr).strip()
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        pass
+    try:
+        s2 = s.replace("Z", "+00:00")
+        if s2.endswith(" GMT"):
+            s2 = s2[:-4].strip()
+        elif s2.endswith(" UTC"):
+            s2 = s2[:-4].strip()
+        dt = datetime.fromisoformat(s2)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+        return dt.timestamp()
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def splunk_p0_streaming_index() -> str:
+    """Index for P0 predict pipeline (override if Splunk admins rename the index)."""
+    return (os.getenv("SPLUNK_P0_STREAMING_INDEX") or "streaming_prod").strip() or "streaming_prod"
+
+
+def splunk_web_base_url() -> str:
+    """Splunk UI origin (interactive dashboards, deep links)."""
+    return (os.getenv("SPLUNK_WEB_BASE") or "https://arlo.splunkcloud.com").rstrip("/")
+
+
+def splunk_p0_default_timerange_hours() -> int:
+    """
+    Default lookback for P0 Streaming / CVR / ADT / US dashboards and the P0 Splunk semaphore.
+    Override with env SPLUNK_P0_DEFAULT_TIMERANGE_HOURS (hours, min 4).
+    """
+    try:
+        v = int((os.getenv("SPLUNK_P0_DEFAULT_TIMERANGE_HOURS") or "24").strip())
+        return max(4, min(v, 8760))
+    except ValueError:
+        return 24
+
+
+def splunk_p0_coerce_timerange_hours(timerange) -> int:
+    """Normalize timerange from UI (int), MCP (e.g. 24h, 2d), or None → hours."""
+    if timerange is None or timerange == "":
+        return splunk_p0_default_timerange_hours()
+    if isinstance(timerange, bool):
+        return splunk_p0_default_timerange_hours()
+    if isinstance(timerange, int):
+        return max(1, min(timerange, 8760))
+    if isinstance(timerange, float):
+        return max(1, min(int(timerange), 8760))
+    s = str(timerange).strip().lower()
+    if s.endswith("h"):
+        try:
+            return max(1, int(s[:-1].strip()))
+        except ValueError:
+            return splunk_p0_default_timerange_hours()
+    if s.endswith("d"):
+        try:
+            return max(1, int(s[:-1].strip()) * 24)
+        except ValueError:
+            return splunk_p0_default_timerange_hours()
+    if s.endswith("w"):
+        try:
+            return max(1, int(s[:-1].strip()) * 24 * 7)
+        except ValueError:
+            return splunk_p0_default_timerange_hours()
+    try:
+        return max(1, int(float(s)))
+    except ValueError:
+        return splunk_p0_default_timerange_hours()
+
+
+def _splunk_p0_predict_empty_panel_html(
+    zmap: dict, timerange_hours: int, host_match: str, headline: str
+) -> str:
+    """Yellow box: distinguish REST failures vs no matching events vs parse issues."""
+    failed_zones = [
+        zn
+        for zn in ("z1", "z2", "z3", "z4")
+        if (zmap.get(zn) or {}).get("error") == "query_failed"
+    ]
+    raw_total = sum(
+        int((zmap.get(zn) or {}).get("raw_row_count") or 0) for zn in ("z1", "z2", "z3", "z4")
+    )
+    idx_disp = html.escape(splunk_p0_streaming_index())
+    host_note = f" (host filter: {html.escape(host_match)})" if host_match else ""
+    parts = [
+        f"<p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ {headline}{host_note}</p>"
+    ]
+    if failed_zones:
+        parts.append(
+            "<p style='margin: 8px 0 0 0; font-size: 12px; color: #856404;'><strong>Splunk REST errors</strong> for "
+            f"zone(s) {', '.join(failed_zones)} — check server logs for HTTP status, token expiry, or IP allowlist (port 8089).</p>"
+        )
+    elif raw_total == 0:
+        parts.append(
+            f"<p style='margin: 8px 0 0 0; font-size: 12px; color: #856404;'>No events matched <code>index={idx_disp}</code> in the last "
+            f"<strong>{int(timerange_hours)}h</strong> for z1–z4 (<code>host</code> must match <code>…-z[1-4]-…</code> after "
+            "<code>rex</code>). Try a longer time range, set <code>SPLUNK_P0_STREAMING_INDEX</code> if the index was renamed, "
+            "or clear the search box if you accidentally applied a <code>host</code> filter.</p>"
+        )
+    else:
+        parts.append(
+            "<p style='margin: 8px 0 0 0; font-size: 12px; color: #856404;'>Splunk returned rows but no chart points were built "
+            "(often a <code>_time</code> format change in export). Redeploy with the latest app or capture one export line for support.</p>"
+        )
+    inner = "".join(parts)
+    return (
+        "<div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; "
+        f"border-radius: 4px;'>{inner}</div>"
+    )
+
+
 def _splunk_build_p0_predict_spl(
     zone: str,
     timerange_hours: int,
@@ -157,7 +299,12 @@ def _splunk_build_p0_predict_spl(
     host_match: str = "",
 ) -> str:
     """
-    SPL aligned with Splunk P0 recording panels: 15m buckets, count as upload_count, predict LLP band.
+    SPL for P0 zones: 15m buckets, count as upload_count.
+
+    We intentionally omit Splunk's ``predict`` command: the REST search/jobs/export endpoint
+    often runs without ML Toolkit, which yields HTTP 400 "Unknown search command 'predict'".
+    Threshold bands and outlier counts are computed in Python (_splunk_rows_to_chart_series rolling band).
+
     search_literals: extra tokens after index, e.g. '"CVR"' for CVR dashboard.
     host_match: optional substring filter (regex-escaped) for match(host, "(?i)...")
     """
@@ -177,23 +324,24 @@ def _splunk_build_p0_predict_spl(
         "| bin _time span=15m aligntime=earliest\n"
         "| stats count as upload_count by _time\n"
         "| sort 0 _time\n"
-        "| predict upload_count as prediction lower95=lower upper95=upper algorithm=LLP holdback=0 future_timespan=0\n"
     )
 
 
 def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
     """
-    Parse predict export rows into chart arrays + outlier count.
-    Falls back to rolling stdev band if Splunk returns no lower/upper.
+    Parse Splunk export rows (_time + upload_count) into chart arrays + outlier count.
+    Uses rolling stdev band unless Splunk returned lower/upper fields (legacy predict rows).
+
+    For rolling bands, ``outliers`` counts points whose ``upload_count`` is strictly outside the
+    same ``lower``/``upper`` arrays drawn on the chart (not a separate warmup rule).
     """
     rows = []
     for row in results or []:
         tr = row.get("_time")
         if tr is None or tr == "":
-            continue
-        try:
-            ts = float(tr)
-        except (TypeError, ValueError):
+            tr = row.get("time")
+        ts = _splunk_row_epoch_seconds(tr)
+        if ts is None:
             continue
         rows.append((ts, row))
     rows.sort(key=lambda x: x[0])
@@ -211,7 +359,7 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
     outliers_predict = 0
     for ts, row in rows:
         dt = datetime.fromtimestamp(ts, tz=ZoneInfo("UTC")).astimezone(tzinfo)
-        labels.append(dt.strftime("%a, %b %d, %H:%M"))
+        labels.append(dt.strftime("%a, %b %d, %H:%M %Z"))
         uc = _splunk_float(row.get("upload_count"), 0.0)
         if uc is None:
             uc = 0.0
@@ -245,6 +393,9 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
         }
 
     if not any_band:
+        # Rolling ±2σ on past buckets only (same thresholds drawn on the chart). Outlier count must
+        # match what you see: count whenever upload_count is outside [lo, hi] for that bucket — do not
+        # skip the first `win` indices (that caused “spike on chart but 0 outliers”).
         win = min(96, max(8, len(ucs) // 4))
         rl, ru, ob = [], [], 0
         for i, uc in enumerate(ucs):
@@ -258,7 +409,7 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
             hi = m + 2 * s
             rl.append(lo)
             ru.append(hi)
-            if i >= win and (uc < lo or uc > hi):
+            if uc < lo or uc > hi:
                 ob += 1
         los, his, outliers_predict = rl, ru, ob
         band = "rolling"
@@ -283,17 +434,18 @@ def _splunk_fetch_p0_zones_predict(
     earliest_time: str,
     latest_time: str,
     search_literals: str = "",
-    index_literal: str = "streaming_prod",
+    index_literal: str | None = None,
     max_workers: int = 4,
     host_match: str = "",
 ) -> dict:
-    """Run predict SPL per zone (z1–z4) in parallel. Returns { 'z1': series_dict, ... }."""
+    """Run P0 zone SPL (upload_count per 15m) in parallel. Band/outliers from Python. Returns { 'z1': series_dict, ... }."""
+    idx = (index_literal or "").strip() or splunk_p0_streaming_index()
     queries = {}
     for zn in ("z1", "z2", "z3", "z4"):
         queries[f"zone_{zn}"] = _splunk_build_p0_predict_spl(
             zn,
             timerange_hours,
-            index_literal=index_literal,
+            index_literal=idx,
             search_literals=search_literals,
             host_match=host_match,
         )
@@ -304,17 +456,29 @@ def _splunk_fetch_p0_zones_predict(
         earliest_time,
         latest_time,
         max_workers=max_workers,
+        timezone=splunk_p0_job_timezone(),
     )
-    display_tz = splunk_display_timezone()
+    display_tz = splunk_p0_job_timezone()
     out = {}
     for zn in ("z1", "z2", "z3", "z4"):
         key = f"zone_{zn}"
         rows = raw.get(key)
         if rows is None:
-            out[zn] = {"error": "query_failed", "labels": [], "upload_count": [], "lower": [], "upper": [], "outliers": 0, "total_upload_count": 0, "band": "none"}
+            out[zn] = {
+                "error": "query_failed",
+                "labels": [],
+                "upload_count": [],
+                "lower": [],
+                "upper": [],
+                "outliers": 0,
+                "total_upload_count": 0,
+                "band": "none",
+                "raw_row_count": 0,
+            }
         else:
             s = _splunk_rows_to_chart_series(rows, display_tz)
             s["error"] = None
+            s["raw_row_count"] = len(rows)
             out[zn] = s
     return out
 
@@ -330,7 +494,7 @@ def _splunk_chartjs_p0_panel_html(
     total_uc = int(series.get("total_upload_count") or 0)
     warn_icon = "⚠️ " if outliers > 0 else ""
     band_note = series.get("band") or ""
-    sub = f"Metrics use 15m buckets · band: {band_note} (timezone {html.escape(splunk_display_timezone())})"
+    sub = f"Metrics use 15m buckets · band: {band_note} (timezone {html.escape(splunk_p0_job_timezone())})"
     return f"""
             <div style='background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
                 <div style='margin-bottom: 10px;'>
@@ -369,10 +533,12 @@ def _splunk_chartjs_p0_script_json(chart_data: dict, canvas_prefix: str) -> str:
             "upper": ser.get("upper") or [],
         }
     chart_json = json.dumps(payload)
+    esc_prefix = json.dumps(canvas_prefix)
     return f"""
         <script>
         (function() {{
             const bundle = {chart_json};
+            const prefix = {esc_prefix};
             const colors = {{
                 "z1": "#4e79a7",
                 "z2": "#f28e2c",
@@ -380,9 +546,22 @@ def _splunk_chartjs_p0_script_json(chart_data: dict, canvas_prefix: str) -> str:
                 "z4": "#76b7b2"
             }};
             const fillRgb = "54, 162, 235";
+            function resizePrefixCharts() {{
+                if (typeof Chart === "undefined" || !Chart.getChart) return;
+                Object.keys(bundle).forEach((zone) => {{
+                    const canvas = document.getElementById(prefix + zone);
+                    if (!canvas) return;
+                    const ch = Chart.getChart(canvas);
+                    if (ch) ch.resize();
+                }});
+            }}
             Object.keys(bundle).forEach((zone) => {{
-                const canvas = document.getElementById("{canvas_prefix}" + zone);
+                const canvas = document.getElementById(prefix + zone);
                 if (!canvas) return;
+                if (typeof Chart !== "undefined" && Chart.getChart) {{
+                    const existing = Chart.getChart(canvas);
+                    if (existing) existing.destroy();
+                }}
                 const z = bundle[zone];
                 const labels = z.labels || [];
                 const up = (z.upload_count || []).map(Number);
@@ -465,24 +644,25 @@ def _splunk_chartjs_p0_script_json(chart_data: dict, canvas_prefix: str) -> str:
                     }},
                 }});
             }});
+            resizePrefixCharts();
         }})();
         </script>
         """
 
 
-def splunk_outliers_monitor_payload(timerange_hours: int = 72) -> dict:
+def splunk_outliers_monitor_payload(timerange_hours=None) -> dict:
     """
     Compact JSON for home sidebar: outlier counts per zone for each Splunk P0 tool
-    (same SPL/predict logic as the chat dashboards).
+    (same P0 zone SPL as the chat dashboards; rolling band in Python).
     """
     token = os.getenv("SPLUNK_TOKEN")
     if not token:
         return {"success": False, "error": "SPLUNK_TOKEN not configured", "tools": []}
     host = os.getenv("SPLUNK_HOST", "arlo.splunkcloud.com")
-    tr = max(4, int(timerange_hours))
+    tr = max(4, splunk_p0_coerce_timerange_hours(timerange_hours))
     earliest = f"-{tr}h@h"
     latest = "now"
-    display_tz = splunk_display_timezone()
+    display_tz = splunk_p0_job_timezone()
 
     tools_cfg = [
         (
@@ -547,32 +727,33 @@ def splunk_outliers_monitor_payload(timerange_hours: int = 72) -> dict:
     }
 
 
-def format_timestamp_range_splunk(from_timestamp: int, to_timestamp: int) -> str:
-    """Format timestamp range into readable format with date and time"""
-    from datetime import datetime
-    
-    # Convert to datetime objects
-    from_dt = datetime.fromtimestamp(from_timestamp)
-    to_dt = datetime.fromtimestamp(to_timestamp)
-    
-    # Format with date and time
-    from_str = from_dt.strftime("%Y-%m-%d %H:%M:%S")
-    to_str = to_dt.strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Also include day of week for context
+def format_timestamp_range_splunk(
+    from_timestamp: int, to_timestamp: int, tz_name: str | None = None
+) -> str:
+    """Format epoch range in the given IANA timezone (default: Splunk display TZ, else Pacific)."""
+    tz_id = (tz_name or splunk_display_timezone() or "America/Los_Angeles").strip()
+    try:
+        zi = ZoneInfo(tz_id)
+    except Exception:
+        zi = ZoneInfo("America/Los_Angeles")
+    from_dt = datetime.fromtimestamp(float(from_timestamp), tz=ZoneInfo("UTC")).astimezone(zi)
+    to_dt = datetime.fromtimestamp(float(to_timestamp), tz=ZoneInfo("UTC")).astimezone(zi)
+
+    from_str = from_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+    to_str = to_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
     from_day = from_dt.strftime("%A")
     to_day = to_dt.strftime("%A")
-    
+
     return f"""
     <div style='display: flex; justify-content: space-around; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 4px; margin-top: 8px;'>
         <div style='text-align: center;'>
-            <div style='font-size: 10px; opacity: 0.8;'>From</div>
+            <div style='font-size: 10px; opacity: 0.8;'>From ({tz_id})</div>
             <div style='font-weight: bold; font-size: 11px;'>{from_str}</div>
             <div style='font-size: 9px; opacity: 0.7;'>{from_day}</div>
         </div>
         <div style='display: flex; align-items: center; font-size: 16px;'>→</div>
         <div style='text-align: center;'>
-            <div style='font-size: 10px; opacity: 0.8;'>To</div>
+            <div style='font-size: 10px; opacity: 0.8;'>To ({tz_id})</div>
             <div style='font-weight: bold; font-size: 11px;'>{to_str}</div>
             <div style='font-size: 9px; opacity: 0.7;'>{to_day}</div>
         </div>
@@ -613,17 +794,18 @@ def generate_splunk_error_help(error_message: str) -> str:
     """
     return html
 
-def read_splunk_p0_dashboard(query: str = "", timerange: int = 4) -> str:
+def read_splunk_p0_dashboard(query: str = "", timerange=None, *, us_infra: bool = False) -> str:
     """
     Shows the P0 Streaming dashboard from Splunk with metrics and graphs.
     If a service name is provided, filters for that specific service.
     Args:
         query: Service name or search filter
-        timerange: Number of hours to look back (default: 4)
+        timerange: Hours lookback (int or MCP string like 24h); default 24h.
+        us_infra: If True, embed the Splunk US infra dashboard deep link and US-specific titles (same REST/charts).
     """
-    timerange_hours = timerange  # Normalize parameter name
+    timerange_hours = splunk_p0_coerce_timerange_hours(timerange)
     print("=" * 80)
-    print("📊 Reading Splunk P0 Dashboard")
+    print("📊 Reading Splunk P0 US Infra Dashboard" if us_infra else "📊 Reading Splunk P0 Dashboard")
     print(f"📝 Query received: '{query}'")
     print(f"📝 Time range: {timerange_hours} hours")
     
@@ -644,12 +826,24 @@ def read_splunk_p0_dashboard(query: str = "", timerange: int = 4) -> str:
         public_ip = "Unable to detect"
     
     output = ""
-    dashboard_url = "https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard"
-    
+    _sw = splunk_web_base_url()
+    dash_slug = "p0_streaming_dashboard__us_infra" if us_infra else "p0_streaming_dashboard"
+    dash_title = "Splunk - P0 Streaming US" if us_infra else "Splunk - P0 Streaming Dashboard"
+    dash_subtitle = (
+        "P0 Streaming US infra — zones z1–z4 (same predict pipeline as P0 Streaming)"
+        if us_infra
+        else "Real-time monitoring of P0 streaming services"
+    )
+    # Deep link aligned with the same lookback as this REST view (hours).
+    dashboard_url = (
+        f"{_sw}/en-US/app/arlo_sre/{dash_slug}"
+        f"?form.tok_time.earliest=-{timerange_hours}h&form.tok_time.latest=now"
+    )
+
     # Calculate timestamps for display
     current_time = int(time.time())
     from_time = current_time - (timerange_hours * 3600)
-    timestamp_range_html = format_timestamp_range_splunk(from_time, current_time)
+    timestamp_range_html = format_timestamp_range_splunk(from_time, current_time, splunk_p0_job_timezone())
     
     # Dashboard header
     output += f"""
@@ -659,9 +853,9 @@ def read_splunk_p0_dashboard(query: str = "", timerange: int = 4) -> str:
                 margin: 0 0 8px 0;
                 color: white;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-        <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 Splunk - P0 Streaming Dashboard</h2>
+        <h2 style='margin: 0 0 6px 0; color: white; font-size: 16px; font-weight: bold;'>📊 {html.escape(dash_title)}</h2>
         <p style='margin: 0 0 4px 0; font-size: 12px; opacity: 0.95;'>
-            Real-time monitoring of P0 streaming services
+            {html.escape(dash_subtitle)}
         </p>
         <p style='margin: 0 0 8px 0;'>
             <a href='{dashboard_url}' target='_blank' style='color: white; text-decoration: underline; font-size: 11px; opacity: 0.9;'>
@@ -694,9 +888,12 @@ def read_splunk_p0_dashboard(query: str = "", timerange: int = 4) -> str:
 
         output += f"""
         <div style='margin: 8px 0; padding: 8px 10px; background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 6px; font-size: 11px; color: #1e3a8a; line-height: 1.45;'>
-            <strong>Matches Splunk UI:</strong> timezone <code>{html.escape(splunk_display_timezone())}</code> on REST searches and chart labels;
-            <strong>15m</strong> buckets; <code>upload_count</code> = event count per bucket;
-            band = <code>predict … lower95/upper95</code> (LLP). <strong>Outliers</strong> = points outside that band (same criterion as the native panel when it uses the same predict).
+            <strong>Splunk REST (this view):</strong> timezone <code>{html.escape(splunk_p0_job_timezone())}</code> (Pacific/PST — buckets + chart aligned with Splunk UI);
+            <strong>15m</strong> buckets; <code>upload_count</code> = event count per bucket.
+            <strong>Band / outliers:</strong> computed here with a rolling ±2σ window on <code>upload_count</code> (REST cannot rely on Splunk’s <code>predict</code>/MLTK on many tenants — avoid HTTP 400).
+            The interactive Splunk dashboard may still use <code>predict</code> LLP when ML Toolkit is available there.
+            <br><br>
+            <strong>Time range:</strong> OneView defaults to <strong>{int(splunk_p0_default_timerange_hours())}h</strong> for P0 tools; the <a href="{html.escape(dashboard_url)}" target="_blank" rel="noopener noreferrer" style="color: #1d4ed8;">Splunk dashboard</a> link uses the <strong>same</strong> lookback as this page (<code>earliest=-{int(timerange_hours)}h</code>). Widen in either UI if needed.
         </div>
         """
 
@@ -715,11 +912,12 @@ def read_splunk_p0_dashboard(query: str = "", timerange: int = 4) -> str:
             len((zmap.get(zn) or {}).get("labels") or []) > 0 for zn in ("z1", "z2", "z3", "z4")
         )
         if not nonempty:
-            output += f"""
-            <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
-                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No streaming recording data for predict pipeline{f" (host filter: {html.escape(host_match)})" if host_match else ""}</p>
-            </div>
-            """
+            output += _splunk_p0_predict_empty_panel_html(
+                zmap,
+                timerange_hours,
+                host_match,
+                "No streaming recording data for this query",
+            )
             return output
 
         chart_bundle = {}
@@ -977,15 +1175,15 @@ def read_splunk_p0_dashboard(query: str = "", timerange: int = 4) -> str:
         return f"<p>❌ Error reading Splunk dashboard: {html.escape(str(e))}</p>"
 
 
-def read_splunk_p0_cvr_dashboard(query: str = "", timerange: int = 4) -> str:
+def read_splunk_p0_cvr_dashboard(query: str = "", timerange=None) -> str:
     """
     Shows the P0 CVR Streaming dashboard from Splunk with metrics and graphs.
     If a service name is provided, filters for that specific service.
     Args:
         query: Service name or search filter
-        timerange: Number of hours to look back (default: 4)
+        timerange: Hours lookback; default 24h (see splunk_p0_default_timerange_hours).
     """
-    timerange_hours = timerange  # Normalize parameter name
+    timerange_hours = splunk_p0_coerce_timerange_hours(timerange)
     print("=" * 80)
     print("📊 Reading Splunk P0 CVR Dashboard")
     print(f"📝 Query received: '{query}'")
@@ -1013,7 +1211,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange: int = 4) -> str:
     # Calculate timestamps for display
     current_time = int(time.time())
     from_time = current_time - (timerange_hours * 3600)
-    timestamp_range_html = format_timestamp_range_splunk(from_time, current_time)
+    timestamp_range_html = format_timestamp_range_splunk(from_time, current_time, splunk_p0_job_timezone())
     
     # Dashboard header with different color scheme
     output += f"""
@@ -1056,7 +1254,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange: int = 4) -> str:
         }
         output += f"""
         <div style='margin: 8px 0; padding: 8px 10px; background: #f3e8ff; border-left: 4px solid #7c3aed; border-radius: 6px; font-size: 11px; color: #4c1d95; line-height: 1.45;'>
-            Same logic as P0 Streaming: 15m buckets, <code>upload_count</code>, <code>predict</code> LLP band, outliers outside the band, TZ <code>{html.escape(splunk_display_timezone())}</code>.
+            Same logic as P0 Streaming: 15m buckets, <code>upload_count</code>, rolling band / outliers in OneView, TZ <code>{html.escape(splunk_p0_job_timezone())}</code>.
             Search scoped with term <code>CVR</code> in the index.
         </div>
         """
@@ -1076,7 +1274,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange: int = 4) -> str:
         if not nonempty:
             output += f"""
             <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
-                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No CVR recording series for predict{f" (host filter: {html.escape(host_match)})" if host_match else ""}</p>
+                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No CVR recording series for this query{f" (host filter: {html.escape(host_match)})" if host_match else ""}</p>
             </div>
             """
             return output
@@ -1319,15 +1517,15 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange: int = 4) -> str:
         return f"<p>❌ Error reading Splunk CVR dashboard: {html.escape(str(e))}</p>"
 
 
-def read_splunk_p0_adt_dashboard(query: str = "", timerange: int = 4) -> str:
+def read_splunk_p0_adt_dashboard(query: str = "", timerange=None) -> str:
     """
     Shows the P0 ADT Streaming dashboard from Splunk with metrics and graphs.
     If a service name is provided, filters for that specific service.
     Args:
         query: Service name or search filter
-        timerange: Number of hours to look back (default: 4)
+        timerange: Hours lookback; default 24h.
     """
-    timerange_hours = timerange  # Normalize parameter name
+    timerange_hours = splunk_p0_coerce_timerange_hours(timerange)
     print("=" * 80)
     print("📊 Reading Splunk P0 ADT Dashboard")
     print(f"📝 Query received: '{query}'")
@@ -1355,7 +1553,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange: int = 4) -> str:
     # Calculate timestamps for display
     current_time = int(time.time())
     from_time = current_time - (timerange_hours * 3600)
-    timestamp_range_html = format_timestamp_range_splunk(from_time, current_time)
+    timestamp_range_html = format_timestamp_range_splunk(from_time, current_time, splunk_p0_job_timezone())
     
     # Dashboard header with orange/red theme
     output += f"""
@@ -1398,7 +1596,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange: int = 4) -> str:
         }
         output += f"""
         <div style='margin: 8px 0; padding: 8px 10px; background: #fff7ed; border-left: 4px solid #ea580c; border-radius: 6px; font-size: 11px; color: #7c2d12; line-height: 1.45;'>
-            Same predict / outlier logic as P0 Streaming (no CVR term). TZ <code>{html.escape(splunk_display_timezone())}</code>.
+            Same band / outlier logic as P0 Streaming (no CVR term). TZ <code>{html.escape(splunk_p0_job_timezone())}</code>.
         </div>
         """
         host_match = (query or "").strip()
@@ -1417,7 +1615,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange: int = 4) -> str:
         if not nonempty:
             output += f"""
             <div style='margin: 8px 0; padding: 12px; background-color: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;'>
-                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No ADT recording series for predict{f" (host filter: {html.escape(host_match)})" if host_match else ""}</p>
+                <p style='margin: 0; font-size: 12px; color: #856404;'>⚠️ No ADT recording series for this query{f" (host filter: {html.escape(host_match)})" if host_match else ""}</p>
             </div>
             """
             return output
@@ -1682,22 +1880,9 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange: int = 4) -> str:
         return f"<p>❌ Error reading Splunk ADT dashboard: {html.escape(str(e))}</p>"
 
 
-def read_splunk_p0_us_infra_dashboard(query: str = "", timerange: int = 4) -> str:
+def read_splunk_p0_us_infra_dashboard(query: str = "", timerange=None) -> str:
     """
     P0 Streaming US infra dashboard in Splunk — same predict / z1–z4 zone logic as P0 Streaming;
     opens the US infra dashboard view.
     """
-    base = read_splunk_p0_dashboard(query, timerange)
-    return (
-        base.replace(
-            "https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard",
-            "https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_streaming_dashboard__us_infra",
-            1,
-        )
-        .replace("Splunk - P0 Streaming Dashboard", "Splunk - P0 Streaming US", 1)
-        .replace(
-            "Real-time monitoring of P0 streaming services",
-            "P0 Streaming US infra — zones z1–z4 (same predict pipeline as P0 Streaming)",
-            1,
-        )
-    )
+    return read_splunk_p0_dashboard(query, timerange, us_infra=True)

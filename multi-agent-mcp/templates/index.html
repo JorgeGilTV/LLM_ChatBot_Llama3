@@ -224,6 +224,15 @@
                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
                             🗄️ SQL Console
                         </a>
+                        <a href="/aws-change-tracker" target="_blank" rel="noopener noreferrer"
+                           style="padding: 6px 12px; background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); color: white; 
+                                  text-decoration: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; 
+                                  transition: transform 0.2s, box-shadow 0.2s; display: inline-block;"
+                           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(13, 148, 136, 0.45)';"
+                           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';"
+                           title="AWS CloudTrail — who changed what (standalone)">
+                            ☁️ AWS Change Tracker
+                        </a>
                         <a href="https://adt-escalation-flow.arlocloud.com" target="_blank" rel="noopener noreferrer"
                            style="padding: 6px 12px; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); color: white; 
                                   text-decoration: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; 
@@ -275,7 +284,7 @@
                 </section>
 
                 <div style="margin-top: 1rem;">
-                    <div class="tool-list" id="tool-list"></div>
+                    <div class="tool-list" id="tool-list"><p class="tool-list-loading" style="color: #666; padding: 10px; margin: 0;">Loading tools…</p></div>
                 </div>
             </div>
             
@@ -353,7 +362,9 @@
                     <option value="1">1 hour</option>
                     <option value="2">2 hours</option>
                     <option value="4" selected>4 hours</option>
+                    <option value="24">24 hours</option>
                     <option value="48">2 days</option>
+                    <option value="72">3 days</option>
                     <option value="96">4 days</option>
                     <option value="168">1 week</option>
                 </select>

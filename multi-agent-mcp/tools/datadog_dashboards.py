@@ -94,6 +94,20 @@ def datadog_dashboard_href(dd_site: str | None, dash_id: str, url_from_api: str 
     return f"{datadog_ui_origin(dd_site)}{u if u.startswith('/') else '/' + u}"
 
 
+def datadog_rest_api_base(dd_site: str | None) -> str:
+    """
+    HTTPS origin for Datadog HTTP API (api.*), not the org UI hostname.
+
+    ``DATADOG_SITE=arlo.datadoghq.com`` must call ``https://api.datadoghq.com``, not
+    ``https://arlo.datadoghq.com/api/...``.
+    """
+    s = _normalize_datadog_site(dd_site or "")
+    if s.startswith("arlo.") or "." in s.split(".")[0]:
+        base_domain = ".".join(s.split(".")[-2:])
+        return f"https://api.{base_domain}"
+    return f"https://api.{s}"
+
+
 def _datadog_http_session():
     """Thread-local Session with retries (Session is not safe across threads)."""
     if getattr(_dd_session_local, "session", None) is None:
@@ -239,6 +253,148 @@ def get_metrics_parallel(dd_api_key, dd_app_key, dd_site, queries_dict, from_tim
     
     return results
 
+def datadog_red_metrics_dashboard_id() -> str:
+    """Public dashboard id for DD_Red_Metrics / RED errors (override if org cloned or renamed the board)."""
+    raw = (os.getenv("DATADOG_RED_METRICS_DASHBOARD_ID") or "mpd-2aw-sfe").strip()
+    return raw or "mpd-2aw-sfe"
+
+
+# Datadog public dashboard ids are typically three hyphenated groups (e.g. mpd-2aw-sfe).
+_DD_PUBLIC_DASHBOARD_ID_RE = re.compile(r"^[a-z0-9]{3}-[a-z0-9]{3}-[a-z0-9]{3}$", re.I)
+
+
+def _normalize_datadog_v2_dashboard(v2_body: dict) -> dict | None:
+    """
+    Map GET /api/v2/dashboard/{id} JSON to the v1-like shape expected by widget rendering
+    (top-level title, widgets, layout_type, author_name).
+    """
+    try:
+        data = v2_body.get("data") or {}
+        attrs = data.get("attributes") or {}
+        widgets = attrs.get("widgets")
+        if widgets is None:
+            widgets = []
+        author = attrs.get("author_name") or attrs.get("author_handle") or "Unknown"
+        return {
+            "title": attrs.get("title", ""),
+            "widgets": widgets,
+            "layout_type": attrs.get("layout_type", "ordered"),
+            "author_name": author,
+            "template_variables": attrs.get("template_variables") or [],
+        }
+    except Exception:
+        return None
+
+
+def dd_widget_primary_metric_query(widget_def: dict) -> str:
+    """
+    Extract one metric/log query string for /api/v1/graph/snapshot.
+
+    Classic widgets use ``requests[].q``. Newer timeseries / formulas use
+    ``requests[].queries[].query`` (and may omit ``q``), which previously left
+    widgets with empty bodies in OneView.
+    """
+    if not isinstance(widget_def, dict):
+        return ""
+    requests = widget_def.get("requests")
+    if not isinstance(requests, list) or not requests:
+        return ""
+    r0 = requests[0]
+    if not isinstance(r0, dict):
+        return ""
+    for key in ("q", "query", "apm_query"):
+        v = r0.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    queries = r0.get("queries")
+    if isinstance(queries, list):
+        for qobj in queries:
+            if not isinstance(qobj, dict):
+                continue
+            mq = qobj.get("query") or qobj.get("metrics_query") or qobj.get("search_query")
+            if isinstance(mq, str) and mq.strip():
+                return mq.strip()
+    return ""
+
+
+def _datadog_dashboard_list_api_url(dd_site: str) -> str:
+    """GET /api/v1/dashboard (list all dashboards metadata)."""
+    return f"{datadog_rest_api_base(dd_site)}/api/v1/dashboard"
+
+
+def discover_red_metrics_dashboard_id(dd_api_key, dd_app_key, dd_site) -> tuple[str | None, str | None]:
+    """
+    List dashboards and pick the best candidate for the main Arlo "RED / Metrics" board.
+    Skips obvious variants (ADT, Samsung, US) so we do not steal the wrong dashboard.
+    """
+    list_url = _datadog_dashboard_list_api_url(dd_site)
+    headers = {
+        "DD-API-KEY": dd_api_key,
+        "DD-APPLICATION-KEY": dd_app_key,
+        "Content-Type": "application/json",
+    }
+    try:
+        session = _datadog_http_session()
+        r = session.get(list_url, headers=headers, timeout=(15, 90))
+        if r.status_code != 200:
+            print(f"⚠️ discover_red_metrics: list HTTP {r.status_code}: {(r.text or '')[:200]}")
+            return None, None
+        boards = (r.json() or {}).get("dashboards") or []
+    except Exception as e:
+        print(f"⚠️ discover_red_metrics: {e}")
+        return None, None
+
+    def _skip_variant(tl: str) -> bool:
+        if "samsung" in tl:
+            return True
+        if re.search(r"\badt\b", tl):
+            return True
+        if "metric" in tl and re.search(r"\b(us|usa)\b", tl):
+            return True
+        return False
+
+    best: dict | None = None  # score, modified_at, id, title
+
+    for d in boards:
+        title = (d.get("title") or "").strip()
+        did = (d.get("id") or "").strip()
+        if not did or not title:
+            continue
+        tl = title.lower()
+        if _skip_variant(tl):
+            continue
+        if "red" not in tl or "metric" not in tl:
+            continue
+        if tl == "red - metrics":
+            score = 100
+        elif tl.startswith("red - metrics") and len(tl) <= 36:
+            score = 90
+        elif "red - metrics" in tl:
+            score = 78
+        else:
+            score = 55
+        # Prefer the classic single-scope board; "All Regions" is usually huge timeseries-only.
+        if "all regions" in tl or "all region" in tl:
+            score -= 50
+        if "multi-region" in tl or "multi region" in tl.replace("-", " "):
+            score -= 35
+        if "regions" in tl and "(" in tl:
+            score -= 15
+        score = max(0, score)
+        mod = str(d.get("modified_at") or "")
+        cand = {"score": score, "mod": mod, "id": did, "title": title}
+        if best is None:
+            best = cand
+        elif score > best["score"] or (score == best["score"] and mod > best["mod"]):
+            best = cand
+
+    if best:
+        print(f"✅ discover_red_metrics: picked {best['id']!r} ({best['title']!r}) score={best['score']}")
+        return best["id"], best["title"]
+    print("⚠️ discover_red_metrics: no candidate (titles must contain both 'red' and 'metric', excluding ADT/Samsung/US).")
+    return None, None
+
+
 def create_graph_snapshot(dd_api_key, dd_app_key, dd_site, metric_query, from_time, to_time, title=""):
     """Create a snapshot image of a graph using Datadog API"""
     if dd_site.startswith('arlo.') or '.' in dd_site.split('.')[0]:
@@ -272,49 +428,99 @@ def create_graph_snapshot(dd_api_key, dd_app_key, dd_site, metric_query, from_ti
         return None
 
 def get_dashboard_details(dd_api_key, dd_app_key, dd_site, dashboard_id):
-    """Get detailed information about a specific dashboard including widgets"""
+    """
+    Get detailed information about a specific dashboard including widgets.
+
+    Tries API v1 first; on HTTP 404, retries with v2 (many newer dashboards are only
+    available or complete via ``/api/v2/dashboard/{id}``). Sets ``get_dashboard_details.last_error``
+    to ``(status_code, body_snippet)`` when returning None (for clearer UI messages).
+    """
+    get_dashboard_details.last_error = None  # type: ignore[attr-defined]
     dd_site = _normalize_datadog_site(dd_site or "")
     # Handle custom subdomains (e.g., arlo.datadoghq.com)
     if dd_site.startswith('arlo.') or '.' in dd_site.split('.')[0]:
-        # Custom subdomain - use the main API endpoint
         base_domain = '.'.join(dd_site.split('.')[-2:])  # Extract datadoghq.com
-        api_url = f"https://api.{base_domain}/api/v1/dashboard/{dashboard_id}"
+        base_url = f"https://api.{base_domain}"
     else:
-        api_url = f"https://api.{dd_site}/api/v1/dashboard/{dashboard_id}"
-    
+        base_url = f"https://api.{dd_site}"
+
+    v1_url = f"{base_url}/api/v1/dashboard/{dashboard_id}"
+    v2_url = f"{base_url}/api/v2/dashboard/{dashboard_id}"
+
     headers = {
         "DD-API-KEY": dd_api_key,
         "DD-APPLICATION-KEY": dd_app_key,
         "Content-Type": "application/json"
     }
-    
-    # Dashboard JSON can be large; intermittent TCP resets from api.datadoghq.com are common
-    # under parallel load — urllib3 retries + app-level backoff + fresh session on failure.
+
     timeout = (10, 60)
     max_attempts = 4
-    for attempt in range(max_attempts):
+
+    def _fetch_once(url: str):
         session = _datadog_http_session()
-        try:
-            response = session.get(api_url, headers=headers, timeout=timeout)
-            if response.status_code == 200:
-                return response.json()
-            print(
-                f"❌ Failed to get dashboard {dashboard_id}: {response.status_code} - {response.text[:200]}"
-            )
-            return None
-        except Exception as e:
-            transient = _is_transient_datadog_connection_error(e)
-            if transient and attempt < max_attempts - 1:
-                _reset_datadog_session_for_thread()
-                delay = 0.75 * (2**attempt)
-                print(
-                    f"⚠️ Datadog dashboard fetch transient error ({dashboard_id}), "
-                    f"retry {attempt + 1}/{max_attempts} in {delay:.1f}s: {e!s}"
-                )
-                time.sleep(delay)
-                continue
-            print(f"❌ Exception getting dashboard details ({dashboard_id}): {e!s}")
-            return None
+        response = session.get(url, headers=headers, timeout=timeout)
+        return response
+
+    def _try_endpoint(api_url: str):
+        for attempt in range(max_attempts):
+            try:
+                response = _fetch_once(api_url)
+                if response.status_code == 200:
+                    return response.status_code, response.json(), None
+                if response.status_code in (502, 503, 504) and attempt < max_attempts - 1:
+                    _reset_datadog_session_for_thread()
+                    delay = 0.75 * (2**attempt)
+                    print(
+                        f"⚠️ Datadog dashboard fetch HTTP {response.status_code} ({dashboard_id}), "
+                        f"retry {attempt + 1}/{max_attempts} in {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+                    continue
+                snippet = (response.text or "")[:500]
+                return response.status_code, None, snippet
+            except Exception as e:
+                transient = _is_transient_datadog_connection_error(e)
+                if transient and attempt < max_attempts - 1:
+                    _reset_datadog_session_for_thread()
+                    delay = 0.75 * (2**attempt)
+                    print(
+                        f"⚠️ Datadog dashboard fetch transient error ({dashboard_id}), "
+                        f"retry {attempt + 1}/{max_attempts} in {delay:.1f}s: {e!s}"
+                    )
+                    time.sleep(delay)
+                    continue
+                return None, None, repr(e)
+        return None, None, "max retries exceeded"
+
+    # --- v1 ---
+    st1, data1, err1 = _try_endpoint(v1_url)
+    if st1 == 200 and isinstance(data1, dict):
+        return data1
+
+    if err1:
+        print(f"❌ Failed to get dashboard {dashboard_id} (v1): HTTP {st1} - {err1[:220]}")
+
+    err2 = None
+    st2 = None
+    # --- v2 on 404 (dashboard may only exist / be readable via v2) ---
+    if st1 == 404:
+        st2, data2, err2 = _try_endpoint(v2_url)
+        if st2 == 200 and isinstance(data2, dict):
+            normalized = _normalize_datadog_v2_dashboard(data2)
+            if normalized:
+                print(f"✅ Loaded dashboard {dashboard_id} via API v2 (v1 returned 404)")
+                return normalized
+        if err2:
+            print(f"❌ Dashboard {dashboard_id} v2: HTTP {st2} - {err2[:220]}")
+
+    parts = []
+    if err1:
+        parts.append(f"v1 HTTP {st1}: {err1[:300]}")
+    if st1 == 404 and err2:
+        parts.append(f"v2 HTTP {st2}: {err2[:300]}")
+    hint = " | ".join(parts) if parts else ""
+    status_for_ui = st2 if st1 == 404 and st2 is not None else st1
+    get_dashboard_details.last_error = (status_for_ui, hint)  # type: ignore[attr-defined]
     return None
 
 def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
@@ -337,20 +543,27 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
     dd_app_key = os.getenv("DATADOG_APP_KEY")
     dd_site = os.getenv("DATADOG_SITE", "datadoghq.com")  # Default to US1
     
-    # Default RED dashboard ID - show directly if no query
-    default_red_dashboard_id = "mpd-2aw-sfe"  # RED - Metrics dashboard
+    # Default RED dashboard ID (override with DATADOG_RED_METRICS_DASHBOARD_ID)
+    default_red_dashboard_id = datadog_red_metrics_dashboard_id()
     show_specific_dashboard = False
     service_filter = None  # Filter for specific service widgets
     original_query = query  # Save original query for messages
     
+    qraw = (query or "").strip()
     # If no query or query is "RED", show the main RED dashboard directly
-    if not query or query.strip().upper() == "RED" or query.strip() == "":
+    if not qraw or qraw.upper() == "RED":
         query = default_red_dashboard_id
         show_specific_dashboard = True
         print("📊 Showing RED - Metrics dashboard directly")
+    elif _DD_PUBLIC_DASHBOARD_ID_RE.match(qraw):
+        # Three-group public id (e.g. abc-def-123): treat as explicit dashboard id, not service name
+        query = qraw.lower()
+        show_specific_dashboard = True
+        service_filter = None
+        print(f"📊 Loading dashboard by public id: {query}")
     else:
         # Assume query is a service name and show RED dashboard filtered by that service
-        service_filter = query.strip().lower()
+        service_filter = qraw.lower()
         original_query = service_filter  # Keep the service name for display
         query = default_red_dashboard_id
         show_specific_dashboard = True
@@ -399,6 +612,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
     }
     
     try:
+        red_metrics_discovery_banner = ""
         # Initialize search_query for later use
         search_query = query.strip().lower() if query and not show_specific_dashboard else ""
         
@@ -416,18 +630,57 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                 print(f"📊 Dashboard title: {details.get('title', 'N/A')}")
             
             if not details:
+                le = getattr(get_dashboard_details, "last_error", None)
+                is_404 = le and isinstance(le, tuple) and le[0] == 404
+                discovered_ok = False
+                if is_404:
+                    stale_id = query
+                    alt_id, alt_title = discover_red_metrics_dashboard_id(dd_api_key, dd_app_key, dd_site)
+                    if alt_id and alt_id != stale_id:
+                        details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, alt_id)
+                        if details:
+                            discovered_ok = True
+                            query = alt_id
+                            red_metrics_discovery_banner = (
+                                "<div style='margin:0 0 12px 0;padding:10px 12px;background:#fffbeb;border-left:4px solid #f59e0b;"
+                                "border-radius:6px;font-size:12px;color:#78350f;line-height:1.45;'>"
+                                "<strong>Dashboard ID:</strong> the configured board <code>"
+                                + html.escape(stale_id)
+                                + "</code> was not found (404). "
+                                "Loaded the best match from your Datadog account: <strong>"
+                                + html.escape(alt_title or "")
+                                + "</strong> (<code>"
+                                + html.escape(alt_id)
+                                + "</code>). Set <code>DATADOG_RED_METRICS_DASHBOARD_ID</code> in <code>.env</code> to pin this ID.</div>"
+                            )
+                            print(f"📊 RED Metrics resolved via discovery: {alt_id}")
+            
+            if not details:
+                le = getattr(get_dashboard_details, "last_error", None)
+                api_hint = ""
+                if le and isinstance(le, tuple) and len(le) >= 2:
+                    api_hint = f"<p><strong>API:</strong> HTTP {html.escape(str(le[0]))}</p><pre style='white-space:pre-wrap;font-size:10px;background:#f5f5f5;padding:8px;border-radius:4px;max-height:120px;overflow:auto;'>{html.escape(str(le[1])[:800])}</pre>"
+                no_match = ""
+                if is_404 and not discovered_ok:
+                    no_match = (
+                        "<p><strong>Automatic lookup:</strong> no dashboard in your account matched "
+                        "<em>red</em> + <em>metric</em> in the title (ADT / Samsung / US variants are skipped). "
+                        "Use <strong>DD_Search</strong> with <code>RED</code> or set <code>DATADOG_RED_METRICS_DASHBOARD_ID</code> to the id from the board URL.</p>"
+                    )
                 error_msg = f"""
                 <div style='padding: 20px; margin: 20px 0; background-color: #fee; border: 2px solid #f00; border-radius: 4px;'>
                     <h3 style='color: #c00;'>❌ Error: Could not load the RED - Metrics dashboard</h3>
-                    <p><strong>Dashboard ID:</strong> {query}</p>
-                    <p><strong>Site:</strong> {dd_site}</p>
+                    <p><strong>Dashboard ID:</strong> {html.escape(str(query))}</p>
+                    <p><strong>Site:</strong> {html.escape(str(dd_site))}</p>
+                    {api_hint}
+                    {no_match}
                     <p>Possible causes:</p>
                     <ul>
-                        <li>Invalid dashboard ID</li>
-                        <li>Insufficient permissions</li>
-                        <li>Dashboard does not exist</li>
+                        <li>Invalid or obsolete dashboard ID — open the board in Datadog and copy the id from the URL; set <code>DATADOG_RED_METRICS_DASHBOARD_ID</code> in <code>.env</code>.</li>
+                        <li>Application key missing <strong>Dashboards Read</strong> (or equivalent) scope.</li>
+                        <li>Dashboard was deleted or restricted to another team.</li>
                     </ul>
-                    <p>Please check your Datadog credentials and dashboard ID in the .env file.</p>
+                    <p>We try API v1 first, then API v2 if v1 returns 404, then search your dashboard list for a title matching <strong>RED</strong> + <strong>Metrics</strong> (excluding ADT / Samsung / US).</p>
                 </div>
                 """
                 return error_msg
@@ -477,7 +730,7 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                         filtered_dashboards.append(dashboard)
         
         # Build HTML output
-        output = f"""
+        output = f"""{red_metrics_discovery_banner}
         <style>
             .datadog-table {{
                 border-collapse: collapse;
@@ -792,6 +1045,62 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                     # OPTIMIZATION: Second pass - render widgets using pre-fetched data
                     print(f"🚀 Phase 3: Rendering widgets with pre-fetched data...")
                     
+                    try:
+                        snap_budget = int((os.getenv("DD_RED_METRICS_SNAPSHOT_MAX") or "72").strip() or "72")
+                    except ValueError:
+                        snap_budget = 72
+                    snap_budget = max(8, min(snap_budget, 200))
+                    snaps_used = 0
+                    snap_truncated = False
+
+                    # Prefetch timeseries graph snapshots in parallel (same cap as sequential path).
+                    snapshot_jobs: list[tuple[str, str]] = []
+                    for meta in widget_metadata:
+                        w = meta["widget"]
+                        wd = w.get("definition", {})
+                        wt = wd.get("type", "unknown")
+                        if wt in ("note", "free_text", "iframe"):
+                            continue
+                        if wt == "trace_service":
+                            continue
+                        q = dd_widget_primary_metric_query(wd)
+                        if not q:
+                            continue
+                        if len(snapshot_jobs) >= snap_budget:
+                            break
+                        snapshot_jobs.append((q, wd.get("title", "Untitled Widget")))
+
+                    unique_snap_jobs: list[tuple[str, str]] = []
+                    _seen_q: set[str] = set()
+                    for q, title in snapshot_jobs:
+                        if q in _seen_q:
+                            continue
+                        _seen_q.add(q)
+                        unique_snap_jobs.append((q, title))
+
+                    snapshot_url_by_query: dict[str, str | None] = {}
+
+                    def _prefetch_snap(job: tuple[str, str]) -> tuple[str, str | None]:
+                        qj, tj = job
+                        try:
+                            return qj, create_graph_snapshot(
+                                dd_api_key, dd_app_key, dd_site, qj, from_time, current_time, tj
+                            )
+                        except Exception as e:
+                            print(f"Error creating snapshot (prefetch): {e}")
+                            return qj, None
+
+                    if unique_snap_jobs:
+                        _mw = min(8, len(unique_snap_jobs))
+                        with ThreadPoolExecutor(max_workers=max(1, _mw)) as _snap_ex:
+                            for qj, url in _snap_ex.map(_prefetch_snap, unique_snap_jobs):
+                                if url:
+                                    snapshot_url_by_query[qj] = url
+                        print(
+                            f"✅ Prefetched {len(snapshot_url_by_query)}/{len(unique_snap_jobs)} "
+                            f"unique graph snapshots ({len(snapshot_jobs)} widget slots)"
+                        )
+                    
                     # Iterate through widgets and display them
                     for meta in widget_metadata:
                         # Get widget and check if it has pre-fetched data
@@ -806,6 +1115,11 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                         if widget_type in ['note', 'free_text', 'iframe']:
                             continue
                         
+                        query = dd_widget_primary_metric_query(widget_def)
+                        if widget_type != "trace_service" and query and snaps_used >= snap_budget:
+                            snap_truncated = True
+                            continue
+                        
                         widget_count += 1
                         
                         # Determine icon based on widget title
@@ -817,16 +1131,8 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                         elif 'latency' in widget_title.lower() or 'duration' in widget_title.lower():
                             metric_icon = "⏱️"
                         
-                        # Try to get the metric query for snapshot
-                        widget_requests = widget_def.get('requests', [])
-                        query = None
                         service_info = None
                         
-                        if widget_requests and len(widget_requests) > 0:
-                            req = widget_requests[0]
-                            query = req.get('q', '') or req.get('query', '')
-                        
-                        # For trace_service widgets, extract service information
                         if widget_type == 'trace_service':
                             service_info = {
                                 'service': widget_def.get('service', 'Unknown'),
@@ -1243,9 +1549,14 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                             </div>
                             """
                         elif query:
-                            # Try to create a graph snapshot for metric queries
+                            snaps_used += 1
+                            # Prefer parallel-prefetched snapshot; one-off fallback if missing
                             print(f"Creating snapshot for: {widget_title}")
-                            snapshot_url = create_graph_snapshot(dd_api_key, dd_app_key, dd_site, query, from_time, current_time, widget_title)
+                            snapshot_url = snapshot_url_by_query.get(query)
+                            if not snapshot_url:
+                                snapshot_url = create_graph_snapshot(
+                                    dd_api_key, dd_app_key, dd_site, query, from_time, current_time, widget_title
+                                )
                             
                             if snapshot_url:
                                 # Show the actual graph image
@@ -1304,6 +1615,12 @@ def read_datadog_dashboards(query: str, timerange_hours: int = 4) -> str:
                     # Close grid and container only if we opened them (i.e., if we have widgets to show)
                     if len(widgets_to_show) > 0:
                         output += "</div></div>"  # Close grid and container
+                        if snap_truncated:
+                            output += (
+                                "<p style='font-size:11px;color:#64748b;margin:8px 12px;line-height:1.45;'>"
+                                f"Only the first <strong>{snap_budget}</strong> timeseries graph snapshots are rendered here to avoid timeouts. "
+                                "Raise <code>DD_RED_METRICS_SNAPSHOT_MAX</code> in <code>.env</code> or open the full board in Datadog.</p>"
+                            )
                     
                     # Add all chart scripts (Chart.js is now loaded globally in index.html)
                     if chart_scripts:
@@ -1393,8 +1710,11 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
     dd_app_key = os.getenv("DATADOG_APP_KEY")
     dd_site = os.getenv("DATADOG_SITE", "datadoghq.com")
     
-    # Default RED - Metrics - ADT dashboard ID
-    default_adt_dashboard_id = "cum-ivw-92c"  # RED Metrics - partnerprod (ADT)
+    # Default RED - Metrics - ADT dashboard ID (override if the board id changed in Datadog)
+    default_adt_dashboard_id = (
+        (os.getenv("DD_ADT_DASHBOARD_ID") or os.getenv("DATADOG_ADT_DASHBOARD_ID") or "cum-ivw-92c").strip()
+        or "cum-ivw-92c"
+    )
     service_filter = None
     
     # If query provided, use it as service filter
@@ -1418,8 +1738,20 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
         print(f"📊 Fetching ADT dashboard: {default_adt_dashboard_id}")
         details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, default_adt_dashboard_id)
         
-        if not details or 'widgets' not in details:
-            return "<p>❌ Could not fetch ADT dashboard details. Please verify the dashboard ID.</p>"
+        if not details or "widgets" not in details:
+            err = getattr(get_dashboard_details, "last_error", None)
+            err_html = ""
+            if err and isinstance(err, tuple) and len(err) >= 2:
+                err_html = (
+                    "<p style='font-size:12px;color:#64748b;margin-top:8px'>"
+                    f"Datadog API: HTTP <code>{html.escape(str(err[0]))}</code> — "
+                    f"{html.escape(str(err[1])[:500])}</p>"
+                )
+            return (
+                "<p>❌ Could not fetch ADT dashboard details. "
+                "Verify <code>DD_ADT_DASHBOARD_ID</code> or the default id in Datadog.</p>"
+                f"{err_html}"
+            )
         
         dash_id = default_adt_dashboard_id
         dash_title = details.get('title', 'RED - Metrics - ADT')
@@ -1556,20 +1888,42 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
         
         # Phase 3: Render widgets with pre-fetched data
         print(f"🚀 ADT Phase 3: Rendering widgets...")
-        
+        try:
+            snap_budget = int((os.getenv("DD_RED_METRICS_SNAPSHOT_MAX") or "72").strip() or "72")
+        except ValueError:
+            snap_budget = 72
+        snap_budget = max(8, min(snap_budget, 200))
+        snaps_used = 0
+        snap_truncated = False
+
         for meta in widget_metadata:
             widget = meta['widget']
             queries_keys = meta['queries_keys']
-            
+
             widget_def = widget.get('definition', {})
             widget_type = widget_def.get('type', 'unknown')
             widget_title = widget_def.get('title', 'Untitled Widget')
-            
+
             if widget_type in ['note', 'free_text', 'iframe']:
                 continue
-            
+
+            query = dd_widget_primary_metric_query(widget_def)
+            if widget_type != "trace_service" and query and snaps_used >= snap_budget:
+                snap_truncated = True
+                continue
+
             widget_count += 1
-            
+
+            metric_icon = "📊"
+            if 'request' in widget_title.lower() or 'rate' in widget_title.lower():
+                metric_icon = "📈"
+            elif 'error' in widget_title.lower():
+                metric_icon = "⚠️"
+            elif 'latency' in widget_title.lower() or 'duration' in widget_title.lower():
+                metric_icon = "⏱️"
+
+            graph_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}" if query else None
+
             service_info = None
             if widget_type == 'trace_service':
                 service_info = {
@@ -1583,7 +1937,7 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
                     'show_distribution': widget_def.get('show_distribution', True),
                     'show_resource_list': widget_def.get('show_resource_list', False),
                 }
-            
+
             if service_info and queries_keys:
                 service = service_info['service']
                 env = service_info['env']
@@ -1937,9 +2291,101 @@ def read_datadog_adt(query: str, timerange_hours: int = 4) -> str:
                     </div>
                 </div>
                 """
-        
+            elif query:
+                snaps_used += 1
+                print(f"📊 ADT snapshot widget: {widget_title}")
+                snapshot_url = create_graph_snapshot(
+                    dd_api_key, dd_app_key, dd_site, query, from_time, current_time, widget_title
+                )
+                output += f"""
+                        <div style='background-color: #f7fafc;
+                                    padding: 4px;
+                                    border-radius: 3px;
+                                    border: 1px solid #e2e8f0;
+                                    box-shadow: 0 1px 2px rgba(0,0,0,0.04);'>
+                            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;'>
+                                <h4 style='margin: 0; color: #2d3748; font-size: 13px; font-weight: 600;'>
+                                    {metric_icon} {html.escape(widget_title)}
+                                </h4>
+                                <span style='font-size: 10px; color: #718096; background-color: #e2e8f0; padding: 1px 3px; border-radius: 2px;'>
+                                    {html.escape(widget_type)}
+                                </span>
+                            </div>
+                """
+                if snapshot_url and graph_url:
+                    output += f"""
+                                <div style='background-color: #ffffff;
+                                            padding: 4px;
+                                            border-radius: 3px;
+                                            border: 1px solid #e2e8f0;'>
+                                    <img src='{html.escape(snapshot_url)}'
+                                         alt='{html.escape(widget_title)}'
+                                         style='width: 100%; height: auto; max-height: 150px; object-fit: contain; border-radius: 2px;'
+                                         onerror="this.parentElement.innerHTML='<div style=\\'padding: 10px; text-align: center; color: #e53e3e; font-size: 10px;\\'>❌ Failed to load</div>';">
+                                    <div style='margin-top: 3px; text-align: center;'>
+                                        <a href='{html.escape(graph_url)}' target='_blank'
+                                           style='font-size: 9px; color: #7c3aed; text-decoration: none;'>
+                                            View Graph →
+                                        </a>
+                                    </div>
+                                </div>
+                    """
+                elif graph_url:
+                    output += f"""
+                                <div style='background-color: #ffffff;
+                                            padding: 8px;
+                                            border-radius: 3px;
+                                            border: 1px dashed #cbd5e0;
+                                            text-align: center;
+                                            min-height: 110px;
+                                            display: flex;
+                                            flex-direction: column;
+                                            justify-content: center;
+                                            align-items: center;'>
+                                    <div style='font-size: 24px; margin-bottom: 4px;'>📊</div>
+                                    <p style='margin: 0 0 4px 0; font-size: 11px; color: #4a5568; font-weight: 500;'>
+                                        {html.escape(widget_title[:50])}{'...' if len(widget_title) > 50 else ''}
+                                    </p>
+                                    <a href='{html.escape(graph_url)}' target='_blank'
+                                       style='display: inline-block; padding: 3px 8px; background-color: #7c3aed; color: white;
+                                              text-decoration: none; border-radius: 2px; font-size: 9px; font-weight: 600;">
+                                        View Graph →
+                                    </a>
+                                </div>
+                    """
+                output += "</div>"
+            else:
+                dash_link = datadog_dashboard_href(dd_site, dash_id)
+                output += f"""
+                        <div style='background-color: #f7fafc;
+                                    padding: 4px;
+                                    border-radius: 3px;
+                                    border: 1px solid #e2e8f0;
+                                    box-shadow: 0 1px 2px rgba(0,0,0,0.04);'>
+                            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;'>
+                                <h4 style='margin: 0; color: #2d3748; font-size: 13px; font-weight: 600;'>
+                                    {metric_icon} {html.escape(widget_title)}
+                                </h4>
+                                <span style='font-size: 10px; color: #718096; background-color: #e2e8f0; padding: 1px 3px; border-radius: 2px;'>
+                                    {html.escape(widget_type)}
+                                </span>
+                            </div>
+                            <div style='background-color: #ffffff; padding: 5px; border-radius: 3px; border: 1px solid #e2e8f0;'>
+                                <p style='margin: 0; font-size: 10px; color: #718096;'>
+                                    {html.escape(widget_type)} — <a href='{html.escape(dash_link)}' target='_blank' style='color: #7c3aed; font-size: 9px;'>Open dashboard →</a>
+                                </p>
+                            </div>
+                        </div>
+                """
+
         output += "</div></div>"  # Close grid and container
-        
+        if snap_truncated:
+            output += (
+                "<p style='font-size:11px;color:#64748b;margin:8px 12px;line-height:1.45;'>"
+                f"Only the first <strong>{snap_budget}</strong> timeseries graph snapshots are shown here. "
+                "Raise <code>DD_RED_METRICS_SNAPSHOT_MAX</code> in <code>.env</code> or open the full board in Datadog.</p>"
+            )
+
         # Add chart scripts
         if chart_scripts:
             output += """
@@ -1986,8 +2432,8 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
     try:
         output = "<div class='datadog-results'>"
         
-        # Always use the RED - Metrics dashboard
-        default_red_dashboard_id = "mpd-2aw-sfe"
+        # Always use the RED - Metrics dashboard (or discover if the configured id 404s)
+        default_red_dashboard_id = datadog_red_metrics_dashboard_id()
         service_filter = query.strip().lower() if query else None
         
         if service_filter:
@@ -1995,14 +2441,34 @@ def read_datadog_errors_only(query: str = "", timerange_hours: int = 4) -> str:
         else:
             print(f"🚨 Showing all services with errors > 0 (last {timerange_hours} hours)")
         
-        # Get dashboard details
-        details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, default_red_dashboard_id)
-        
-        if not details or 'widgets' not in details:
-            return "<p>❌ Could not fetch dashboard details</p>"
-        
         dash_id = default_red_dashboard_id
-        dash_title = details.get('title', 'RED - Metrics')
+        details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, dash_id)
+        if not details or "widgets" not in details:
+            le = getattr(get_dashboard_details, "last_error", None)
+            is_404 = le and isinstance(le, tuple) and le[0] == 404
+            if is_404:
+                alt_id, alt_title = discover_red_metrics_dashboard_id(dd_api_key, dd_app_key, dd_site)
+                if alt_id and alt_id != dash_id:
+                    details = get_dashboard_details(dd_api_key, dd_app_key, dd_site, alt_id)
+                    if details and "widgets" in details:
+                        dash_id = alt_id
+                        output += (
+                            "<div style='margin:8px 0;padding:10px 12px;background:#fffbeb;border-left:4px solid #f59e0b;"
+                            "border-radius:6px;font-size:12px;color:#78350f;'>"
+                            "<strong>RED Metrics dashboard:</strong> configured id was not found; using <strong>"
+                            + html.escape(alt_title or "")
+                            + "</strong> (<code>"
+                            + html.escape(alt_id)
+                            + "</code>). Set <code>DATADOG_RED_METRICS_DASHBOARD_ID</code> to pin it.</div>"
+                        )
+        
+        if not details or "widgets" not in details:
+            return (
+                "<p>❌ Could not fetch RED Metrics dashboard details. "
+                "Verify <code>DATADOG_RED_METRICS_DASHBOARD_ID</code> or that your app key can list dashboards.</p>"
+            )
+        
+        dash_title = details.get("title", "RED - Metrics")
         dash_url = f"{datadog_ui_origin(dd_site)}/dashboard/{dash_id}"
         
         # Calculate timestamps for display
@@ -2590,8 +3056,10 @@ def read_datadog_adt_errors_only(query: str = "", timerange_hours: int = 4) -> s
     dd_app_key = os.getenv("DATADOG_APP_KEY")
     dd_site = os.getenv("DATADOG_SITE", "datadoghq.com")
     
-    # Default RED - Metrics - ADT dashboard ID
-    default_adt_dashboard_id = "cum-ivw-92c"  # RED Metrics - partnerprod (ADT)
+    default_adt_dashboard_id = (
+        (os.getenv("DD_ADT_DASHBOARD_ID") or os.getenv("DATADOG_ADT_DASHBOARD_ID") or "cum-ivw-92c").strip()
+        or "cum-ivw-92c"
+    )
     service_filter = None
     
     # If query provided, use it as service filter
@@ -4085,7 +4553,7 @@ def read_datadog_failed_pods(query: str = "", timerange_hours: int = 4) -> str:
         
         # Query for failed pods
         # Using Datadog metrics API to get pod status
-        base_url = f"https://{dd_site}/api/v1"
+        base_url = f"{datadog_rest_api_base(dd_site)}/api/v1"
         headers = {
             "DD-API-KEY": dd_api_key,
             "DD-APPLICATION-KEY": dd_app_key,
@@ -4297,7 +4765,7 @@ def read_datadog_403_errors(query: str = "", timerange_hours: int = 4) -> str:
         print(f"📅 Time range: {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')}")
         
         # Query APM for 403 errors
-        base_url = f"https://{dd_site}/api/v1"
+        base_url = f"{datadog_rest_api_base(dd_site)}/api/v1"
         headers = {
             "DD-API-KEY": dd_api_key,
             "DD-APPLICATION-KEY": dd_app_key,
@@ -4533,7 +5001,7 @@ def search_datadog_dashboards(query: str = "", timerange: int = 4) -> str:
             "DD-APPLICATION-KEY": dd_app_key
         }
         
-        dashboards_url = f"https://{dd_site}/api/v1/dashboard"
+        dashboards_url = f"{datadog_rest_api_base(dd_site)}/api/v1/dashboard"
         print(f"📡 Fetching dashboards from: {dashboards_url}")
         
         response = requests.get(dashboards_url, headers=headers, timeout=30)

@@ -26,6 +26,27 @@ function ensureChartJs() {
 }
 
 let _html2canvasPromise = null;
+/** Chart.js: canvases inside display:none tabs get zero size — resize when tab becomes visible or after scripts run. */
+function resizeSplunkChartsIn(root) {
+    if (!root || typeof Chart === 'undefined' || !Chart.getChart) {
+        return;
+    }
+    try {
+        root.querySelectorAll('canvas').forEach(function (canvas) {
+            try {
+                const ch = Chart.getChart(canvas);
+                if (ch) {
+                    ch.resize();
+                }
+            } catch (_e) {
+                /* ignore */
+            }
+        });
+    } catch (_e) {
+        /* ignore */
+    }
+}
+
 function ensureHtml2Canvas() {
     if (typeof html2canvas === 'function') {
         return Promise.resolve();
@@ -570,6 +591,12 @@ function switchTab(contentId, btnElement) {
     const selectedContent = document.getElementById(contentId);
     if (selectedContent) {
         selectedContent.style.display = 'block';
+        // Splunk P0 tabs: charts were often laid out at 0×0 while this panel was hidden
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                resizeSplunkChartsIn(selectedContent);
+            });
+        });
     }
     
     // Add active class to clicked button
@@ -626,6 +653,24 @@ function updateLastUpdateTime() {
     }
 }
 
+// P0 Splunk tools default to 24h in the Time Range selector when only these are selected.
+const SPLUNK_P0_TOOL_NAMES = new Set([
+    'P0_Streaming',
+    'P0_CVR_Streaming',
+    'P0_ADT_Streaming',
+    'P0_Streaming_US',
+]);
+let _lastSplunkP0OnlySelection = false;
+
+function splunkP0OnlyToolSelection(selectedTools) {
+    return (
+        selectedTools.length > 0 &&
+        selectedTools.every(function (t) {
+            return SPLUNK_P0_TOOL_NAMES.has(t);
+        })
+    );
+}
+
 // Function to show/hide timerange selector based on selected tools
 function setupTimeRangeSelector() {
     const timerangeContainer = document.getElementById('timerange-container');
@@ -651,6 +696,13 @@ function setupTimeRangeSelector() {
         if (timerangeContainer) {
             timerangeContainer.style.display = showTimeRange ? 'block' : 'none';
         }
+
+        const p0Only = splunkP0OnlyToolSelection(selectedTools);
+        const trSel = document.getElementById('timerange-select');
+        if (showTimeRange && trSel && p0Only && !_lastSplunkP0OnlySelection) {
+            trSel.value = '24';
+        }
+        _lastSplunkP0OnlySelection = p0Only;
     }
     
     // Add event listeners to all tool checkboxes
@@ -801,6 +853,11 @@ async function showHistoryResult(index) {
     let scriptIndex = 0;
     function executeNextScript() {
         if (scriptIndex >= scripts.length) {
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    resizeSplunkChartsIn(resultsBox);
+                });
+            });
             // Add result actions after scripts are executed
             setTimeout(() => addResultActions(resultsBox), 100);
             return;
@@ -1365,7 +1422,7 @@ function loadSplunkOutliersMonitor(forceRefresh) {
             return;
         }
     }
-    fetch('/api/splunk/monitor?timerange=72')
+    fetch('/api/splunk/monitor')
         .then(function (res) {
             if (!res.ok) throw new Error('Splunk monitor HTTP ' + res.status);
             return res.json();
@@ -1908,41 +1965,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 function createToolCheckboxLabel(tool) {
                     const label = document.createElement('label');
                     label.className = 'tool-item tool-item-sub';
-                    label.title = tool.desc || tool.name;
+                    label.title = tool.desc || tool.name || '';
                     const displayName = tool.name === 'Ask_ARLOCHAT' ? 'MCP_ARLO' : tool.name;
-                    label.innerHTML = `
-                        <input type="checkbox" name="tool" value="${tool.name}">
-                        <span class="tool-item-text">${displayName}</span>
-                    `;
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.name = 'tool';
+                    input.value = tool.name || '';
+                    const span = document.createElement('span');
+                    span.className = 'tool-item-text';
+                    span.textContent = displayName;
+                    label.appendChild(input);
+                    label.appendChild(span);
                     return label;
                 }
 
-                const TOOL_PREVIEW_COUNT = 5;
-                const previewTools = tools.slice(0, TOOL_PREVIEW_COUNT);
-                const extraTools = tools.slice(TOOL_PREVIEW_COUNT);
-
+                // List every tool in this section (no "Show N more" fold) so nothing looks missing.
                 const previewWrap = document.createElement('div');
                 previewWrap.className = 'tool-items-preview';
-                previewTools.forEach(tool => {
+                tools.forEach(tool => {
                     previewWrap.appendChild(createToolCheckboxLabel(tool));
                 });
                 toolsContainer.appendChild(previewWrap);
-
-                if (extraTools.length > 0) {
-                    const more = document.createElement('details');
-                    more.className = 'tool-items-more';
-                    const summary = document.createElement('summary');
-                    const n = extraTools.length;
-                    summary.textContent = `Show ${n} more tool${n === 1 ? '' : 's'}`;
-                    more.appendChild(summary);
-                    const moreInner = document.createElement('div');
-                    moreInner.className = 'tool-more-inner';
-                    extraTools.forEach(tool => {
-                        moreInner.appendChild(createToolCheckboxLabel(tool));
-                    });
-                    more.appendChild(moreInner);
-                    toolsContainer.appendChild(more);
-                }
                 
                 content.appendChild(toolsContainer);
                 dropdownDiv.appendChild(content);
@@ -2030,6 +2073,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 let scriptIndex = 0;
                 function executeNextScript() {
                     if (scriptIndex >= scripts.length) {
+                        requestAnimationFrame(function () {
+                            requestAnimationFrame(function () {
+                                resizeSplunkChartsIn(resultsBox);
+                            });
+                        });
                         return;
                     }
                     

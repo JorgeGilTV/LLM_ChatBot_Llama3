@@ -387,6 +387,70 @@ def embed_splunk_samsung_latencies():
     return build_embed_for_flask(leg, studio_earliest=se, studio_latest=sl)
 
 
+@flask_app.route("/aws-change-tracker")
+def aws_change_tracker_page():
+    """Standalone CloudTrail lookup UI (Who changed what)."""
+    from tools.aws_cloudtrail_tracker import CLOUDTRAIL_RESOURCE_TYPE_OPTIONS
+
+    return render_template(
+        "aws_change_tracker.html",
+        resource_type_options=CLOUDTRAIL_RESOURCE_TYPE_OPTIONS,
+    )
+
+
+@flask_app.route("/api/aws/cloudtrail/search", methods=["POST"])
+def api_aws_cloudtrail_search():
+    """JSON: CloudTrail LookupEvents filtered by resource name + account + optional resource type."""
+    try:
+        from tools.aws_cloudtrail_tracker import cloudtrail_search
+
+        data = request.get_json() or {}
+        raw_max = data.get("max_events")
+        if raw_max is None or str(raw_max).strip() == "":
+            max_ev = 50
+        else:
+            try:
+                max_ev = int(raw_max)
+            except (TypeError, ValueError):
+                max_ev = 50
+        try:
+            lb = int(data.get("lookback_days") or 7)
+        except (TypeError, ValueError):
+            lb = 7
+        out = cloudtrail_search(
+            resource_name=str(data.get("resource_name") or ""),
+            resource_type=str(data.get("resource_type") or ""),
+            region=str(data.get("region") or ""),
+            account_id=str(data.get("account_id") or ""),
+            lookback_days=lb,
+            max_events=max_ev,
+        )
+        if not out.get("success"):
+            return jsonify(out), 400
+        return jsonify(out)
+    except Exception as e:
+        logging.exception("CloudTrail search API")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@flask_app.route("/api/aws/cloudtrail/analyze-upload", methods=["POST"])
+def api_aws_cloudtrail_analyze_upload():
+    """Parse a console-exported CSV (UTF-8); no AWS calls."""
+    try:
+        from tools.aws_cloudtrail_tracker import parse_console_csv_or_excel
+
+        f = request.files.get("file")
+        if not f or not f.filename:
+            return jsonify({"success": False, "error": "Missing form field 'file'."}), 400
+        out = parse_console_csv_or_excel(f)
+        if not out.get("success"):
+            return jsonify(out), 400
+        return jsonify(out)
+    except Exception as e:
+        logging.exception("CloudTrail CSV analyze")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @flask_app.route('/statuswall')
 def statuswall_page():
     """Full-screen wall: all environments as status tiles only (no hub chrome)."""
@@ -403,16 +467,31 @@ def statuswall_preview_page():
 def apm_services_page():
     """
     APM Status Wall: default `all` = every APM `env` as its own block; or one
-    (production, goldendev, goldenqa, adt_prod, qa, samsung_prod) via `?dd_env=…`.
+    (production, goldendev, goldenqa, adt_prod, samsung_prod) via `?dd_env=…`.
+    The `qa` env is not part of the Main tab aggregate or dropdown; `dd_env=qa` still works for a focused API/query.
     See SOFTWARE_CATALOG_* and lists/*_apm_services.txt.
     """
-    from tools.status_monitor import normalize_software_catalog_wall_dd_env
+    from tools.status_monitor import (
+        SOFTWARE_CATALOG_WALL_APM_ENVS,
+        SOFTWARE_CATALOG_WALL_GOLDEN_ENVS,
+        _apm_wall_group_label,
+        normalize_software_catalog_wall_dd_env,
+    )
     import re
 
-    q = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "all").strip()
-    wall_dd_env = normalize_software_catalog_wall_dd_env(q)
+    tab = (request.args.get("tab") or "").strip().lower()
+    q_raw = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "all").strip()
+    if tab == "golden":
+        wall_dd_env = normalize_software_catalog_wall_dd_env("golden")
+    else:
+        wall_dd_env = normalize_software_catalog_wall_dd_env(q_raw)
     # Datadog Software list uses one `env` tag; when showing all, link to a neutral default.
-    _dd_sw = "production" if wall_dd_env == "all" else wall_dd_env
+    if wall_dd_env == "all":
+        _dd_sw = "production"
+    elif wall_dd_env == "golden":
+        _dd_sw = "goldendev"
+    else:
+        _dd_sw = wall_dd_env
     dd_base = (os.environ.get("DATADOG_APM_SOFTWARE_BASE") or "").strip()
     if not dd_base:
         datadog_software_href = (
@@ -429,12 +508,20 @@ def apm_services_page():
             if "fromUser" not in datadog_software_href:
                 qm = "?" if "?" not in datadog_software_href else "&"
                 datadog_software_href = f"{datadog_software_href}{qm}fromUser=true"
-    if wall_dd_env == "all":
+    if wall_dd_env == "golden":
+        _slack = "APM Status Wall — Golden (goldendev + goldenqa)"
+    elif wall_dd_env == "all":
         _slack = "APM Status Wall — all envs"
     elif wall_dd_env != "production":
         _slack = f"APM Status Wall — {wall_dd_env}"
     else:
         _slack = "APM Status Wall — production"
+    wall_apm_tab = "golden" if wall_dd_env == "golden" else "main"
+    wall_apm_env_labels = {
+        e: _apm_wall_group_label(e)
+        for e in tuple(SOFTWARE_CATALOG_WALL_APM_ENVS)
+        + tuple(SOFTWARE_CATALOG_WALL_GOLDEN_ENVS)
+    }
     return render_template(
         "statuswall.html",
         wall_title="APM Status Wall",
@@ -443,7 +530,12 @@ def apm_services_page():
         wall_slack_title=_slack,
         wall_show_apm_env=True,
         wall_dd_env=wall_dd_env,
+        wall_apm_tab=wall_apm_tab,
         datadog_software_href=datadog_software_href,
+        wall_incremental_apm=True,
+        wall_apm_parallel_main_envs=list(SOFTWARE_CATALOG_WALL_APM_ENVS),
+        wall_apm_parallel_golden_envs=list(SOFTWARE_CATALOG_WALL_GOLDEN_ENVS),
+        wall_apm_env_labels=wall_apm_env_labels,
     )
 
 
@@ -514,7 +606,8 @@ def api_statusmonitor_wall():
 def api_statusmonitor_software_catalog_wall():
     """
     JSON for /apm-services: APM Status Wall. Body: dd_env
-    = all (default) for every env, or one of production|goldendev|goldenqa|adt_prod|qa|samsung_prod.
+    = all (default) for main envs, golden for Golden tab (goldendev + goldenqa),
+    or one of production|goldendev|goldenqa|adt_prod|samsung_prod|qa (qa not in Main “all” list).
     """
     try:
         from tools.status_monitor import (
@@ -1892,9 +1985,7 @@ def api_splunk_monitor():
     try:
         from tools.splunk_tool import splunk_outliers_monitor_payload
 
-        tr = request.args.get("timerange", default=72, type=int)
-        if tr is None or tr < 4:
-            tr = 72
+        tr = request.args.get("timerange", type=int)
         return jsonify(splunk_outliers_monitor_payload(tr))
     except Exception as e:
         logging.error("Error in Splunk monitor: %s", e)

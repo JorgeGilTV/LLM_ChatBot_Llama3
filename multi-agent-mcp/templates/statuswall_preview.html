@@ -20,16 +20,74 @@
         .sw-logo-section { display: flex; align-items: center; gap: 10px; }
         .sw-logo { display: flex; align-items: center; text-decoration: none; background: rgba(255,255,255,0.96); border-radius: 8px; padding: 4px 10px; border: 1px solid rgba(148,163,184,0.35); }
         .sw-logo img { height: 24px; width: auto; display: block; }
-        .sw-top h1 { margin: 0; font-size: 0.95rem; font-weight: 800; color: #f8fafc; }
-        .sw-top button { padding: 6px 14px; color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .sw-top h1 { margin: 0; font-size: 16px; font-weight: 800; color: #f8fafc; }
+        .sw-top button { padding: 6px 14px; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; }
         .sw-top button.sw-slack-btn { background: #611f69; }
         .sw-top button.sw-slack-btn:hover { filter: brightness(1.1); }
         .sw-meta { font-size: 12px; color: #94a3b8; margin-left: auto; }
+        .sw-top .sw-meta { font-size: 16px; }
         .sw-main { padding: 8px 12px 16px; }
         .sw-group { margin-bottom: 12px; }
-        .sw-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; padding: 10px 14px; background: linear-gradient(105deg, #1e3a5f 0%, #243b53 42%, #1e293b 100%); border: 1px solid #334155; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.22); }
-        .sw-group-head .sw-badges { margin-left: auto; }
-        .sw-group-title { font-size: 1.05rem; font-weight: 800; color: #f8fafc; line-height: 1.2; letter-spacing: -0.02em; }
+        .sw-group-head {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; padding: 10px 14px;
+            background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
+            border: 1px solid #1e3a55;
+            border-radius: 10px;
+            box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38), 0 2px 12px rgba(0, 10, 24, 0.45);
+        }
+        .sw-group-head .sw-group-title { color: #ffffff; }
+        .sw-group-head .sw-monitor-pill { background: rgba(15, 23, 42, 0.22); border-color: rgba(255, 255, 255, 0.45); color: #f0f9ff; font-size: 16px; padding: 5px 12px; }
+        .sw-group-head .sw-monitor-pill--ok {
+            border: 1px solid #166534;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+            background: linear-gradient(165deg, #86efac 0%, #4ade80 32%, #22c55e 68%, #15803d 100%);
+            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.35);
+        }
+        .sw-group-head .sw-monitor-pill--warning {
+            border: 1px solid #b45309;
+            color: #422006;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+            background: linear-gradient(165deg, #fef08a 0%, #facc15 35%, #f59e0b 72%, #d97706 100%);
+            box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4);
+        }
+        .sw-group-head .sw-monitor-pill--critical {
+            border: 1px solid #7f1d1d;
+            color: #fff7ed;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+            background: linear-gradient(165deg, #fca5a5 0%, #f87171 32%, #ef4444 65%, #b91c1c 100%);
+            box-shadow: 0 3px 12px rgba(239, 68, 68, 0.45);
+        }
+        .sw-group-head .sw-monitor-pill--unknown { border-color: #64748b; color: #1e293b; background: rgba(226, 232, 240, 0.9); }
+        .sw-group-head .sw-overall-pill { border-color: rgba(255, 255, 255, 0.55); color: #f0f9ff; font-size: 16px; padding: 5px 12px; }
+        .sw-group-head .sw-overall-pill.healthy {
+            border: 1px solid #166534;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+            background: linear-gradient(165deg, #86efac 0%, #4ade80 32%, #22c55e 68%, #15803d 100%);
+            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.35);
+        }
+        .sw-group-head .sw-overall-pill.warning {
+            border: 1px solid #b45309;
+            color: #422006;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+            background: linear-gradient(165deg, #fef08a 0%, #facc15 35%, #f59e0b 72%, #d97706 100%);
+            box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4);
+        }
+        .sw-group-head .sw-overall-pill.critical {
+            border: 1px solid #7f1d1d;
+            color: #fff7ed;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+            background: linear-gradient(165deg, #fca5a5 0%, #f87171 32%, #ef4444 65%, #b91c1c 100%);
+            box-shadow: 0 3px 12px rgba(239, 68, 68, 0.45);
+        }
+        .sw-group-head .sw-badges { margin-left: auto; font-size: 16px; }
+        .sw-group-head .sw-badges .sw-badge { background: rgba(15, 23, 42, 0.25); color: #f1f5f9; }
+        .sw-group-head .sw-badges .sw-badge--ok { background: rgba(20, 83, 45, 0.95); color: #bbf7d0; }
+        .sw-group-head .sw-badges .sw-badge--warn { background: rgba(133, 77, 14, 0.95); color: #fef08a; }
+        .sw-group-head .sw-badges .sw-badge--crit { background: rgba(127, 29, 29, 0.95); color: #fecaca; }
+        .sw-group-title { font-size: 20px; font-weight: 800; color: #f8fafc; line-height: 1.2; letter-spacing: -0.02em; }
+        .sw-group-head .sw-meta { font-size: 16px; color: rgba(240, 249, 255, 0.95); }
         .sw-badges { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; font-weight: 700; }
         .sw-badge { padding: 3px 8px; border-radius: 6px; background: #334155; color: #cbd5e1; }
         .sw-badge--ok { background: #14532d; color: #bbf7d0; }
@@ -48,21 +106,70 @@
         .sw-monitor-pill--critical { border-color: #f87171; color: #fecaca; }
         .sw-monitor-pill--unknown { border-color: #64748b; color: #94a3b8; }
         .sw-monitor-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .sw-region-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+        .sw-region-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; align-items: start; }
+        .sw-region-grid:has(> .sw-region-col:only-child) { grid-template-columns: 1fr; }
         @media (max-width: 900px) { .sw-region-grid { grid-template-columns: 1fr; } }
         .sw-region-col {
             min-width: 0; border: 1px solid #334155; border-radius: 10px; background: rgba(15, 23, 42, 0.45); padding: 8px 8px 10px;
         }
         .sw-region-col-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 8px; padding: 0 4px; }
-        .sw-region-col-title { font-size: 0.78rem; font-weight: 800; color: #e2e8f0; letter-spacing: 0.02em; }
-        .sw-region-col-hint { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
-        .sw-tiles--region { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
-        @keyframes blink-alert {
-            0%, 100% { opacity: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
-            50% { opacity: 0.88; box-shadow: 0 0 10px rgba(255,255,255,0.35); }
+        .sw-region-col-title { font-size: 0.62rem; font-weight: 800; color: #e2e8f0; letter-spacing: 0.02em; }
+        .sw-region-col-hint { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
+        .sw-region-backend-block { margin-top: 0; padding: 4px 4px 6px; border: 1px solid rgba(51, 65, 85, 0.9); border-radius: 8px; background: rgba(15, 23, 42, 0.5); }
+        .sw-region-backend-block--after-main { margin-top: 6px; }
+        .sw-region-subhead { font-size: 0.58rem; font-weight: 800; color: #94a3b8; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; padding: 0 2px; }
+        .sw-region-grid > .sw-meta { grid-column: 1 / -1; }
+        .sw-tiles, .sw-tiles--region {
+            --sw-tile-row-unit: 3.85rem;
+            --sw-tile-col-min: 7.75rem;
+            display: grid;
+            grid-auto-flow: row;
+            grid-auto-rows: var(--sw-tile-row-unit);
+            row-gap: 0;
+            column-gap: 0;
+            gap: 0;
+            align-items: stretch;
+            grid-template-columns: repeat(auto-fill, minmax(var(--sw-tile-col-min), 1fr));
         }
-        .sw-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 6px; }
-        .sw-tile-wrap { position: relative; min-width: 0; overflow: visible; }
+        .sw-tiles--region > .sw-tile-wrap { margin: -1px; justify-self: stretch; width: 100%; max-width: none; }
+        .sw-tiles > .sw-meta { grid-column: 1 / -1; }
+        .sw-tile-wrap { position: relative; min-width: 0; min-height: 0; height: 100%; align-self: stretch; overflow: visible; display: flex; flex-direction: column; }
+        .sw-tile-wrap--size-ok { grid-row: span 1; width: auto; max-width: 100%; }
+        .sw-tile-wrap--size-ok-wide { grid-row: span 1; grid-column: span 2; width: auto; max-width: 100%; }
+        .sw-tile-wrap--size-warn { grid-row: span 2; width: auto; max-width: 100%; }
+        .sw-tile-wrap--size-warn-wide { grid-row: span 2; grid-column: span 2; width: auto; max-width: 100%; }
+        .sw-tile-wrap--size-crit { grid-row: span 3; width: auto; max-width: 100%; }
+        .sw-tile-wrap--size-crit-wide { grid-row: span 3; grid-column: span 2; width: auto; max-width: 100%; }
+        .sw-tile-wrap--size-warn .sw-tile, .sw-tile-wrap--size-warn-wide .sw-tile,
+        .sw-tile-wrap--size-crit .sw-tile, .sw-tile-wrap--size-crit-wide .sw-tile {
+            aspect-ratio: auto;
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            box-sizing: border-box;
+            justify-content: flex-start;
+            overflow: hidden;
+        }
+        .sw-tile-wrap--size-warn .sw-tile, .sw-tile-wrap--size-warn-wide .sw-tile { padding: 8px 9px; }
+        .sw-tile-wrap--size-crit .sw-tile, .sw-tile-wrap--size-crit-wide .sw-tile { padding: 8px 10px; }
+        .sw-tile-wrap--hyphen-split { max-width: 100%; }
+        .sw-tile-name-scroll.sw-tile-name-hyphen-split { overflow-wrap: anywhere; word-break: break-word; max-width: 100%; margin-left: auto; margin-right: auto; }
+        .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-warn .sw-tile-name-scroll.sw-tile-name-hyphen-split,
+        .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-warn-wide .sw-tile-name-scroll.sw-tile-name-hyphen-split { font-size: 16px; }
+        .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-crit .sw-tile-name-scroll.sw-tile-name-hyphen-split,
+        .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-crit-wide .sw-tile-name-scroll.sw-tile-name-hyphen-split { font-size: 16px; }
+        .sw-tile-wrap--size-ok .sw-tile, .sw-tile-wrap--size-ok-wide .sw-tile {
+            aspect-ratio: auto;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+        }
         .sw-tile-wrap:hover, .sw-tile-wrap:focus-within { z-index: 40; }
         /* Same rich hover panels as Status monitor */
         .sm-hover-tip {
@@ -95,7 +202,7 @@
         .sm-hover-tip-k { color: #22d3ee; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
         .sm-hover-tip-v { color: #f8fafc; font-weight: 700; font-size: 11px; }
         .sm-hover-tip-metrics {
-            margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(71, 85, 105, 0.65); color: #e2e8f0; font-weight: 700;
+            margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(71, 85, 105, 0.65); color: #e2e8f0; font-weight: 700; font-size: 10px;
         }
         .sm-hover-tip-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
         .sm-hover-tip-chip {
@@ -104,6 +211,9 @@
         }
         .sm-hover-tip-chip--alert {
             background: rgba(220, 38, 38, 0.35); color: #fecaca; border-color: rgba(248, 113, 113, 0.5);
+        }
+        .sm-hover-tip-chip--warn {
+            background: rgba(234, 179, 8, 0.35); color: #fef08a; border-color: rgba(250, 204, 21, 0.55);
         }
         a.sm-hover-tip-chip { text-decoration: none; cursor: pointer; }
         a.sm-hover-tip-chip:hover { filter: brightness(1.1); }
@@ -114,16 +224,160 @@
             margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(71, 85, 105, 0.65);
             color: #fde68a; font-weight: 600; font-size: 10px; line-height: 1.4;
         }
-        .sw-tile { aspect-ratio: 1; width: 100%; max-height: none; border-radius: 9px; border: 1px solid #166534; background: linear-gradient(165deg, #86efac 0%, #22c55e 68%, #15803d 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 4px; text-decoration: none; cursor: pointer; transition: transform 0.12s ease; }
+        @keyframes sw-farola-warn {
+            0%, 100% {
+                box-shadow: 0 3px 10px rgba(245, 158, 11, 0.45), 0 0 0 0 rgba(253, 224, 71, 0);
+            }
+            50% {
+                box-shadow:
+                    0 5px 20px rgba(217, 119, 6, 0.65),
+                    0 0 26px 5px rgba(254, 243, 199, 0.55),
+                    0 0 42px 8px rgba(250, 204, 21, 0.35);
+            }
+        }
+        @keyframes sw-farola-crit {
+            0%, 100% {
+                box-shadow: 0 3px 12px rgba(239, 68, 68, 0.45), 0 0 0 0 rgba(252, 165, 165, 0);
+            }
+            50% {
+                box-shadow:
+                    0 5px 22px rgba(185, 28, 28, 0.7),
+                    0 0 28px 6px rgba(254, 202, 202, 0.6),
+                    0 0 48px 10px rgba(248, 113, 113, 0.4);
+            }
+        }
+        .sw-tile {
+            flex: 1 1 auto;
+            width: 100%;
+            min-height: 0;
+            height: 100%;
+            border-radius: 9px;
+            border: 1px solid #166534;
+            background: linear-gradient(165deg, #86efac 0%, #22c55e 68%, #15803d 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 2px;
+            padding: 6px 6px;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: transform 0.12s ease;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .sw-tile--warn,
+        .sw-tile--crit {
+            overflow: visible;
+        }
         a.sw-tile { color: inherit; }
         .sw-tile:hover { transform: scale(1.06); }
         .sw-tile--warn { border-color: #b45309; background: linear-gradient(165deg, #fef08a 0%, #f59e0b 72%, #d97706 100%); }
         .sw-tile--crit { border-color: #7f1d1d; background: linear-gradient(165deg, #fca5a5 0%, #ef4444 65%, #b91c1c 100%); }
-        .sw-tile--warn.sw-tile--alert, .sw-tile--crit.sw-tile--alert { animation: blink-alert 2s ease-in-out infinite; }
+        .sw-tile--warn.sw-tile--alert {
+            position: relative;
+            z-index: 1;
+            animation: sw-farola-warn 1.75s ease-in-out infinite;
+        }
+        .sw-tile--crit.sw-tile--alert {
+            position: relative;
+            z-index: 1;
+            animation: sw-farola-crit 1.45s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .sw-tile--warn.sw-tile--alert,
+            .sw-tile--crit.sw-tile--alert {
+                animation: none;
+            }
+        }
         .sw-tile--warn .sw-tile-icon, .sw-tile--warn .sw-tile-name-compact { color: #422006; text-shadow: 0 1px 0 rgba(255,255,255,0.35); }
         .sw-tile--crit .sw-tile-icon, .sw-tile--crit .sw-tile-name-compact { color: #fff7ed; text-shadow: 0 1px 2px rgba(0,0,0,0.25); }
-        .sw-tile-icon { font-size: 13px; line-height: 1; margin-bottom: 2px; color: #f0fdf4; }
-        .sw-tile-name-compact { font-size: clamp(8px, 2.15vw, 11px); font-weight: 800; line-height: 1.12; color: #052e16; text-align: center; max-height: 3.6em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; padding: 0 2px; }
+        .sw-tile-inline-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+            align-self: center;
+            flex: 0 0 auto;
+            margin-top: 4px;
+            max-width: 100%;
+            pointer-events: auto;
+        }
+        .sw-tile-inline-chips.sm-hover-tip-chips { margin-top: 4px; }
+        .sw-tile-inline-chips .sm-hover-tip-chip {
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1.12;
+            padding: 3px 7px;
+            border-radius: 7px;
+            color: #0a0a0a;
+        }
+        .sw-tile-inline-chips [data-href]:hover { filter: brightness(1.12); }
+        .sw-tile-apm-errline {
+            flex: 0 0 auto;
+            align-self: stretch;
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums;
+            color: rgba(255, 247, 237, 0.95);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+            padding: 2px 4px 0;
+            margin-top: 3px;
+            text-align: center;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .sw-tile-icon { font-size: 13px; line-height: 1; margin-bottom: 0; flex-shrink: 0; color: #f0fdf4; }
+        .sw-tile-name-compact {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            flex: 1 1 auto;
+            align-self: stretch;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            font-size: 16px;
+            font-weight: 800;
+            line-height: 1.12;
+            color: #052e16;
+            text-align: center;
+            padding: 0 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .sw-tile-name-scroll {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            font-weight: 800;
+            line-height: 1.12;
+            text-align: center;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            hyphens: auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .sw-tile-wrap--size-warn .sw-tile-name-compact, .sw-tile-wrap--size-warn-wide .sw-tile-name-compact { font-size: 17px; line-height: 1.15; }
+        .sw-tile-wrap--size-crit .sw-tile-name-compact, .sw-tile-wrap--size-crit-wide .sw-tile-name-compact { font-size: 18px; line-height: 1.15; }
+        .sw-tile-wrap--size-warn .sw-tile-icon, .sw-tile-wrap--size-warn-wide .sw-tile-icon { font-size: 18px; }
+        .sw-tile-wrap--size-crit .sw-tile-icon, .sw-tile-wrap--size-crit-wide .sw-tile-icon { font-size: 20px; }
+        .sw-tile:not(.sw-tile--warn):not(.sw-tile--crit):not(.sw-tile--neutral) .sw-tile-icon {
+            font-size: 14px; color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        }
+        .sw-tile:not(.sw-tile--warn):not(.sw-tile--crit):not(.sw-tile--neutral) .sw-tile-name-compact {
+            font-size: 16px; color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42), 0 0 1px rgba(0, 0, 0, 0.28);
+        }
     </style>
 </head>
 <body>
@@ -243,19 +497,143 @@
                 return null;
             }
         }
+        /**
+         * Cápsulas PagerDuty / Splunk / tráfico / DD — mismas clases que el hover (preview sin setSafeAnchorHref).
+         */
+        function wallAppendServiceMonitorChips(container, s, linkMode) {
+            const useSpan = linkMode === 'span';
+            if (s.pd_incident) {
+                const pdu = smSafeHttpHref(s.pd_incident_url);
+                if (useSpan) {
+                    const c = document.createElement('span');
+                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    c.textContent = 'PD';
+                    if (pdu) {
+                        c.setAttribute('data-href', pdu);
+                        c.style.cursor = 'pointer';
+                    }
+                    container.appendChild(c);
+                } else if (pdu) {
+                    const c = document.createElement('a');
+                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    c.href = pdu;
+                    c.target = '_blank';
+                    c.rel = 'noopener noreferrer';
+                    c.textContent = 'PD';
+                    container.appendChild(c);
+                } else {
+                    const c = document.createElement('span');
+                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    c.textContent = 'PD';
+                    container.appendChild(c);
+                }
+            }
+            const splH = smSafeHttpHref(s.splunk_url);
+            if (splH) {
+                if (useSpan) {
+                    const sp = document.createElement('span');
+                    sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
+                    sp.textContent = 'SPL';
+                    sp.setAttribute('data-href', splH);
+                    sp.style.cursor = 'pointer';
+                    container.appendChild(sp);
+                } else {
+                    const sp = document.createElement('a');
+                    sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
+                    sp.href = splH;
+                    sp.target = '_blank';
+                    sp.rel = 'noopener noreferrer';
+                    sp.textContent = 'SPL';
+                    container.appendChild(sp);
+                }
+            }
+            if (s.traffic_drop) {
+                const c = document.createElement('span');
+                c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                c.textContent = 'Traffic drop';
+                container.appendChild(c);
+            }
+            if (s.traffic_variance != null && !s.traffic_drop) {
+                const c = document.createElement('span');
+                c.className = 'sm-hover-tip-chip';
+                c.textContent = 'Traffic ' + Math.round(Number(s.traffic_variance)) + '% vs 7d';
+                container.appendChild(c);
+            }
+            const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
+            const wddSuf = s.dd_monitor_alert_suffix_count != null ? Number(s.dd_monitor_alert_suffix_count) : 0;
+            if (wddc > 0) {
+                const ddmH = smSafeHttpHref(s.dd_monitors_url);
+                const label = wddc + ' DD';
+                if (useSpan) {
+                    const cdd = document.createElement('span');
+                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    cdd.textContent = label;
+                    if (ddmH) {
+                        cdd.setAttribute('data-href', ddmH);
+                        cdd.style.cursor = 'pointer';
+                    }
+                    container.appendChild(cdd);
+                } else if (ddmH) {
+                    const cdd = document.createElement('a');
+                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    cdd.href = ddmH;
+                    cdd.target = '_blank';
+                    cdd.rel = 'noopener noreferrer';
+                    cdd.textContent = label;
+                    container.appendChild(cdd);
+                } else {
+                    const cdd = document.createElement('span');
+                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
+                    cdd.textContent = label;
+                    container.appendChild(cdd);
+                }
+            }
+            if (wddSuf > 0) {
+                const hrefAll = smSafeHttpHref(s.dd_monitors_url_all_alerts || '');
+                const label = wddSuf + ' DD';
+                if (useSpan) {
+                    const cws = document.createElement('span');
+                    cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
+                    cws.textContent = label;
+                    if (hrefAll) {
+                        cws.setAttribute('data-href', hrefAll);
+                        cws.style.cursor = 'pointer';
+                    }
+                    container.appendChild(cws);
+                } else if (hrefAll) {
+                    const cws = document.createElement('a');
+                    cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
+                    cws.href = hrefAll;
+                    cws.target = '_blank';
+                    cws.rel = 'noopener noreferrer';
+                    cws.textContent = label;
+                    container.appendChild(cws);
+                } else {
+                    const cws = document.createElement('span');
+                    cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
+                    cws.textContent = label;
+                    container.appendChild(cws);
+                }
+            }
+        }
         function wallReasonFallback(s) {
             if (s.status_reason) return s.status_reason;
             const ddcR = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
+            const ddcSuf = s.dd_monitor_alert_suffix_count != null ? Number(s.dd_monitor_alert_suffix_count) : 0;
             const bits = [];
-            if (ddcR === 1) bits.push('1 Datadog monitor in Alert');
-            else if (ddcR > 1) bits.push(ddcR + ' Datadog monitors in Alert');
-            if (s.pd_incident) bits.push('PagerDuty');
+            if (ddcR >= 1) bits.push(ddcR + ' DD');
+            if (ddcSuf >= 1 && ddcR === 0) {
+                bits.push(ddcSuf + ' DD');
+            } else if (ddcSuf >= 1 && ddcR >= 1) {
+                bits.push('+' + ddcSuf + ' DD');
+            }
+            if (s.pd_incident) bits.push('PD');
             if (s.high_latency) bits.push('High latency');
             if (s.traffic_drop) bits.push('Traffic drop vs 7d');
             const st = s.status || '';
             if (st === 'inactive') return 'No APM traffic in window';
             if (st === 'unknown') return 'No data / query issue';
-            if (st === 'healthy' && !(ddcR > 0)) return 'Healthy';
+            if (st === 'healthy' && !(ddcR > 0) && !(ddcSuf > 0)) return 'Healthy';
             if (bits.length) return bits.join(' · ');
             return st || '—';
         }
@@ -290,7 +668,7 @@
             metrics.className = 'sm-hover-tip-metrics';
             const req = s.requests != null ? Number(s.requests).toLocaleString() : '—';
             const errs = s.errors != null ? Number(s.errors).toLocaleString() : '—';
-            metrics.textContent = 'Error rate ' + fmtErr(s.error_rate) + '% · Requests ' + req + ' · Errors ' + errs;
+            metrics.textContent = 'Error rate ' + fmtErr(s.error_rate) + '% · Reqs ' + req + ' · ERR ' + errs;
             inner.appendChild(metrics);
             if (s.p95_latency != null && s.p95_latency !== '') {
                 const lat = document.createElement('div');
@@ -337,72 +715,22 @@
             }
             const chips = document.createElement('div');
             chips.className = 'sm-hover-tip-chips';
-            if (s.pd_incident) {
-                let c;
-                const pdu = smSafeHttpHref(s.pd_incident_url);
-                if (pdu) {
-                    c = document.createElement('a');
-                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    c.href = pdu;
-                    c.target = '_blank';
-                    c.rel = 'noopener noreferrer';
-                    c.textContent = 'PagerDuty';
-                } else {
-                    c = document.createElement('span');
-                    c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    c.textContent = 'PagerDuty';
-                }
-                chips.appendChild(c);
-            }
-            const splH = smSafeHttpHref(s.splunk_url);
-            if (splH) {
-                const sp = document.createElement('a');
-                sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
-                sp.href = splH;
-                sp.target = '_blank';
-                sp.rel = 'noopener noreferrer';
-                sp.textContent = 'Splunk';
-                chips.appendChild(sp);
-            }
-            if (s.traffic_drop) {
-                const c = document.createElement('span');
-                c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                c.textContent = 'Traffic drop';
-                chips.appendChild(c);
-            }
-            if (s.traffic_variance != null && !s.traffic_drop) {
-                const c = document.createElement('span');
-                c.className = 'sm-hover-tip-chip';
-                c.textContent = 'Traffic ' + Math.round(Number(s.traffic_variance)) + '% vs 7d';
-                chips.appendChild(c);
-            }
-            const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
-            if (wddc > 0) {
-                const ddmH = smSafeHttpHref(s.dd_monitors_url);
-                if (ddmH) {
-                    const cdd = document.createElement('a');
-                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    cdd.href = ddmH;
-                    cdd.target = '_blank';
-                    cdd.rel = 'noopener noreferrer';
-                    cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
-                    chips.appendChild(cdd);
-                } else {
-                    const cdd = document.createElement('span');
-                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    cdd.textContent = wddc === 1 ? '1 DD monitor (Alert)' : wddc + ' DD monitors (Alert)';
-                    chips.appendChild(cdd);
-                }
-            }
+            wallAppendServiceMonitorChips(chips, s, 'anchor');
             if (chips.children.length) inner.appendChild(chips);
-            if (wddc > 0) {
+            const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
+            const wddSuf = s.dd_monitor_alert_suffix_count != null ? Number(s.dd_monitor_alert_suffix_count) : 0;
+            if (wddc > 0 || wddSuf > 0) {
                 const dnames = Array.isArray(s.dd_monitor_alerts) ? s.dd_monitor_alerts.filter(Boolean) : [];
-                if (dnames.length) {
+                const dnsuf = Array.isArray(s.dd_monitor_alerts_suffix_ab) ? s.dd_monitor_alerts_suffix_ab.filter(Boolean) : [];
+                const parts = [];
+                if (dnames.length) parts.push('DD: ' + dnames.join(' · '));
+                if (dnsuf.length) parts.push('DD: ' + dnsuf.join(' · '));
+                if (parts.length) {
                     const dnl = document.createElement('div');
                     dnl.className = 'sm-hover-tip-why';
                     dnl.style.fontSize = '10px';
                     dnl.style.lineHeight = '1.4';
-                    dnl.textContent = 'Monitors: ' + dnames.join(' · ');
+                    dnl.textContent = parts.join('\n');
                     inner.appendChild(dnl);
                 }
             }
@@ -423,13 +751,16 @@
             if (latBits.length) lines.push(latBits.join(' · '));
             const clusters = Array.isArray(s.eks_clusters) ? s.eks_clusters.filter(Boolean) : [];
             if (clusters.length) lines.push('Clusters: ' + clusters.join(', '));
-            lines.push('ERR ' + fmtErr(s.error_rate) + '% · ' + req + ' req');
+            lines.push('ERR ' + fmtErr(s.error_rate) + '% · ' + req + ' Reqs');
             const dna = Array.isArray(s.dd_monitor_alerts) ? s.dd_monitor_alerts.filter(Boolean) : [];
-            if (dna.length) lines.push('DD (Alert): ' + dna.join(' · '));
+            const dns = Array.isArray(s.dd_monitor_alerts_suffix_ab) ? s.dd_monitor_alerts_suffix_ab.filter(Boolean) : [];
+            if (dna.length) lines.push('DD: ' + dna.join(' · '));
+            if (dns.length) lines.push('DD: ' + dns.join(' · '));
             lines.push(wallReasonFallback(s));
             return lines.join('\n');
         }
         function tile(st, name, env, er, req, err, reason, pd, extra) {
+            const enc = encodeURIComponent(String(name || 'service'));
             const o = {
                 service: name,
                 environment: env,
@@ -439,7 +770,7 @@
                 errors: err,
                 pd_incident: !!pd,
                 status_reason: reason,
-                apm_url: '#',
+                apm_url: 'https://app.datadoghq.com/apm/services/' + enc + '/overview',
                 region: 'Ireland',
             };
             if (extra && typeof extra === 'object') Object.assign(o, extra);
@@ -449,8 +780,8 @@
             success: true,
             timerange: 1,
             monitors: {
-                pagerduty: { label: 'PagerDuty', status: 'warning', short: '2 trg', detail: 'Mock — 2 triggered (24h)' },
-                splunk: { label: 'Splunk', status: 'ok', short: 'OK', detail: 'Mock — P0 predict OK' },
+                pagerduty: { label: 'PD', status: 'warning', short: '2 trg', detail: 'Mock — 2 triggered (24h)' },
+                splunk: { label: 'SPL', status: 'ok', short: 'OK', detail: 'Mock — P0 predict OK' },
             },
             groups: [
                 {
@@ -462,8 +793,24 @@
                         tile('healthy', 'broker-service', 'production', 0.15, 45120, 67, 'Healthy — within APM thresholds', false, { region: 'Oregon' }),
                         tile('healthy', 'mqtt-auth', 'production', 0.22, 120400, 265, 'Healthy — within APM thresholds', false, { region: 'Oregon' }),
                         tile('healthy', 'presence', 'production', 0.31, 22300, 69, 'Healthy — within APM thresholds', false, { region: 'Ireland' }),
-                        tile('warning', 'backend-hmspayment', 'production', 1.85, 8840, 164, 'Error rate >1%', false, { region: 'Ireland' }),
-                        tile('critical', 'hmsweb', 'production', 6.2, 12005, 744, 'Error rate >5% · PagerDuty incident', true, { p95_latency: 420, p99_latency: 2100, eks_clusters: ['prod-use1-streaming'], high_latency: true, region: 'Multi-region' }),
+                        tile('warning', 'backend-hmspayment', 'production', 1.85, 8840, 164, 'Error rate >1%', false, {
+                            region: 'Ireland',
+                            splunk_url: 'https://www.splunk.com/en_us/search-mock-warning',
+                            dd_monitor_alert_count: 1,
+                            dd_monitors_url: 'https://app.datadoghq.com/monitors/manage?q=service%3Abackend-hmspayment',
+                        }),
+                        tile('critical', 'hmsweb', 'production', 6.2, 12005, 744, 'Error rate >5% · PagerDuty incident', true, {
+                            p95_latency: 420,
+                            p99_latency: 2100,
+                            eks_clusters: ['prod-use1-streaming'],
+                            high_latency: true,
+                            region: 'Multi-region',
+                            pd_incident_url: 'https://www.pagerduty.com/incidents/mock-hmsweb',
+                            splunk_url: 'https://www.splunk.com/en_us/search-mock',
+                            dd_monitor_alert_count: 2,
+                            dd_monitors_url: 'https://app.datadoghq.com/monitors/manage?q=service%3Ahmsweb',
+                            apm_url: 'https://app.datadoghq.com/apm/services/hmsweb/overview',
+                        }),
                     ],
                 },
                 {
@@ -494,7 +841,10 @@
                     counts: { healthy: 1, warning: 0, critical: 1, unknown: 0, inactive: 0, total: 2 },
                     services: [
                         tile('healthy', 'logger', 'goldenqa', 0.62, 4200, 26, 'Healthy — within APM thresholds', false),
-                        tile('critical', 'backend-hmsapi', 'goldenqa', 8.1, 3100, 251, 'Error rate >5%', false),
+                        tile('critical', 'backend-hmsapi', 'goldenqa', 8.1, 3100, 251, 'Error rate >5%', false, {
+                            apm_url: 'https://app.datadoghq.com/apm/services/backend-hmsapi/overview',
+                            splunk_url: 'https://www.splunk.com/en_us/search-mock-backend-hmsapi',
+                        }),
                     ],
                 },
                 {
@@ -508,6 +858,14 @@
                 },
             ],
         };
+        function swTileServiceLabel(name) {
+            return String(name || '').replace(/backend-/gi, 'bknd-');
+        }
+        function swTileServiceLabelBackendDisplay(name) {
+            const lab = swTileServiceLabel(String(name || '')).trim();
+            const rest = lab.replace(/^bknd-/i, '').trim();
+            return rest || '—';
+        }
         function wallSortKey(s) {
             const st = s.status;
             const er = Number(s.error_rate || 0);
@@ -549,6 +907,49 @@
                 { key: 'arlo_eu', label: 'Arlo EU', subtitle: 'Ireland', services: eu },
             ];
         }
+        function filterNonEmptyRegionColumns(columns) {
+            if (!Array.isArray(columns)) return [];
+            return columns.filter(function(c) {
+                return (c.services && c.services.length > 0);
+            });
+        }
+        function swSanitizeAttrText(t) {
+            if (t == null) return '';
+            return String(t).replace(/\0/g, '');
+        }
+        function appendCritApmTrafficLine(hostEl, s) {
+            if ((s.status || '') !== 'critical') return;
+            var er = Number(s.error_rate);
+            if (!Number.isFinite(er) || er <= 5) return;
+            var reqN = s.requests != null ? Number(s.requests) : NaN;
+            var errN = s.errors != null ? Number(s.errors) : NaN;
+            if (!Number.isFinite(reqN) && !Number.isFinite(errN)) return;
+            var line = document.createElement('div');
+            line.className = 'sw-tile-apm-errline';
+            var bits = [];
+            if (Number.isFinite(reqN)) bits.push(reqN.toLocaleString() + ' Reqs');
+            if (Number.isFinite(errN)) bits.push(errN.toLocaleString() + ' ERR');
+            line.textContent = bits.join(' · ');
+            hostEl.appendChild(line);
+        }
+        function appendTileIssueChipsStrip(tileEl, s) {
+            const st = s.status || '';
+            if (st !== 'critical' && st !== 'warning') return;
+            const chips = document.createElement('div');
+            chips.className = 'sm-hover-tip-chips sw-tile-inline-chips';
+            wallAppendServiceMonitorChips(chips, s, 'span');
+            if (!chips.children.length) return;
+            chips.addEventListener('click', function (ev) {
+                const t = ev.target.closest('[data-href]');
+                if (!t || !chips.contains(t)) return;
+                const h = t.getAttribute('data-href');
+                if (!h) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                window.open(h, '_blank', 'noopener');
+            });
+            tileEl.appendChild(chips);
+        }
         function appendMonitorPills(head, monitors) {
             if (!monitors || typeof monitors !== 'object') return;
             const cluster = document.createElement('div');
@@ -564,21 +965,206 @@
             });
             head.appendChild(cluster);
         }
-        function appendTilesToGrid(grid, svcs) {
+        function splitServicesBknd(services) {
+            const main = [];
+            const backend = [];
+            for (const s of services || []) {
+                const raw = String(s.service || '').trim();
+                const disp = swTileServiceLabel(raw).toLowerCase();
+                if (disp.startsWith('bknd-')) backend.push(s);
+                else main.push(s);
+            }
+            return { main: main, backend: backend };
+        }
+        function swCssWidthToPx(cssLen, contextEl) {
+            var probe = document.createElement('div');
+            probe.setAttribute(
+                'style',
+                'position:absolute;left:-9999px;top:0;width:' +
+                    cssLen +
+                    ';height:0;overflow:hidden;visibility:hidden;pointer-events:none'
+            );
+            (contextEl && contextEl.parentNode ? contextEl.parentNode : document.body).appendChild(probe);
+            var px = probe.getBoundingClientRect().width;
+            probe.remove();
+            return px || 1;
+        }
+        function swPackTilesGrid(grid) {
+            var wraps = Array.prototype.slice.call(grid.querySelectorAll(':scope > .sw-tile-wrap'));
+            if (!wraps.length) {
+                grid.style.gridTemplateColumns = '';
+                grid.style.gridAutoFlow = '';
+                return;
+            }
+            var w = grid.clientWidth;
+            if (w < 2) return;
+            var cs = getComputedStyle(grid);
+            var colMinStr = (cs.getPropertyValue('--sw-tile-col-min') || '').trim();
+            if (!colMinStr) colMinStr = '7.75rem';
+            var colMinPx = swCssWidthToPx(colMinStr, grid);
+            var colCount = Math.max(1, Math.floor(w / colMinPx));
+            grid.style.gridTemplateColumns = 'repeat(' + colCount + ', minmax(0, 1fr))';
+            grid.style.gridAutoFlow = 'row';
+            var occ = Object.create(null);
+            function occKey(r, c) {
+                return r + ',' + c;
+            }
+            function canPlace(r, c, rowSpan, colSpan) {
+                if (c + colSpan > colCount) return false;
+                for (var dr = 0; dr < rowSpan; dr++) {
+                    for (var dc = 0; dc < colSpan; dc++) {
+                        if (occ[occKey(r + dr, c + dc)]) return false;
+                    }
+                }
+                return true;
+            }
+            function markOcc(r, c, rowSpan, colSpan) {
+                for (var dr = 0; dr < rowSpan; dr++) {
+                    for (var dc = 0; dc < colSpan; dc++) {
+                        occ[occKey(r + dr, c + dc)] = 1;
+                    }
+                }
+            }
+            for (var i = 0; i < wraps.length; i++) {
+                var wrap = wraps[i];
+                wrap.style.gridRow = '';
+                wrap.style.gridColumn = '';
+                wrap.style.removeProperty('max-width');
+                var rowSpan = 1;
+                if (
+                    wrap.classList.contains('sw-tile-wrap--size-crit') ||
+                    wrap.classList.contains('sw-tile-wrap--size-crit-wide')
+                ) {
+                    rowSpan = 3;
+                } else if (
+                    wrap.classList.contains('sw-tile-wrap--size-warn') ||
+                    wrap.classList.contains('sw-tile-wrap--size-warn-wide')
+                ) {
+                    rowSpan = 2;
+                }
+                var colSpan = 1;
+                if (wrap.classList.contains('sw-tile-wrap--span-3')) {
+                    colSpan = 3;
+                } else if (
+                    wrap.classList.contains('sw-tile-wrap--size-ok-wide') ||
+                    wrap.classList.contains('sw-tile-wrap--size-warn-wide') ||
+                    wrap.classList.contains('sw-tile-wrap--size-crit-wide')
+                ) {
+                    colSpan = 2;
+                }
+                if (colSpan > colCount) colSpan = colCount;
+                var placed = false;
+                for (var r = 0; r < 900 && !placed; r++) {
+                    for (var c = 0; c <= colCount - colSpan; c++) {
+                        if (canPlace(r, c, rowSpan, colSpan)) {
+                            wrap.style.gridRow = r + 1 + ' / span ' + rowSpan;
+                            wrap.style.gridColumn = c + 1 + ' / span ' + colSpan;
+                            markOcc(r, c, rowSpan, colSpan);
+                            placed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        var _swPackWallT = null;
+        function swSchedulePackAllWallTileGrids() {
+            clearTimeout(_swPackWallT);
+            _swPackWallT = setTimeout(function() {
+                _swPackWallT = null;
+                document.querySelectorAll('.sw-tiles.sw-tiles--region').forEach(function(el) {
+                    swPackTilesGrid(el);
+                });
+            }, 32);
+        }
+        function swInitWallTilePackResize() {
+            if (window._swWallPackResizeInit) return;
+            window._swWallPackResizeInit = true;
+            var root = document.getElementById('sw-root');
+            if (!root) return;
+            if (typeof ResizeObserver === 'undefined') {
+                window.addEventListener('resize', swSchedulePackAllWallTileGrids);
+                return;
+            }
+            var roT = null;
+            var ro = new ResizeObserver(function() {
+                clearTimeout(roT);
+                roT = setTimeout(swSchedulePackAllWallTileGrids, 48);
+            });
+            ro.observe(root);
+        }
+        function appendRegionColumnTiles(colEl, services) {
+            const sp = splitServicesBknd(services);
+            let hasMainGrid = false;
+            if (sp.main.length) {
+                const grid = document.createElement('div');
+                grid.className = 'sw-tiles sw-tiles--region';
+                appendTilesToGrid(grid, sp.main);
+                colEl.appendChild(grid);
+                hasMainGrid = true;
+            }
+            if (sp.backend.length) {
+                const block = document.createElement('div');
+                block.className =
+                    'sw-region-backend-block' + (hasMainGrid ? ' sw-region-backend-block--after-main' : '');
+                const sh = document.createElement('div');
+                sh.className = 'sw-region-subhead';
+                sh.textContent = 'Backend';
+                block.appendChild(sh);
+                const gridB = document.createElement('div');
+                gridB.className = 'sw-tiles sw-tiles--region sw-tiles--backend';
+                appendTilesToGrid(gridB, sp.backend, { backendSection: true });
+                block.appendChild(gridB);
+                colEl.appendChild(block);
+            }
+        }
+        function appendTilesToGrid(grid, svcs, opts) {
+            opts = opts || {};
+            const backendSection = !!opts.backendSection;
             if (!svcs || !svcs.length) {
                 const empty = document.createElement('div');
                 empty.className = 'sw-meta';
-                empty.style.gridColumn = '1 / -1';
                 empty.textContent = 'No services in this column.';
                 grid.appendChild(empty);
                 return;
             }
             for (const s of svcs) {
                 const st = s.status || 'unknown';
+                const rawSvc = String(s.service || '');
+                const tileLabel = backendSection
+                    ? swTileServiceLabelBackendDisplay(rawSvc)
+                    : swTileServiceLabel(rawSvc);
                 const wrap = document.createElement('div');
                 wrap.className = 'sw-tile-wrap';
+                const labLen = tileLabel.length;
+                if (st === 'critical') {
+                    if (labLen > 30) {
+                        wrap.classList.add('sw-tile-wrap--span-3', 'sw-tile-wrap--size-crit');
+                    } else if (labLen > 17) {
+                        wrap.classList.add('sw-tile-wrap--size-crit-wide');
+                    } else {
+                        wrap.classList.add('sw-tile-wrap--size-crit');
+                    }
+                } else if (st === 'warning') {
+                    if (labLen > 30) {
+                        wrap.classList.add('sw-tile-wrap--span-3', 'sw-tile-wrap--size-warn');
+                    } else if (labLen > 17) {
+                        wrap.classList.add('sw-tile-wrap--size-warn-wide');
+                    } else {
+                        wrap.classList.add('sw-tile-wrap--size-warn');
+                    }
+                } else {
+                    if (labLen > 30) {
+                        wrap.classList.add('sw-tile-wrap--span-3', 'sw-tile-wrap--size-ok');
+                    } else if (labLen > 17) {
+                        wrap.classList.add('sw-tile-wrap--size-ok-wide');
+                    } else {
+                        wrap.classList.add('sw-tile-wrap--size-ok');
+                    }
+                }
                 const el = document.createElement('a');
-                el.href = '#';
+                const apmH = smSafeHttpHref(s.apm_url);
+                el.href = apmH || '#';
                 el.className = 'sw-tile';
                 el.setAttribute('title', nativeTitleSummary(s));
                 if (st === 'critical') el.classList.add('sw-tile--crit', 'sw-tile--alert');
@@ -589,8 +1175,20 @@
                 el.appendChild(icon);
                 const met = document.createElement('div');
                 met.className = 'sw-tile-name-compact';
-                met.textContent = s.service || '—';
+                const nameScroll = document.createElement('div');
+                nameScroll.className = 'sw-tile-name-scroll';
+                nameScroll.textContent = tileLabel || '—';
+                met.appendChild(nameScroll);
                 el.appendChild(met);
+                appendCritApmTrafficLine(met, s);
+                if ((st === 'warning' || st === 'critical') && tileLabel.indexOf('-') !== -1) {
+                    const segs = tileLabel.split(/-+/).map(function (p) { return p.trim(); }).filter(Boolean);
+                    if (segs.length >= 2) {
+                        wrap.classList.add('sw-tile-wrap--hyphen-split');
+                        nameScroll.classList.add('sw-tile-name-hyphen-split');
+                    }
+                }
+                appendTileIssueChipsStrip(el, s);
                 wrap.appendChild(el);
                 wrap.appendChild(buildTileTip(s));
                 attachTipBehavior(wrap);
@@ -634,12 +1232,12 @@
                 if (!hasAny) {
                     const empty = document.createElement('div');
                     empty.className = 'sw-meta';
-                    empty.style.gridColumn = '1 / -1';
                     empty.textContent = 'No services with APM signal in this window (inactive/unknown are hidden on the wall).';
                     regionWrap.appendChild(empty);
                 } else {
                     let columns = g.region_columns;
                     if (!columns || !columns.length) columns = buildRegionColumnsFromServices(allSvcs);
+                    columns = filterNonEmptyRegionColumns(columns);
                     for (const col of columns) {
                         const colEl = document.createElement('div');
                         colEl.className = 'sw-region-col';
@@ -654,10 +1252,7 @@
                         hrow.appendChild(ct);
                         hrow.appendChild(ch);
                         colEl.appendChild(hrow);
-                        const grid = document.createElement('div');
-                        grid.className = 'sw-tiles sw-tiles--region';
-                        appendTilesToGrid(grid, col.services || []);
-                        colEl.appendChild(grid);
+                        appendRegionColumnTiles(colEl, col.services || []);
                         regionWrap.appendChild(colEl);
                     }
                 }
@@ -665,6 +1260,10 @@
                 root.appendChild(section);
             }
             bindWallTipGlobalHandlersOnce();
+            swInitWallTilePackResize();
+            requestAnimationFrame(function() {
+                requestAnimationFrame(swSchedulePackAllWallTileGrids);
+            });
         }
         renderWall(MOCK);
         document.getElementById('sw-slack').addEventListener('click', function() {

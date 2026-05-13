@@ -56,6 +56,7 @@ from tools.splunk_tool import (
     read_splunk_p0_cvr_dashboard,
     read_splunk_p0_adt_dashboard,
     read_splunk_p0_us_infra_dashboard,
+    splunk_p0_coerce_timerange_hours,
 )
 from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.pagerduty_tool import get_pagerduty_incidents
@@ -264,8 +265,8 @@ TOOL_REGISTRY = {
                 },
                 "timerange": {
                     "type": "string",
-                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
-                    "default": "4h"
+                    "description": "Time range (e.g. 24h, 2d, 4h); default 24h",
+                    "default": "24h"
                 }
             }
         }
@@ -282,8 +283,8 @@ TOOL_REGISTRY = {
                 },
                 "timerange": {
                     "type": "string",
-                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
-                    "default": "4h"
+                    "description": "Time range (e.g. 24h, 2d, 4h); default 24h",
+                    "default": "24h"
                 }
             }
         }
@@ -300,8 +301,8 @@ TOOL_REGISTRY = {
                 },
                 "timerange": {
                     "type": "string",
-                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
-                    "default": "4h"
+                    "description": "Time range (e.g. 24h, 2d, 4h); default 24h",
+                    "default": "24h"
                 }
             }
         }
@@ -318,8 +319,8 @@ TOOL_REGISTRY = {
                 },
                 "timerange": {
                     "type": "string",
-                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
-                    "default": "4h"
+                    "description": "Time range (e.g. 24h, 2d, 4h); default 24h",
+                    "default": "24h"
                 }
             }
         }
@@ -454,9 +455,10 @@ async def call_tool(name: str, arguments: dict) -> Sequence[TextContent]:
         status = arguments.get("status", "all")
         
         # Determine which arguments to pass based on function signature
-        if name in ["datadog_red_metrics", "datadog_red_adt", "datadog_errors", "datadog_failed_pods", "datadog_403_errors",
-                    "splunk_p0_streaming", "splunk_p0_cvr", "splunk_p0_adt", "splunk_p0_us_infra"]:
-            # These tools need timerange
+        if name in ["splunk_p0_streaming", "splunk_p0_cvr", "splunk_p0_adt", "splunk_p0_us_infra"]:
+            input_text = service if service else query
+            result = func(input_text, splunk_p0_coerce_timerange_hours(arguments.get("timerange")))
+        elif name in ["datadog_red_metrics", "datadog_red_adt", "datadog_errors", "datadog_failed_pods", "datadog_403_errors"]:
             input_text = service if service else query
             result = func(input_text, timerange)
         elif name == "pagerduty_incidents":

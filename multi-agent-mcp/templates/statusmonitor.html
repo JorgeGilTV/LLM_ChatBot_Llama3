@@ -582,6 +582,11 @@
             color: #fecaca;
             border-color: rgba(248, 113, 113, 0.5);
         }
+        .sm-hover-tip-chip--warn {
+            background: rgba(234, 179, 8, 0.35);
+            color: #fef08a;
+            border-color: rgba(250, 204, 21, 0.55);
+        }
         a.sm-hover-tip-chip {
             text-decoration: none;
             cursor: pointer;
@@ -909,11 +914,16 @@
             if (d.status === 'inactive') return 'No APM traffic in window';
             if (d.status === 'unknown') return 'No data / query issue';
             const ddc = d.dd_monitor_alert_count != null ? Number(d.dd_monitor_alert_count) : 0;
-            if (d.status === 'healthy' && !(ddc > 0)) return 'Healthy — within APM thresholds';
+            const ddcSuf = d.dd_monitor_alert_suffix_count != null ? Number(d.dd_monitor_alert_suffix_count) : 0;
+            if (d.status === 'healthy' && !(ddc > 0) && !(ddcSuf > 0)) return 'Healthy — within APM thresholds';
             const bits = [];
-            if (ddc === 1) bits.push('1 Datadog monitor in Alert');
-            else if (ddc > 1) bits.push(ddc + ' Datadog monitors in Alert');
-            if (d.pd_incident) bits.push('PagerDuty');
+            if (ddc >= 1) bits.push(ddc + ' DD');
+            if (ddcSuf >= 1 && ddc === 0) {
+                bits.push(ddcSuf + ' DD');
+            } else if (ddcSuf >= 1 && ddc >= 1) {
+                bits.push('+' + ddcSuf + ' DD');
+            }
+            if (d.pd_incident) bits.push('PD');
             if (d.high_latency) bits.push('High latency');
             if (d.traffic_drop) bits.push('Traffic drop vs 7d');
             if (bits.length) return bits.join(' · ');
@@ -1058,11 +1068,11 @@
                         c.href = pdu;
                         c.target = '_blank';
                         c.rel = 'noopener noreferrer';
-                        c.textContent = 'PagerDuty';
+                        c.textContent = 'PD';
                     } else {
                         c = document.createElement('span');
                         c.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                        c.textContent = 'PagerDuty';
+                        c.textContent = 'PD';
                     }
                     chips.appendChild(c);
                 }
@@ -1073,7 +1083,7 @@
                     sp.href = splH;
                     sp.target = '_blank';
                     sp.rel = 'noopener noreferrer';
-                    sp.textContent = 'Splunk';
+                    sp.textContent = 'SPL';
                     chips.appendChild(sp);
                 }
                 if (d.traffic_drop) {
@@ -1089,6 +1099,7 @@
                     chips.appendChild(c);
                 }
                 const ddc2 = d.dd_monitor_alert_count != null ? Number(d.dd_monitor_alert_count) : 0;
+                const ddcSuf2 = d.dd_monitor_alert_suffix_count != null ? Number(d.dd_monitor_alert_suffix_count) : 0;
                 if (ddc2 > 0) {
                     const ddmH = smSafeHttpHref(d.dd_monitors_url);
                     if (ddmH) {
@@ -1097,24 +1108,45 @@
                         cdd.href = ddmH;
                         cdd.target = '_blank';
                         cdd.rel = 'noopener noreferrer';
-                        cdd.textContent = ddc2 === 1 ? '1 DD monitor (Alert)' : ddc2 + ' DD monitors (Alert)';
+                        cdd.textContent = ddc2 + ' DD';
                         chips.appendChild(cdd);
                     } else {
                         const cdd = document.createElement('span');
                         cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                        cdd.textContent = ddc2 === 1 ? '1 DD monitor (Alert)' : ddc2 + ' DD monitors (Alert)';
+                        cdd.textContent = ddc2 + ' DD';
                         chips.appendChild(cdd);
                     }
                 }
+                if (ddcSuf2 > 0) {
+                    const hrefAll = smSafeHttpHref(d.dd_monitors_url_all_alerts);
+                    if (hrefAll) {
+                        const cws = document.createElement('a');
+                        cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
+                        cws.href = hrefAll;
+                        cws.target = '_blank';
+                        cws.rel = 'noopener noreferrer';
+                        cws.textContent = ddcSuf2 + ' DD';
+                        chips.appendChild(cws);
+                    } else {
+                        const cws = document.createElement('span');
+                        cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
+                        cws.textContent = ddcSuf2 + ' DD';
+                        chips.appendChild(cws);
+                    }
+                }
                 if (chips.children.length) inner.appendChild(chips);
-                if (ddc2 > 0) {
+                if (ddc2 > 0 || ddcSuf2 > 0) {
                     const dnames = Array.isArray(d.dd_monitor_alerts) ? d.dd_monitor_alerts.filter(Boolean) : [];
-                    if (dnames.length) {
+                    const dnsuf = Array.isArray(d.dd_monitor_alerts_suffix_ab) ? d.dd_monitor_alerts_suffix_ab.filter(Boolean) : [];
+                    const parts = [];
+                    if (dnames.length) parts.push('DD: ' + dnames.join(' · '));
+                    if (dnsuf.length) parts.push('DD: ' + dnsuf.join(' · '));
+                    if (parts.length) {
                         const dnl = document.createElement('div');
                         dnl.className = 'sm-hover-tip-why';
                         dnl.style.fontSize = '10px';
                         dnl.style.lineHeight = '1.4';
-                        dnl.textContent = 'Monitors: ' + dnames.join(' · ');
+                        dnl.textContent = parts.join('\n');
                         inner.appendChild(dnl);
                     }
                 }
@@ -1239,7 +1271,7 @@
                 return;
             }
             slot.innerHTML = '<div style="padding:10px 12px;color:#64748b;font-size:12px;font-weight:600;border:1px dashed #cbd5e1;border-radius:10px;">Loading Splunk P0 outliers…</div>';
-            fetch('/api/splunk/monitor?timerange=72')
+            fetch('/api/splunk/monitor')
                 .then(function(res) {
                     return res.json();
                 })
@@ -1319,7 +1351,7 @@
                     const bg = grand > 0 ? '#dc2626' : '#10b981';
                     const blinkCls = grand > 0 ? ' pd-status-blink' : '';
                     const statusTxt = grand > 0 ? '🔴 OUTLIERS' : '🟢 CLEAR';
-                    const tr = data.timerange_hours != null ? data.timerange_hours : 72;
+                    const tr = data.timerange_hours != null ? data.timerange_hours : 24;
                     slot.innerHTML =
                         '<div class="sm-hub-splunk-bar' + blinkCls + '" style="background:' + bg + ';border-radius:10px;padding:8px 12px;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.12);">' +
                         '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;">' +

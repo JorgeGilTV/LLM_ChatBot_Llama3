@@ -17,20 +17,24 @@ from typing import Optional
 import boto3
 from botocore.exceptions import ClientError
 
-# Load secure embedded credentials (for compiled executable)
-try:
-    from config_secure import load_secure_env
-    load_secure_env()
-    print("✅ Loaded embedded credentials")
-except ImportError:
-    # If not compiled, will use .env file below
-    print("ℹ️  Using .env file for credentials")
-    pass
+# Environment / secrets (order matters):
+# 1) .env from project directory — primary for local dev and docker --env-file
+# 2) config_secure — optional embedded defaults for frozen builds only; must not override .env
+# 3) AWS Secrets Manager — optional overlay when AWS_SECRETS_MANAGER_SECRET_ID is set
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    _APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+    load_dotenv(os.path.join(_APP_ROOT, ".env"))
 except ImportError:
+    pass
+try:
+    from config_secure import load_secure_env
+
+    load_secure_env()
+    print("✅ config_secure: filled missing env keys only (.env / shell take precedence)")
+except ImportError:
+    print("ℹ️  config_secure not present — using .env / process environment only")
     pass
 try:
     from tools.aws_secrets_env import load_aws_secrets_manager_into_environ
@@ -233,7 +237,7 @@ _SLACK_WEBHOOK_MISSING_MSG = (
     "SLACK_WEBHOOK_URL is not set. "
     "The Docker image does not include .env: set SLACK_WEBHOOK_URL on the host and run "
     "docker run ... --env-file .env, or use docker-compose (env_file: .env). "
-    "See .env.example."
+    "See DOCKER_DEPLOYMENT.md for required variables."
 )
 
 # Short-lived PNG cache for Slack (webhook has no multipart; Slack fetches image_url)
@@ -870,6 +874,75 @@ def api_health():
             'database': {'error': str(e)},
             'version': '3.0.2'
         })
+
+
+@flask_app.route('/testconnections')
+def testconnections_page():
+    """Página para comprobar integraciones (lee .env del proceso; no expone secretos)."""
+    return render_template('testconnections.html')
+
+
+@flask_app.route('/api/testconnections', methods=['GET', 'POST'])
+def api_testconnections():
+    try:
+        from tools.test_connections import run_connection_checks
+
+        return jsonify(run_connection_checks())
+    except Exception as e:
+        logging.exception('api_testconnections failed')
+        return jsonify({'error': str(e), 'items': [], 'all_ok': False}), 500
+
+
+def _admin_token_from_request():
+    t = (request.headers.get('X-Admin-Token') or request.form.get('token') or '').strip()
+    if t:
+        return t
+    if request.is_json:
+        return str((request.get_json(silent=True) or {}).get('token') or '').strip()
+    return ''
+
+
+@flask_app.route('/dev-admin')
+def dev_admin_page():
+    """Git pull + reemplazo de .env (APIs protegidas con ADMIN_TOKEN)."""
+    from tools import dev_admin as dev_admin_mod
+
+    return render_template('dev_admin.html', admin_enabled=dev_admin_mod.admin_token_configured())
+
+
+@flask_app.route('/api/admin/git-update', methods=['POST'])
+def api_admin_git_update():
+    from tools import dev_admin as dev_admin_mod
+
+    ok, msg = dev_admin_mod.verify_admin_request_token(_admin_token_from_request())
+    if not ok:
+        code = 403 if 'deshabilitad' in msg.lower() or 'no está definido' in msg.lower() else 401
+        return jsonify({'success': False, 'error': msg}), code
+    try:
+        out = dev_admin_mod.git_update_status_and_pull()
+        status = 200 if out.get('success') else 400
+        return jsonify(out), status
+    except Exception as e:
+        logging.exception('api_admin_git_update')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@flask_app.route('/api/admin/upload-env', methods=['POST'])
+def api_admin_upload_env():
+    from tools import dev_admin as dev_admin_mod
+
+    ok, msg = dev_admin_mod.verify_admin_request_token(_admin_token_from_request())
+    if not ok:
+        code = 403 if 'deshabilitad' in msg.lower() or 'no está definido' in msg.lower() else 401
+        return jsonify({'success': False, 'error': msg}), code
+    try:
+        f = request.files.get('file')
+        out = dev_admin_mod.save_uploaded_dotenv(f)
+        status = 200 if out.get('success') else 400
+        return jsonify(out), status
+    except Exception as e:
+        logging.exception('api_admin_upload_env')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @flask_app.route('/api/cache/clear', methods=['POST'])
@@ -2151,43 +2224,58 @@ def _collect_subcalendars_for_match(obj) -> list:
     return out
 
 
-def _resolve_subcalendar_id_by_name(email: str, token: str, name_substr: str) -> Optional[str]:
-    """Query subcalendars.json; match first calendar whose name contains name_substr (case-insensitive)."""
+def _resolve_subcalendar_id_by_name(
+    email: str, token: str, name_substr: str
+) -> tuple[Optional[str], list[tuple[str, str]]]:
+    """
+    Query subcalendars.json; match calendars whose name contains name_substr (case-insensitive).
+    Returns (first_matching_id, all_matches) for diagnostics when several calendars match.
+    """
     if not name_substr or not email or not token:
-        return None
+        return None, []
     name_key = name_substr.strip().lower()
     if not name_key:
-        return None
+        return None, []
     import time
-    import requests
 
     ent = _team_cal_subcal_resolve_cache.get(name_key)
     if ent and (time.monotonic() - ent[0]) < _TEAM_CAL_SUBCAL_RESOLVE_TTL_S:
-        return ent[1]
+        if len(ent) == 3:
+            _, cal_id, matches = ent
+            return cal_id, list(matches)
+        _, cal_id = ent
+        return cal_id, []
 
     bases = _team_calendar_base_candidates()
     data, used_or_lines = _fetch_subcalendars_from_bases(bases, email, token)
     if data is None:
         logging.warning("subcalendars.json: no 200 from any base: %s", used_or_lines)
-        return None
+        return None, []
     logging.info("subcalendars.json OK from base %s", used_or_lines)
     try:
         pairs = _collect_subcalendars_for_match(data)
     except Exception as e:
         logging.warning("subcalendars parse failed: %s", e)
-        return None
+        return None, []
 
-    for cal_id, cal_name in pairs:
-        if name_key in cal_name.lower():
-            _team_cal_subcal_resolve_cache[name_key] = (time.monotonic(), cal_id)
-            logging.info("Resolved subCalendarId by name %r -> %s", name_substr, cal_id)
-            return cal_id
-    logging.warning(
-        "No subcalendar matched name containing %r (scanned %s names)",
+    matches = [(cal_id, cal_name) for cal_id, cal_name in pairs if name_key in cal_name.lower()]
+    if not matches:
+        logging.warning(
+            "No subcalendar matched name containing %r (scanned %s names)",
+            name_substr,
+            len(pairs),
+        )
+        return None, []
+
+    cal_id = matches[0][0]
+    _team_cal_subcal_resolve_cache[name_key] = (time.monotonic(), cal_id, tuple(matches))
+    logging.info(
+        "Resolved subCalendarId by name %r -> %s (%s match(es))",
         name_substr,
-        len(pairs),
+        cal_id,
+        len(matches),
     )
-    return None
+    return cal_id, matches
 
 
 def _normalize_team_calendar_events(payload, _depth: int = 0) -> list:
@@ -2536,9 +2624,10 @@ def api_deployments_upcoming():
         # Default = GRM subCalendarId from the calendar macro (ac:parameter name="id"), not the wiki page id.
         sub_calendar_id_env = (os.getenv("DEPLOYMENTS_SUBCALENDAR_ID") or "fb3ba305-784d-4750-a244-db3d87683733").strip()
         name_match = (os.getenv("DEPLOYMENTS_SUBCALENDAR_NAME") or "").strip()
+        name_env_resolve_matches: list[tuple[str, str]] = []
         sub_calendar_id = sub_calendar_id_env
         if name_match and email and token:
-            maybe_id = _resolve_subcalendar_id_by_name(email, token, name_match)
+            maybe_id, name_env_resolve_matches = _resolve_subcalendar_id_by_name(email, token, name_match)
             if maybe_id:
                 sub_calendar_id = maybe_id
 
@@ -2602,6 +2691,10 @@ def api_deployments_upcoming():
         diag["filter_hours_future"] = filter_hours_future
         diag["filter_hours_past"] = filter_hours_past
         diag["max_rows"] = max_rows
+        if name_env_resolve_matches:
+            diag["name_match_candidates"] = [
+                {"id": a, "name": b} for a, b in name_env_resolve_matches[:25]
+            ]
 
         # Team Calendars: ISO range + per-base /wiki vs non-wiki + subCalendarId / calendarId; optional name id fallback
         partial: dict = {}
@@ -2637,14 +2730,21 @@ def api_deployments_upcoming():
             logging.warning("Team Calendar API failed: %s", e)
 
         fb_name = _deployments_subcalendar_fallback_name()
-        if (
-            not deployments
-            and not partial.get("empty_calendar_200")
-            and fb_name
-            and email
-            and token
-        ):
-            alt_id = _resolve_subcalendar_id_by_name(email, token, fb_name)
+        # Do not gate on empty_calendar_200: a wrong subCalendarId can still return HTTP 200 with
+        # zero events; we must still try resolving "GRM" by name (DEPLOYMENTS_SUBCALENDAR_ID_FALLBACK_NAME).
+        if not deployments and fb_name and email and token:
+            alt_id, fb_matches = _resolve_subcalendar_id_by_name(email, token, fb_name)
+            diag["grm_fallback_name"] = fb_name
+            diag["grm_fallback_resolved_id"] = alt_id
+            diag["grm_fallback_match_candidates"] = [
+                {"id": a, "name": b} for a, b in fb_matches[:25]
+            ]
+            if not alt_id:
+                diag["grm_fallback_skip_reason"] = "subcalendars_unavailable_or_no_name_match"
+            elif alt_id == sub_calendar_id:
+                diag["grm_fallback_skip_reason"] = (
+                    "name_resolved_to_same_id_as_request_events_api_returned_zero_in_range"
+                )
             if alt_id and alt_id != sub_calendar_id:
                 logging.info(
                     "Calendar: retrying with name %r -> subCalendarId %s (macro id was not accepted)",
@@ -2805,6 +2905,11 @@ def api_deployments_upcoming():
                 "subcalendar_resolved_by_fallback_name": diag.get("subcalendar_resolved_by_fallback_name"),
                 "rows_after_filter": len(upcoming),
                 "sample_event_keys": diag.get("sample_event_keys"),
+                "name_match_candidates": diag.get("name_match_candidates"),
+                "grm_fallback_name": diag.get("grm_fallback_name"),
+                "grm_fallback_resolved_id": diag.get("grm_fallback_resolved_id"),
+                "grm_fallback_match_candidates": diag.get("grm_fallback_match_candidates"),
+                "grm_fallback_skip_reason": diag.get("grm_fallback_skip_reason"),
             },
         }
         if deployment_source == "empty":
@@ -2831,11 +2936,24 @@ def api_deployments_upcoming():
                     "Confluence may use other field names; check server logs and diagnostics.sample_event_keys."
                 )
             elif ok_200 and raw_total == 0:
+                sr = diag.get("grm_fallback_skip_reason")
+                extra = ""
+                if sr == "name_resolved_to_same_id_as_request_events_api_returned_zero_in_range":
+                    extra = (
+                        " Name lookup resolves to this same id but events.json still returns 0 rows for "
+                        "the requested window. If several calendars match, set DEPLOYMENTS_SUBCALENDAR_NAME "
+                        "to a more specific substring and inspect diagnostics.grm_fallback_match_candidates."
+                    )
+                elif sr == "subcalendars_unavailable_or_no_name_match":
+                    extra = (
+                        " Could not match a sub-calendar by fallback name (check CONFLUENCE_ATLASSIAN_HOST "
+                        "and token scope). Set DEPLOYMENTS_SUBCALENDAR_ID from the wiki Team Calendar macro."
+                    )
                 payload["warning"] = (
                     "API returned OK but 0 events in the selected range. Set DEPLOYMENTS_SUBCALENDAR_NAME "
                     "to a substring of the GRM sub-calendar (from subcalendars.json) if the id differs "
                     f"from the wiki page. Current subCalendarId: {sub_calendar_id}."
-                )
+                ) + extra
             elif ps is not None or alt_s is not None:
                 payload["warning"] = (
                     f"Team Calendar API did not return 200 (primary HTTP {ps}, alt HTTP {alt_s}). "

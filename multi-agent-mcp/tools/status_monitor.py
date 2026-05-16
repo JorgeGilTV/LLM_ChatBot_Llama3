@@ -758,7 +758,10 @@ earliest=-{timerange_hours}h latest=now
         }
         
         print(f"🔍 Querying Splunk for US Infra Exceptions (last {timerange_hours}h)...")
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(15, 60))
+        from tools.splunk_tool import splunk_ipv4_rest_scope
+
+        with splunk_ipv4_rest_scope():
+            response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(15, 60))
         
         if response.status_code == 200:
             results = []
@@ -824,7 +827,10 @@ earliest=-{timerange_hours}h latest=now
         }
         
         print(f"🔍 Querying Splunk for outliers (last {timerange_hours}h)...")
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(15, 90))
+        from tools.splunk_tool import splunk_ipv4_rest_scope
+
+        with splunk_ipv4_rest_scope():
+            response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(15, 90))
         
         if response.status_code == 200:
             results = []
@@ -4156,11 +4162,11 @@ def _samsung_splunk_embed_aside_html() -> str:
                 <a href="{u_esc}" target="_blank" rel="noopener" style="color:#0284c7;font-weight:600;">Open dashboard in Splunk</a>
             </p>
         </aside>"""
-    hint = "Add <code>SPLUNK_TOKEN</code> and (optional) <code>spl/samsung_studio_dashboard.json</code> or Studio/SPL env vars (see <code>.env.example</code>)."
+    hint = "Add <code>SPLUNK_TOKEN</code> and (optional) <code>spl/samsung_studio_dashboard.json</code> or Studio/SPL env vars (see <code>DOCKER_DEPLOYMENT.md</code> / your <code>.env</code>)."
     if tok and not api_ready:
         hint = (
             "Token set — configure a panel source: <code>SPLUNK_SAMSUNG_STUDIO_JSON</code>, "
-            "or <code>SPLUNK_SAMSUNG_SPL_PROD</code> / <code>SPLUNK_FETCH_STUDIO_FROM_REST</code> (see <code>.env.example</code>)."
+            "or <code>SPLUNK_SAMSUNG_SPL_PROD</code> / <code>SPLUNK_FETCH_STUDIO_FROM_REST</code> (see <code>DOCKER_DEPLOYMENT.md</code>)."
         )
     u_esc2 = html.escape(splunk_ui, quote=True)
     return f"""

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de conexiones — OneView</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 16px 20px 40px;
+        }
+        a { color: #38bdf8; }
+        .top {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px 20px;
+            margin-bottom: 20px;
+        }
+        h1 { margin: 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+        .btn {
+            padding: 8px 16px;
+            background: #0095da;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover { filter: brightness(1.08); }
+        .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .banner {
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 700;
+            font-size: 15px;
+            border: 1px solid transparent;
+        }
+        .banner.ok {
+            background: rgba(34, 197, 94, 0.15);
+            color: #86efac;
+            border-color: rgba(34, 197, 94, 0.45);
+        }
+        .banner.bad {
+            background: rgba(239, 68, 68, 0.12);
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+        .banner.wait {
+            background: rgba(148, 163, 184, 0.12);
+            color: #cbd5e1;
+            border-color: #475569;
+        }
+        .wrap { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #1e293b;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+            vertical-align: top;
+        }
+        th {
+            background: #0f172a;
+            color: #94a3b8;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr.row-ok td:first-child { box-shadow: inset 3px 0 0 #22c55e; }
+        tr.row-bad td:first-child { box-shadow: inset 3px 0 0 #ef4444; }
+        .svc { font-weight: 700; color: #f8fafc; }
+        .cell-cb { text-align: center; white-space: nowrap; }
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #22c55e;
+            cursor: default;
+        }
+        input[type="checkbox"]:not(:checked) { accent-color: #64748b; }
+        .na { color: #64748b; font-size: 12px; }
+        .detail { color: #94a3b8; font-size: 12px; max-width: 320px; word-break: break-word; }
+        .err { color: #fca5a5; font-size: 12px; max-width: 360px; word-break: break-word; }
+        .hint { margin-top: 16px; font-size: 12px; color: #64748b; max-width: 900px; line-height: 1.5; }
+        code { background: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <div class="top">
+        <h1>Test de conexiones</h1>
+        <button type="button" class="btn" id="btn-run">Ejecutar comprobaciones</button>
+        <a href="/">← Volver al chat</a>
+    </div>
+    <div id="banner" class="banner wait">Cargando…</div>
+    <div class="wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Integración</th>
+                    <th class="cell-cb">Clave / token</th>
+                    <th class="cell-cb">Usuario</th>
+                    <th class="cell-cb">Conexión</th>
+                    <th>Detalle</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+    <p class="hint">
+        Las pruebas se ejecutan en el servidor con tu <code>.env</code>. No se muestran secretos.
+        Webhook Slack: por defecto no se envía POST; define <code>VERIFY_SLACK_WEBHOOK_POST=1</code> en el entorno del proceso para probar envío real.
+        Gemini / Anthropic: solo se comprueba que la clave exista (sin llamada de pago).
+    </p>
+    <script>
+        function tri(v) {
+            if (v === true) return { chk: true, label: '' };
+            if (v === false) return { chk: false, label: '' };
+            return { chk: false, label: 'n/a', na: true };
+        }
+        function cbCell(state) {
+            const t = tri(state);
+            if (t.na) return '<span class="na">N/A</span>';
+            return '<input type="checkbox" disabled ' + (t.chk ? 'checked' : '') + ' title="' + (t.chk ? 'OK' : 'No') + '">';
+        }
+        function render(data) {
+            const banner = document.getElementById('banner');
+            const tbody = document.getElementById('tbody');
+            tbody.innerHTML = '';
+            if (!data || !data.items) {
+                banner.className = 'banner bad';
+                banner.textContent = 'Respuesta inválida del servidor.';
+                return;
+            }
+            banner.className = 'banner ' + (data.all_ok ? 'ok' : 'bad');
+            banner.textContent = data.all_ok
+                ? 'Todo correcto — ' + (data.checked_at || '')
+                : 'Hay fallos o credenciales incompletas — ' + (data.checked_at || '');
+
+            for (const it of data.items) {
+                const tr = document.createElement('tr');
+                tr.className = it.row_ok ? 'row-ok' : 'row-bad';
+                tr.innerHTML =
+                    '<td class="svc">' + escapeHtml(it.name) + '</td>' +
+                    '<td class="cell-cb">' + cbCell(it.key_ok) + '</td>' +
+                    '<td class="cell-cb">' + cbCell(it.user_ok) + '</td>' +
+                    '<td class="cell-cb">' + cbCell(it.connection_ok) + '</td>' +
+                    '<td class="detail">' + escapeHtml(it.detail || '') + '</td>' +
+                    '<td class="err">' + escapeHtml(it.error || '') + '</td>';
+                tbody.appendChild(tr);
+            }
+        }
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s == null ? '' : String(s);
+            return d.innerHTML;
+        }
+        async function run() {
+            const btn = document.getElementById('btn-run');
+            const banner = document.getElementById('banner');
+            btn.disabled = true;
+            banner.className = 'banner wait';
+            banner.textContent = 'Ejecutando pruebas…';
+            document.getElementById('tbody').innerHTML = '';
+            try {
+                const r = await fetch('/api/testconnections', { method: 'POST', headers: { 'Accept': 'application/json' } });
+                const data = await r.json();
+                if (!r.ok) {
+                    banner.className = 'banner bad';
+                    banner.textContent = 'HTTP ' + r.status + ': ' + (data.error || r.statusText);
+                    return;
+                }
+                render(data);
+            } catch (e) {
+                banner.className = 'banner bad';
+                banner.textContent = 'Error: ' + e;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        document.getElementById('btn-run').addEventListener('click', run);
+        run();
+    </script>
+</body>
+</html>

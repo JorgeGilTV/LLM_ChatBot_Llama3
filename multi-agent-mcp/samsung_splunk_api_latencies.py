@@ -381,10 +381,13 @@ def _export_search_parsed(
         data["timezone"] = tz
     tmo = _splunk_export_http_timeout()
     try:
-        r = requests.post(url, headers=headers, data=data, verify=True, timeout=tmo)
-        if r.status_code == 400 and "timezone" in data:
-            d2 = {k: v for k, v in data.items() if k != "timezone"}
-            r = requests.post(url, headers=headers, data=d2, verify=True, timeout=tmo)
+        from tools.splunk_tool import splunk_ipv4_rest_scope
+
+        with splunk_ipv4_rest_scope():
+            r = requests.post(url, headers=headers, data=data, verify=True, timeout=tmo)
+            if r.status_code == 400 and "timezone" in data:
+                d2 = {k: v for k, v in data.items() if k != "timezone"}
+                r = requests.post(url, headers=headers, data=d2, verify=True, timeout=tmo)
         if r.status_code != 200:
             return name, None, f"HTTP {r.status_code}: {r.text[:500]!r}"
         out: list[dict[str, Any]] = []

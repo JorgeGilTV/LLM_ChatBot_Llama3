@@ -12,7 +12,8 @@ from typing import Any, Sequence
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    _MCP_ROOT = os.path.dirname(os.path.abspath(__file__))
+    load_dotenv(os.path.join(_MCP_ROOT, ".env"))
 except ImportError:
     pass
 try:

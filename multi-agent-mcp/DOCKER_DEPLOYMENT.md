@@ -18,7 +18,7 @@ Desde **~mediados de marzo 2026** el commit grande de producción dejó la image
 | `scp` corta / `Connection closed` | Timeout o red inestable | `rsync -avP --partial ./oneview-goc-ai_v*.tar user@ec2:~/` (reanuda) |
 | `no space left on device` | Disco lleno en EC2 | `df -h`; borrar `.tar` viejos tras `docker load`; `docker system prune` |
 | `unexpected EOF` al `docker load` | `.tar` incompleto (subida truncada) | Volver a subir; comprobar tamaño local vs remoto (`ls -lh`, `wc -c`) |
-| `couldn't find env file` / Compose no arranca | Falta `./.env` junto al compose (Compose antiguo) | `touch .env` o `cp .env.example .env`, o usa `./old/scripts/ec2-compose-up.sh` |
+| `couldn't find env file` / Compose no arranca | Falta `./.env` junto al compose (Compose antiguo) | `touch .env` y rellena variables (ver `DOCKER_DEPLOYMENT.md`), o usa `./old/scripts/ec2-compose-up.sh` |
 | Compose rechaza `required: false` | Docker Compose anterior a 2.24 | Actualiza el plugin `docker compose` o usa `touch .env` junto al YAML |
 
 Comprimir opcional: `gzip -k oneview-goc-ai_v3.2.7-mcp.tar` y subir el `.gz`; en el servidor: `gunzip -c archivo.tar.gz \| docker load`.
@@ -70,7 +70,7 @@ docker run -d \
   oneview-goc-ai:latest
 ```
 
-Variables sueltas (nombres reales del proyecto — ver `.env.example`):
+Variables sueltas (nombres reales del proyecto — ver secciones siguientes y tu `.env`):
 
 ```bash
 docker run -d \
@@ -95,11 +95,11 @@ La imagen incluye **código y dependencias**, no claves ni webhooks. Eso es inte
 
 1. Archivo `oneview-goc-ai_v*.tar` (esta imagen).
 2. Archivo `.env` con valores reales (canal seguro aparte del `.tar`).
-3. En la misma carpeta: `docker-compose.prod.yml` (viene en el proyecto) y, si hace falta, `.env.example` como plantilla.
+3. En la misma carpeta: `docker-compose.prod.yml` (viene en el proyecto) y un fichero `.env` con secretos (no va en la imagen).
 
 ```bash
 docker load -i oneview-goc-ai_v3.2.7-mcp.tar
-cp .env.example .env   # editar: Slack, Datadog, Bedrock, etc.
+Crea o edita `.env` en esa carpeta (Slack, Datadog, Bedrock, etc. — ver listas en este doc).
 mkdir -p logs data
 docker compose -f docker-compose.prod.yml up -d
 ```
@@ -120,7 +120,7 @@ La imagen **no puede** llevar contraseñas dentro de la capa: cualquiera con el 
 
 **Roles típicos**
 
-1. **Tú (desarrollo / release)**: generas `oneview-goc-ai_v*.tar` + documentación + `.env.example` (sin secretos).
+1. **Tú (desarrollo / release)**: generas `oneview-goc-ai_v*.tar` + documentación; los secretos van solo en `.env` del host (o Secrets Manager).
 2. **Quien despliega** (sí tiene acceso al host o al panel de Kubernetes/ECS/Portainer): coloca el `.env` real **o** define las mismas variables allí. No hace falta reconstruir la imagen.
 
 **Un solo comando en el servidor** (si ya dejaron el `.env` en la carpeta de despliegue):
@@ -324,10 +324,10 @@ Debe coincidir con el host (p. ej. `amd64` en un nodo EKS x86_64, `arm64` en un 
 
 **Causa**: `docker-compose.prod.yml` declara `env_file: .env`. Si en la EC2 **no existe** ese archivo en la carpeta del compose, Compose **rechaza** levantar el servicio (no es un fallo de la imagen `.tar`).
 
-**Solución**: En el directorio de despliegue, crea el fichero (aunque sea vacío o copiado de `.env.example`):
+**Solución**: En el directorio de despliegue, crea el fichero `.env` (aunque sea vacío al inicio) y rellénalo:
 
 ```bash
-cp .env.example .env && nano .env
+touch .env && nano .env
 # o, solo para probar que el contenedor arranca:
 touch .env
 docker compose -f docker-compose.prod.yml up -d
@@ -489,7 +489,7 @@ Esas rutas hacen **POST** a `/api/statusmonitor/wall` o `/api/statusmonitor/soft
    - `proxy_read_timeout 600s;`
    - `proxy_send_timeout 600s;`
    - `fastcgi_read_timeout` si aplica
-4. **Reducir trabajo del Status wall** (sin tocar el ALB): `STATUS_MONITOR_WALL_ATTACH_EKS=0` omite consultas EKS por tile en `/statuswall` (menos llamadas a Datadog). Opcional: `APM_STATUS_WALL_ATTACH_EKS=0` afecta también el wall clásico cuando la variable específica no está definida (ver `.env.example`).
+4. **Reducir trabajo del Status wall** (sin tocar el ALB): `STATUS_MONITOR_WALL_ATTACH_EKS=0` omite consultas EKS por tile en `/statuswall` (menos llamadas a Datadog). Opcional: `APM_STATUS_WALL_ATTACH_EKS=0` afecta también el wall clásico cuando la variable específica no está definida (ver variables en este doc / tu `.env`).
 5. **Reducir trabajo del dashboard por entorno** (`/statusmonitor/production`, etc.): `STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0` omite las búsquedas EKS por servicio en la página del Status Monitor (misma idea que el wall; los tooltips pueden no mostrar `kube_cluster_name`).
 6. **Solo prueba local** con `python app.py`: no hay proxy; si aun así falla, el cuello de botella es otro (red a Datadog, credenciales, etc.).
 

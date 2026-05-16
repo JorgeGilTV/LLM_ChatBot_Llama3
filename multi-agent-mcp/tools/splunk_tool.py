@@ -1,12 +1,16 @@
 import os
 import re
 import html
-import requests
 import json
+import socket
+import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from statistics import mean, pstdev
+
+import requests
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -14,7 +18,7 @@ load_dotenv()
 
 
 def splunk_search_timezone() -> str:
-    """IANA zone for REST jobs (earliest/latest + predict). Default PST."""
+    """IANA zone for REST jobs (earliest/latest + predict). Default US Pacific."""
     return (os.getenv("SPLUNK_SEARCH_TIMEZONE") or "America/Los_Angeles").strip()
 
 
@@ -23,15 +27,142 @@ def splunk_display_timezone() -> str:
     return (os.getenv("SPLUNK_DISPLAY_TIMEZONE") or splunk_search_timezone()).strip()
 
 
+def _splunk_resolve_p0_timezone_id(raw: str) -> str:
+    """
+    Normalize env values like PST/PDT/Pacific to a valid IANA id for Splunk REST + Python.
+    America/Los_Angeles follows US Pacific (PST winter / PDT summer).
+    """
+    if not raw:
+        return "America/Los_Angeles"
+    key = raw.strip().lower()
+    if key in ("pst", "pdt", "pt", "pacific", "us/pacific", "us-pacific", "pacific time"):
+        return "America/Los_Angeles"
+    candidate = raw.strip()
+    try:
+        ZoneInfo(candidate)
+        return candidate
+    except Exception:
+        return "America/Los_Angeles"
+
+
 def splunk_p0_job_timezone() -> str:
     """
     Pacific-aligned TZ for P0 Splunk REST jobs, bucket boundaries, chart labels, and outliers.
 
-    Use IANA zones (America/Los_Angeles = PST/PDT). Override with SPLUNK_P0_TIMEZONE,
-    else SPLUNK_SEARCH_TIMEZONE, else Pacific.
+    Default ``America/Los_Angeles`` (US Pacific: PST in winter, PDT in summer — same wall clock
+    family Splunk UI uses for Pacific searches). Override with ``SPLUNK_P0_TIMEZONE`` (IANA or
+    aliases pst/pdt/pacific), else ``SPLUNK_SEARCH_TIMEZONE``.
     """
     raw = (os.getenv("SPLUNK_P0_TIMEZONE") or os.getenv("SPLUNK_SEARCH_TIMEZONE") or "America/Los_Angeles").strip()
-    return raw or "America/Los_Angeles"
+    return _splunk_resolve_p0_timezone_id(raw or "America/Los_Angeles")
+
+
+def splunk_mgmt_port() -> str:
+    """Splunk management REST port (Splunk Cloud default 8089)."""
+    return (os.getenv("SPLUNK_MGMT_PORT") or "8089").strip() or "8089"
+
+
+def splunk_rest_timeouts() -> tuple[int, int]:
+    """
+    (connect_seconds, read_seconds) for Splunk REST export.
+    Connect timeout = TCP handshake to management port — if this fires, traffic often never reaches Splunk
+    (firewall, VPN, or Splunk Cloud IP allowlist), not a slow query.
+    """
+    try:
+        c = int((os.getenv("SPLUNK_CONNECT_TIMEOUT") or "30").strip())
+    except ValueError:
+        c = 30
+    try:
+        r = int((os.getenv("SPLUNK_READ_TIMEOUT") or "180").strip())
+    except ValueError:
+        r = 180
+    return max(5, min(c, 300)), max(30, min(r, 3600))
+
+
+_orig_getaddrinfo = socket.getaddrinfo
+_splunk_dns_tls = threading.local()
+_splunk_gai_ipv4_patched = False
+
+
+def splunk_prefer_ipv4() -> bool:
+    """
+    Default True: Splunk REST resolves and connects over IPv4 only (Splunk Cloud allowlists are often IPv4-only).
+
+    Set SPLUNK_PREFER_IPV4=0 (or false/no/off) to use the system default (dual-stack / IPv6).
+    SPLUNK_FORCE_IPV4 is an alias when SPLUNK_PREFER_IPV4 is unset.
+    """
+    p = (os.getenv("SPLUNK_PREFER_IPV4") or "").strip().lower()
+    if p in ("0", "false", "no", "off"):
+        return False
+    if p in ("1", "true", "yes", "on"):
+        return True
+    f = (os.getenv("SPLUNK_FORCE_IPV4") or "").strip().lower()
+    if f in ("0", "false", "no", "off"):
+        return False
+    if f in ("1", "true", "yes", "on"):
+        return True
+    return True
+
+
+def _splunk_getaddrinfo_ipv4_wrapper(*args, **kwargs):
+    if not getattr(_splunk_dns_tls, "force_af_inet", False):
+        return _orig_getaddrinfo(*args, **kwargs)
+    kw = dict(kwargs)
+    lst = list(args)
+    nargs = len(lst)
+    if nargs == 2:
+        h, p = lst
+        return _orig_getaddrinfo(
+            h,
+            p,
+            socket.AF_INET,
+            kw.pop("type", 0),
+            kw.pop("proto", 0),
+            kw.pop("flags", 0),
+            **kw,
+        )
+    if nargs >= 3 and lst[2] in (0, socket.AF_UNSPEC):
+        lst[2] = socket.AF_INET
+    if "family" in kw and kw["family"] in (0, socket.AF_UNSPEC):
+        kw["family"] = socket.AF_INET
+    return _orig_getaddrinfo(*lst, **kw)
+
+
+def _ensure_splunk_ipv4_getaddrinfo_patch() -> None:
+    global _splunk_gai_ipv4_patched
+    if _splunk_gai_ipv4_patched:
+        return
+    if not splunk_prefer_ipv4():
+        return
+    socket.getaddrinfo = _splunk_getaddrinfo_ipv4_wrapper
+    _splunk_gai_ipv4_patched = True
+
+
+@contextmanager
+def splunk_ipv4_rest_scope():
+    """Restrict DNS resolution for Splunk REST to IPv4 on this thread (default on; opt out with SPLUNK_PREFER_IPV4=0)."""
+    if not splunk_prefer_ipv4():
+        yield
+        return
+    _ensure_splunk_ipv4_getaddrinfo_patch()
+    prev = getattr(_splunk_dns_tls, "force_af_inet", False)
+    _splunk_dns_tls.force_af_inet = True
+    try:
+        yield
+    finally:
+        _splunk_dns_tls.force_af_inet = prev
+
+
+def _splunk_rest_authorization_value(splunk_token: str) -> str:
+    """
+    Build Authorization header value for Splunk REST.
+    SPLUNK_AUTH_MODE or SPLUNK_REST_AUTH: bearer (default) | splunk
+    Use splunk for classic session tokens (Authorization: Splunk <token>).
+    """
+    mode = (os.getenv("SPLUNK_AUTH_MODE") or os.getenv("SPLUNK_REST_AUTH") or "bearer").strip().lower()
+    if mode in ("splunk", "session", "splunk-session"):
+        return f"Splunk {splunk_token}"
+    return f"Bearer {splunk_token}"
 
 
 def execute_splunk_query(
@@ -44,63 +175,92 @@ def execute_splunk_query(
     timezone=None,
 ):
     """Execute a single Splunk query - helper for parallel execution"""
+    port = splunk_mgmt_port()
+    connect_s, read_s = splunk_rest_timeouts()
     try:
-        headers = {
-            "Authorization": f"Bearer {splunk_token}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        
-        search_url = f"https://{splunk_host}:8089/services/search/jobs/export"
-        tz = timezone if timezone is not None else splunk_search_timezone()
-        data = {
-            "search": query_data,
-            "earliest_time": earliest_time,
-            "latest_time": latest_time,
-            "output_mode": "json",
-        }
-        if tz:
-            data["timezone"] = tz
-        
-        # Increased connect timeout to 30 seconds for Splunk Cloud
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(30, 180))
-        # Keep timezone for PST/PDT bucket alignment unless Splunk rejects the parameter itself.
-        if response.status_code == 400 and tz:
-            body_low = (response.text or "").lower()
-            if any(
-                x in body_low
-                for x in ("timezone", "time zone", "invalid time", "unrecognized argument")
-            ):
-                data_retry = {k: v for k, v in data.items() if k != "timezone"}
-                response = requests.post(
-                    search_url, headers=headers, data=data_retry, verify=True, timeout=(30, 180)
+        with splunk_ipv4_rest_scope():
+            search_url = f"https://{splunk_host}:{port}/services/search/jobs/export"
+            to = (connect_s, read_s)
+            tz = timezone if timezone is not None else splunk_search_timezone()
+            data = {
+                "search": query_data,
+                "earliest_time": earliest_time,
+                "latest_time": latest_time,
+                "output_mode": "json",
+            }
+            if tz:
+                data["timezone"] = tz
+
+            def _post_with_auth(auth_header_value: str):
+                headers = {
+                    "Authorization": auth_header_value,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                }
+                resp = requests.post(search_url, headers=headers, data=data, verify=True, timeout=to)
+                if resp.status_code == 400 and tz:
+                    body_low = (resp.text or "").lower()
+                    if any(
+                        x in body_low
+                        for x in ("timezone", "time zone", "invalid time", "unrecognized argument")
+                    ):
+                        data_retry = {k: v for k, v in data.items() if k != "timezone"}
+                        resp = requests.post(
+                            search_url, headers=headers, data=data_retry, verify=True, timeout=to
+                        )
+                return resp
+
+            primary = _splunk_rest_authorization_value(splunk_token)
+            response = _post_with_auth(primary)
+
+            fb = (os.getenv("SPLUNK_AUTH_401_FALLBACK", "1").strip().lower() not in ("0", "false", "no"))
+            if response.status_code == 401 and fb and splunk_token:
+                alt = (
+                    f"Splunk {splunk_token}"
+                    if primary.startswith("Bearer ")
+                    else f"Bearer {splunk_token}"
                 )
-        
-        if response.status_code == 200:
-            # Parse JSON lines from export (NDJSON). Splunk often omits "preview" on final rows;
-            # requiring preview==False dropped all rows — only skip streaming preview rows.
-            results = []
-            for line in response.text.strip().split('\n'):
-                if line:
-                    try:
-                        result = json.loads(line)
-                        row = result.get("result")
-                        if not row:
+                if alt != primary:
+                    response = _post_with_auth(alt)
+
+            if response.status_code == 200:
+                # Parse JSON lines from export (NDJSON). Splunk often omits "preview" on final rows;
+                # requiring preview==False dropped all rows — only skip streaming preview rows.
+                results = []
+                for line in response.text.strip().split("\n"):
+                    if line:
+                        try:
+                            result = json.loads(line)
+                            row = result.get("result")
+                            if not row:
+                                continue
+                            if result.get("preview") is True:
+                                continue
+                            results.append(row)
+                        except json.JSONDecodeError:
                             continue
-                        if result.get("preview") is True:
-                            continue
-                        results.append(row)
-                    except json.JSONDecodeError:
-                        continue
-            return query_key, results, None
-        else:
-            return query_key, None, f"HTTP {response.status_code}: {response.text[:200]}"
-    
+                return query_key, results, None
+            else:
+                return query_key, None, f"HTTP {response.status_code}: {response.text[:200]}"
+
     except requests.exceptions.ConnectTimeout as e:
-        return query_key, None, f"⚠️ Connection timeout - Your IP may not be whitelisted in Splunk Cloud: {str(e)}"
+        return (
+            query_key,
+            None,
+            "⚠️ TCP connect timeout to "
+            f"https://{splunk_host}:{port}/services/search/jobs/export "
+            f"({connect_s}s) — the session never reached Splunk on port {port}. "
+            "Common causes: (1) corporate network or Wi‑Fi blocks outbound "
+            f"{port}; (2) Splunk Cloud IP allowlist does not include this machine's public egress IP; "
+            "(3) VPN required for management API. "
+            "Splunk REST uses IPv4 by default; set SPLUNK_PREFER_IPV4=0 only if you need dual-stack/IPv6. "
+            f"Quick check from this host: `nc -vz {splunk_host} {port}` or open the URL in a browser (expect TLS). "
+            f"Detail: {e}",
+        )
     except requests.exceptions.Timeout as e:
         return query_key, None, f"⏱️ Request timeout - Splunk query took too long: {str(e)}"
     except requests.exceptions.ConnectionError as e:
-        return query_key, None, f"🔌 Connection error - Check if port 8089 is accessible or if VPN is required: {str(e)}"
+        p = splunk_mgmt_port()
+        return query_key, None, f"🔌 Connection error — check port {p}, VPN, or firewall: {str(e)}"
     except Exception as e:
         return query_key, None, f"❌ Unexpected error: {str(e)}"
 
@@ -113,6 +273,7 @@ def execute_splunk_queries_parallel(
     latest_time,
     max_workers=3,
     timezone=None,
+    errors_out: dict | None = None,
 ):
     """Execute multiple Splunk queries in parallel"""
     results = {}
@@ -146,12 +307,16 @@ def execute_splunk_queries_parallel(
                 if error:
                     print(f"❌ Query '{key}' failed: {error}")
                     results[key] = None
+                    if errors_out is not None:
+                        errors_out[key] = error
                 else:
                     results[key] = data
                     print(f"✅ Query '{key}' completed: {len(data) if data else 0} results")
             except Exception as e:
                 print(f"❌ Query '{query_key}' exception: {str(e)}")
                 results[query_key] = None
+                if errors_out is not None:
+                    errors_out[query_key] = str(e)
     
     elapsed = time.time() - start_time
     print(f"✅ All Splunk queries completed in {elapsed:.2f}s")
@@ -168,10 +333,14 @@ def _splunk_float(val, default=None):
         return default
 
 
-def _splunk_row_epoch_seconds(tr) -> float | None:
+def _splunk_row_epoch_seconds(tr, naive_wall_timezone: str | None = None) -> float | None:
     """
     Splunk export sometimes returns _time as epoch float/string; other builds use ISO text.
     If we drop all rows here, charts show empty even when Splunk returned data.
+
+    ISO timestamps **without** a zone are interpreted in ``naive_wall_timezone`` (Splunk search
+    wall clock / REST ``timezone``), not UTC — assuming UTC used to scramble bucket order vs the
+    rolling band and inflated false outliers on P0 charts.
     """
     if tr is None or tr == "":
         return None
@@ -190,7 +359,12 @@ def _splunk_row_epoch_seconds(tr) -> float | None:
             s2 = s2[:-4].strip()
         dt = datetime.fromisoformat(s2)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+            wall = naive_wall_timezone or "America/Los_Angeles"
+            try:
+                zi = ZoneInfo(wall)
+            except Exception:
+                zi = ZoneInfo("America/Los_Angeles")
+            dt = dt.replace(tzinfo=zi)
         return dt.timestamp()
     except (TypeError, ValueError, OSError):
         return None
@@ -270,8 +444,27 @@ def _splunk_p0_predict_empty_panel_html(
     if failed_zones:
         parts.append(
             "<p style='margin: 8px 0 0 0; font-size: 12px; color: #856404;'><strong>Splunk REST errors</strong> for "
-            f"zone(s) {', '.join(failed_zones)} — check server logs for HTTP status, token expiry, or IP allowlist (port 8089).</p>"
+            f"zone(s) {', '.join(failed_zones)} — check server logs for HTTP status, token expiry, or IP allowlist "
+            f"(port {html.escape(splunk_mgmt_port())}).</p>"
         )
+        detail = None
+        for zn in failed_zones:
+            detail = (zmap.get(zn) or {}).get("error_detail")
+            if detail:
+                break
+        if detail:
+            parts.append(
+                "<p style='margin: 8px 0 0 0; font-size: 11px; color: #92400e; word-break: break-word;'>"
+                f"<strong>Last error (first zone):</strong> <code style='font-size:10px;'>{html.escape(str(detail)[:900])}</code></p>"
+            )
+            dl = str(detail).lower()
+            if "503" in str(detail) and "concurrency" in dl:
+                parts.append(
+                    "<p style='margin: 8px 0 0 0; font-size: 12px; color: #856404;'>"
+                    "If the message mentions <strong>role-based concurrency</strong>, Splunk was throttling parallel REST searches. "
+                    "P0 zone metrics now use <strong>one combined search</strong> per request; if 503 persists, another client may be "
+                    "running searches as the same Splunk user, or raise the role limit in Splunk Cloud.</p>"
+                )
     elif raw_total == 0:
         parts.append(
             f"<p style='margin: 8px 0 0 0; font-size: 12px; color: #856404;'>No events matched <code>index={idx_disp}</code> in the last "
@@ -312,11 +505,12 @@ def _splunk_build_p0_predict_spl(
     head = f"search index={index_literal}"
     if sl:
         head = f"{head} {sl}"
-    head = f"{head} earliest=-{timerange_hours}h@h latest=now"
+    # Time window: use REST export earliest_time/latest_time only (duplicate earliest in SPL breaks some tenants).
     where = f'| where zone="{zone}"'
     hm = (host_match or "").strip()
     if hm:
         where += f' AND match(host, "(?i){re.escape(hm)}")'
+    _ = int(timerange_hours)  # window applied by jobs/export earliest_time/latest_time, not duplicated in SPL
     return (
         f"{head}\n"
         f'| rex field=host "-(?<zone>z[1-4])-"\n'
@@ -324,6 +518,36 @@ def _splunk_build_p0_predict_spl(
         "| bin _time span=15m aligntime=earliest\n"
         "| stats count as upload_count by _time\n"
         "| sort 0 _time\n"
+    )
+
+
+def _splunk_build_p0_all_zones_spl(
+    timerange_hours: int,
+    index_literal: str = "streaming_prod",
+    search_literals: str = "",
+    host_match: str = "",
+) -> str:
+    """
+    Single SPL for z1–z4 (one REST job). Splunk Cloud REST users (e.g. hybrid_rest_user) often hit
+    HTTP 503 role concurrency limits when dispatching four parallel historical searches; one job avoids that.
+    """
+    sl = (search_literals or "").strip()
+    head = f"search index={index_literal}"
+    if sl:
+        head = f"{head} {sl}"
+    hm = (host_match or "").strip()
+    wh_parts = ['isnotnull(zone)', 'zone IN ("z1","z2","z3","z4")']
+    if hm:
+        wh_parts.append(f'match(host, "(?i){re.escape(hm)}")')
+    where_clause = " AND ".join(wh_parts)
+    _ = int(timerange_hours)
+    return (
+        f"{head}\n"
+        f'| rex field=host "-(?<zone>z[1-4])-"\n'
+        f"| where {where_clause}\n"
+        "| bin _time span=15m aligntime=earliest\n"
+        "| stats count as upload_count by _time zone\n"
+        "| sort 0 zone _time\n"
     )
 
 
@@ -340,7 +564,7 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
         tr = row.get("_time")
         if tr is None or tr == "":
             tr = row.get("time")
-        ts = _splunk_row_epoch_seconds(tr)
+        ts = _splunk_row_epoch_seconds(tr, naive_wall_timezone=display_tz)
         if ts is None:
             continue
         rows.append((ts, row))
@@ -351,7 +575,7 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
     los = []
     his = []
     try:
-        tzinfo = ZoneInfo(display_tz)
+        tzinfo = ZoneInfo(_splunk_resolve_p0_timezone_id(display_tz))
     except Exception:
         tzinfo = ZoneInfo("America/Los_Angeles")
 
@@ -438,48 +662,71 @@ def _splunk_fetch_p0_zones_predict(
     max_workers: int = 4,
     host_match: str = "",
 ) -> dict:
-    """Run P0 zone SPL (upload_count per 15m) in parallel. Band/outliers from Python. Returns { 'z1': series_dict, ... }."""
+    """
+    Run P0 zone SPL (upload_count per 15m per zone). Band/outliers from Python.
+
+    Uses **one** REST search for all zones (z1–z4) to avoid Splunk Cloud HTTP 503
+    "role-based concurrency limit" when the REST identity runs several historical
+    searches at once. ``max_workers`` is kept for API compatibility and ignored here.
+    """
+    _ = max_workers  # was used for parallel per-zone jobs; single search replaces that
     idx = (index_literal or "").strip() or splunk_p0_streaming_index()
-    queries = {}
-    for zn in ("z1", "z2", "z3", "z4"):
-        queries[f"zone_{zn}"] = _splunk_build_p0_predict_spl(
-            zn,
-            timerange_hours,
-            index_literal=idx,
-            search_literals=search_literals,
-            host_match=host_match,
-        )
-    raw = execute_splunk_queries_parallel(
-        queries,
+    spl = _splunk_build_p0_all_zones_spl(
+        timerange_hours,
+        index_literal=idx,
+        search_literals=search_literals,
+        host_match=host_match,
+    )
+    tz_job = splunk_p0_job_timezone()
+    _key, rows, err = execute_splunk_query(
+        "p0_zones_all",
+        spl,
         splunk_host,
         splunk_token,
         earliest_time,
         latest_time,
-        max_workers=max_workers,
-        timezone=splunk_p0_job_timezone(),
+        timezone=tz_job,
     )
-    display_tz = splunk_p0_job_timezone()
+    display_tz = tz_job
+    empty_series = {
+        "labels": [],
+        "upload_count": [],
+        "lower": [],
+        "upper": [],
+        "outliers": 0,
+        "total_upload_count": 0,
+        "band": "none",
+        "raw_row_count": 0,
+    }
+    if err:
+        out = {}
+        for zn in ("z1", "z2", "z3", "z4"):
+            out[zn] = {
+                **empty_series,
+                "error": "query_failed",
+                "error_detail": err,
+            }
+        return out
+
+    by_zone: dict[str, list] = {"z1": [], "z2": [], "z3": [], "z4": []}
+    for row in rows or []:
+        zn = row.get("zone")
+        if zn is None:
+            continue
+        zn = str(zn).strip()
+        if zn not in by_zone:
+            continue
+        by_zone[zn].append(
+            {"_time": row.get("_time"), "upload_count": row.get("upload_count")}
+        )
+
     out = {}
     for zn in ("z1", "z2", "z3", "z4"):
-        key = f"zone_{zn}"
-        rows = raw.get(key)
-        if rows is None:
-            out[zn] = {
-                "error": "query_failed",
-                "labels": [],
-                "upload_count": [],
-                "lower": [],
-                "upper": [],
-                "outliers": 0,
-                "total_upload_count": 0,
-                "band": "none",
-                "raw_row_count": 0,
-            }
-        else:
-            s = _splunk_rows_to_chart_series(rows, display_tz)
-            s["error"] = None
-            s["raw_row_count"] = len(rows)
-            out[zn] = s
+        zrows = by_zone[zn]
+        s = _splunk_rows_to_chart_series(zrows, display_tz)
+        s["error"] = None
+        s["raw_row_count"] = len(zrows)
+        out[zn] = s
     return out
 
 
@@ -820,7 +1067,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange=None, *, us_infra: bool 
     
     # Get public IP for whitelist verification
     try:
-        public_ip_response = requests.get("https://api.ipify.org", timeout=5)
+        public_ip_response = requests.get("https://api.ipify.org", timeout=15)
         public_ip = public_ip_response.text if public_ip_response.status_code == 200 else "Unable to detect"
     except:
         public_ip = "Unable to detect"
@@ -888,7 +1135,7 @@ def read_splunk_p0_dashboard(query: str = "", timerange=None, *, us_infra: bool 
 
         output += f"""
         <div style='margin: 8px 0; padding: 8px 10px; background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 6px; font-size: 11px; color: #1e3a8a; line-height: 1.45;'>
-            <strong>Splunk REST (this view):</strong> timezone <code>{html.escape(splunk_p0_job_timezone())}</code> (Pacific/PST — buckets + chart aligned with Splunk UI);
+            <strong>Splunk REST (this view):</strong> timezone <code>{html.escape(splunk_p0_job_timezone())}</code> (US Pacific PST/PDT — buckets + chart aligned with Splunk UI);
             <strong>15m</strong> buckets; <code>upload_count</code> = event count per bucket.
             <strong>Band / outliers:</strong> computed here with a rolling ±2σ window on <code>upload_count</code> (REST cannot rely on Splunk’s <code>predict</code>/MLTK on many tenants — avoid HTTP 400).
             The interactive Splunk dashboard may still use <code>predict</code> LLP when ML Toolkit is available there.
@@ -940,12 +1187,13 @@ def read_splunk_p0_dashboard(query: str = "", timerange=None, *, us_infra: bool 
         output += _splunk_chartjs_p0_script_json(chart_bundle, "chart_p0_")
 
         all_queries = {}
-        all_queries["servers"] = f'''| tstats dc(host) as server_count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+        _p0_idx = splunk_p0_streaming_index()
+        all_queries["servers"] = f'''| tstats dc(host) as server_count where index={_p0_idx} by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
 | timechart span=1h dc(host) as servers by zone
 | fillnull value=0'''
-        all_queries["jvm"] = f'''| search index=streaming_prod earliest=-{timerange_hours}h ("JVM" OR "OutOfMemoryError" OR "crash")
+        all_queries["jvm"] = f'''| search index={_p0_idx} ("JVM" OR "OutOfMemoryError" OR "crash")
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
 | timechart span=1h count by zone
@@ -1200,7 +1448,7 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange=None) -> str:
     
     # Get public IP for whitelist verification
     try:
-        public_ip_response = requests.get("https://api.ipify.org", timeout=5)
+        public_ip_response = requests.get("https://api.ipify.org", timeout=15)
         public_ip = public_ip_response.text if public_ip_response.status_code == 200 else "Unable to detect"
     except:
         public_ip = "Unable to detect"
@@ -1298,10 +1546,11 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange=None) -> str:
         output += _splunk_chartjs_p0_script_json(chart_bundle, "chart_cvr_")
 
         all_queries = {}
-        all_queries["devices"] = f'''| tstats dc(device_id) as device_count where index=streaming_prod earliest=-{timerange_hours}h "CVR" by _time span=1h
+        _p0_idx = splunk_p0_streaming_index()
+        all_queries["devices"] = f'''| tstats dc(device_id) as device_count where index={_p0_idx} "CVR" by _time span=1h
 | timechart span=1h sum(device_count) as devices
 | fillnull value=0'''
-        all_queries["connections"] = f'''| search index=streaming_prod earliest=-{timerange_hours}h "CVR" "connection"
+        all_queries["connections"] = f'''| search index={_p0_idx} "CVR" "connection"
 | timechart span=1h count as connections
 | fillnull value=0'''
         all_results = execute_splunk_queries_parallel(
@@ -1542,7 +1791,7 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange=None) -> str:
     
     # Get public IP for whitelist verification
     try:
-        public_ip_response = requests.get("https://api.ipify.org", timeout=5)
+        public_ip_response = requests.get("https://api.ipify.org", timeout=15)
         public_ip = public_ip_response.text if public_ip_response.status_code == 200 else "Unable to detect"
     except:
         public_ip = "Unable to detect"
@@ -1639,12 +1888,13 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange=None) -> str:
         output += _splunk_chartjs_p0_script_json(chart_bundle, "chart_adt_")
 
         all_queries = {}
-        all_queries["servers"] = f'''| tstats dc(host) as server_count where index=streaming_prod earliest=-{timerange_hours}h by _time, host span=1h
+        _p0_idx = splunk_p0_streaming_index()
+        all_queries["servers"] = f'''| tstats dc(host) as server_count where index={_p0_idx} by _time, host span=1h
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
 | timechart span=1h dc(host) as servers by zone
 | fillnull value=0'''
-        all_queries["jvm"] = f'''| search index=streaming_prod earliest=-{timerange_hours}h ("JVM" OR "OutOfMemoryError" OR "crash")
+        all_queries["jvm"] = f'''| search index={_p0_idx} ("JVM" OR "OutOfMemoryError" OR "crash")
 | rex field=host "-(?<zone>z[1-4])-"
 | where isnotnull(zone)
 | timechart span=1h count by zone

@@ -78,6 +78,11 @@
         .sw-meta { font-size: 12px; color: #94a3b8; margin-left: auto; }
         .sw-top .sw-meta { font-size: 16px; }
         .sw-meta.err { color: #fca5a5; }
+        /* While re-fetching APM wall, keep previous tiles visible until each env replaces in place */
+        #sw-root.sw-root--refreshing {
+            opacity: 0.9;
+            transition: opacity 0.2s ease;
+        }
         .sw-nav-hub {
             font-size: 16px;
             font-weight: 700;
@@ -1045,6 +1050,8 @@
         const WALL_REFRESH_MS = 360000; /* 6 min */
         let wallTipGlobalsBound = false;
         let wallLoadGeneration = 0;
+        /** After first successful paint, keep tiles visible until new data replaces them (auto-refresh / manual refresh). */
+        let wallDomEverPainted = false;
 
         /** WebKit: invalid href or URL can throw (\"The string did not match the expected pattern\"). */
         function setSafeAnchorHref(anchor, href) {
@@ -2003,23 +2010,32 @@
             return section;
         }
 
-        function renderWall(data) {
+        function buildWallFragment(data) {
+            const groups = data.groups || [];
+            const monitors = data.monitors || null;
+            const frag = document.createDocumentFragment();
+            for (const g of groups) {
+                frag.appendChild(buildApmGroupSection(g, monitors));
+            }
+            return frag;
+        }
+
+        function mountWallFragment(frag) {
             const root = document.getElementById('sw-root');
             const loading = document.getElementById('sw-loading');
             if (loading) loading.remove();
-
             root.textContent = '';
-            const groups = data.groups || [];
-            const monitors = data.monitors || null;
-            for (const g of groups) {
-                root.appendChild(buildApmGroupSection(g, monitors));
-            }
+            root.appendChild(frag);
             bindWallTipGlobalHandlersOnce();
             swScrollToHashIfAny();
             swInitWallTilePackResize();
             requestAnimationFrame(function () {
                 requestAnimationFrame(swSchedulePackAllWallTileGrids);
             });
+        }
+
+        function renderWall(data) {
+            mountWallFragment(buildWallFragment(data));
         }
 
         const WALL_DATA_URL = {{ (wall_api|default('/api/statusmonitor/wall'))|tojson }};
@@ -2080,13 +2096,25 @@
             return section;
         }
 
-        async function loadWallApmIncremental(timerange, forceRefresh, envList, statusEl, myGen) {
+        async function loadWallApmIncremental(
+            timerange,
+            forceRefresh,
+            envList,
+            statusEl,
+            myGen,
+            retainExistingWidgets
+        ) {
             const root = document.getElementById('sw-root');
             const loading = document.getElementById('sw-loading');
             if (loading) loading.remove();
-            root.textContent = '';
-            for (let i = 0; i < envList.length; i++) {
-                root.appendChild(buildApmPendingPlaceholder(envList[i]));
+            if (!retainExistingWidgets) {
+                root.textContent = '';
+                for (let i = 0; i < envList.length; i++) {
+                    root.appendChild(buildApmPendingPlaceholder(envList[i]));
+                }
+            } else {
+                root.classList.add('sw-root--refreshing');
+                root.dataset.swRefreshGen = String(myGen);
             }
             bindWallTipGlobalHandlersOnce();
 
@@ -2216,6 +2244,14 @@
             );
 
             if (myGen !== wallLoadGeneration) return;
+            if (
+                retainExistingWidgets &&
+                root &&
+                root.dataset.swRefreshGen === String(myGen)
+            ) {
+                root.classList.remove('sw-root--refreshing');
+                delete root.dataset.swRefreshGen;
+            }
             if (doneOk === 0 && failed === total) {
                 statusEl.classList.add('err');
             } else {
@@ -2245,6 +2281,7 @@
         async function loadWall(options) {
             wallLoadGeneration++;
             const myGen = wallLoadGeneration;
+            const retainExistingWidgets = wallDomEverPainted;
             const forceRefresh = options && options.forceRefresh === true;
             const trEl = document.getElementById('sw-timerange');
             const timerange = trEl ? parseInt(trEl.value, 10) : 1;
@@ -2257,7 +2294,7 @@
             }
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
-            statusEl.textContent = 'Loading…';
+            statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
 
             const useIncremental =
                 WALL_INCREMENTAL_APM &&
@@ -2279,20 +2316,27 @@
                         forceRefresh,
                         envList,
                         statusEl,
-                        myGen
+                        myGen,
+                        retainExistingWidgets
                     );
                     if (myGen !== wallLoadGeneration) return;
+                    wallDomEverPainted = true;
                     return;
                 }
 
                 const data = await swPostWallBody(body);
                 if (myGen !== wallLoadGeneration) return;
                 try {
-                    renderWall(data);
+                    if (retainExistingWidgets) {
+                        mountWallFragment(buildWallFragment(data));
+                    } else {
+                        renderWall(data);
+                    }
                 } catch (re) {
                     console.error('Status wall render', re);
                     throw new Error(re && re.message ? re.message : 'Render failed');
                 }
+                wallDomEverPainted = true;
                 const t = new Date().toLocaleTimeString();
                 let line = 'Updated ' + t + ' · range ' + (data.timerange || timerange) + 'h';
                 if (data.source && (data.source.services_in_scope != null)) {
@@ -2307,6 +2351,15 @@
                 statusEl.textContent = line + ' · auto-refresh 6 min';
             } catch (e) {
                 if (myGen !== wallLoadGeneration) return;
+                var rootEl = document.getElementById('sw-root');
+                if (
+                    rootEl &&
+                    retainExistingWidgets &&
+                    rootEl.dataset.swRefreshGen === String(myGen)
+                ) {
+                    rootEl.classList.remove('sw-root--refreshing');
+                    delete rootEl.dataset.swRefreshGen;
+                }
                 statusEl.classList.add('err');
                 var msg = (e && e.message) ? String(e.message) : String(e);
                 if (msg.indexOf('504') >= 0 || /Gateway Time-?out/i.test(msg)) {

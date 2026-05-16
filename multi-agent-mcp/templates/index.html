@@ -49,7 +49,7 @@
                    style="font-size: 10px; color: #64748b; text-decoration: underline;" title="Same calendar source in Confluence">Confluence GRM ↗</a>
                 <button type="button" id="deployments-refresh-btn" onclick="loadUpcomingDeployments(true)" class="refresh-status-btn" title="Refresh deployments (Confluence can be slow)" style="font-size: 14px; margin-left: auto;">🔄</button>
             </div>
-            <p style="margin: 0 0 6px; font-size: 10px; color: var(--text-secondary, #64748b); line-height: 1.3;">Team Calendars API — same GRM source as the wiki. Default: events in the next ~30 days (see <code style="font-size:9px;">.env</code> <code style="font-size:9px;">DEPLOYMENTS_*</code>).</p>
+            <p style="margin: 0 0 6px; font-size: 10px; color: var(--text-secondary, #64748b); line-height: 1.3;">Team Calendars API — same GRM source as the wiki. Default: events in the next ~60 days (see <code style="font-size:9px;">.env</code> <code style="font-size:9px;">DEPLOYMENTS_*</code>).</p>
             <div id="deployments-current" style="display: none; font-size: 12px; padding: 8px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 6px; margin-bottom: 10px; color: white; text-align: center; font-weight: bold;">
                 🔴 LIVE: <span id="current-deployment-name"></span>
             </div>
@@ -83,6 +83,10 @@
             <ul id="status-incidents" style="list-style: none; padding: 0; font-size: 10px;">
                 <li style="padding: 4px; color: #999;">Loading...</li>
             </ul>
+        </div>
+        <div style="margin-top: 14px; padding: 10px; border-radius: 8px; background: var(--bg-secondary, #f1f5f9); font-size: 11px; border: 1px solid #e2e8f0;">
+            <a href="/dev-admin" style="color: #0369a1; font-weight: 600;">Dev admin</a>
+            <span style="color: #94a3b8;"> — git pull / .env</span>
         </div>
         
     </aside>

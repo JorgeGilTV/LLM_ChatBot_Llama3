@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dev admin — OneView</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px 48px; color: #1e293b; }
+        h1 { font-size: 1.25rem; }
+        .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 16px 0; }
+        label { display: block; font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 6px; }
+        input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+        button { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; font-size: 14px; margin-top: 10px; margin-right: 8px; }
+        .btn-git { background: #0f766e; color: #fff; }
+        .btn-env { background: #1d4ed8; color: #fff; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; font-size: 11px; max-height: 320px; white-space: pre-wrap; word-break: break-word; }
+        .warn { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; font-size: 13px; color: #78350f; margin: 12px 0; border-radius: 0 8px 8px 0; }
+        .err { background: #fef2f2; border-left: 4px solid #dc2626; color: #7f1d1d; }
+        .ok { background: #ecfdf5; border-left: 4px solid #059669; color: #065f46; }
+        a { color: #0369a1; }
+        input[type="file"] { margin-top: 8px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <p><a href="/">← Volver al chat</a></p>
+    <h1>Dev admin</h1>
+    <p style="font-size: 14px; color: #64748b;">Actualizar código desde <code>git</code> y sustituir el fichero <code>.env</code> del servidor. Requiere <code>ADMIN_TOKEN</code> en el entorno del proceso.</p>
+
+    {% if not admin_enabled %}
+    <div class="warn err">
+        <strong>Desactivado:</strong> define <code>ADMIN_TOKEN</code> en el <code>.env</code> (o variables del contenedor) y reinicia la app. Sin eso no se ejecutan las acciones.
+    </div>
+    {% endif %}
+
+    <div class="warn">
+        <strong>Docker:</strong> la imagen por defecto <strong>no incluye <code>.git</code></strong> y suele no tener <code>git</code>. Ahí <em>git pull</em> no podrá traer commits hasta que montes el repo con historial o instales git y copies <code>.git</code>. Sube una nueva imagen desde CI o monta el código como volumen.
+    </div>
+
+    <div class="card">
+        <label for="adminToken">Token (<code>X-Admin-Token</code> = valor de <code>ADMIN_TOKEN</code>)</label>
+        <input type="password" id="adminToken" placeholder="Pega el token del servidor" autocomplete="off">
+        <p style="font-size: 11px; color: #94a3b8; margin: 6px 0 0;">Se guarda solo en el navegador (sessionStorage) si pulsas «Recordar en este navegador».</p>
+        <button type="button" onclick="rememberToken()" style="background:#64748b;color:#fff;margin-top:8px;">Recordar en este navegador</button>
+    </div>
+
+    <div class="card">
+        <h2 style="font-size:1rem;margin:0 0 8px;">Update code</h2>
+        <p style="font-size:13px;color:#64748b;margin:0 0 8px;">Ejecuta <code>git fetch</code> y <code>git pull --ff-only</code> en el directorio raíz de la app.</p>
+        <button type="button" class="btn-git" id="btnGit" onclick="doGitUpdate()" {% if not admin_enabled %}disabled{% endif %}>Update code (git pull)</button>
+        <div id="outGit" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
+        <h2 style="font-size:1rem;margin:0 0 8px;">Cargar .env</h2>
+        <p style="font-size:13px;color:#64748b;margin:0 0 8px;">El fichero debe llamarse exactamente <code>.env</code>. Se sobrescribe el <code>.env</code> del servidor y se crea copia <code>.env.bak.&lt;timestamp&gt;</code> si existía.</p>
+        <input type="file" id="envFile" accept=".env,application/octet-stream,text/plain">
+        <button type="button" class="btn-env" id="btnEnv" onclick="doEnvUpload()" {% if not admin_enabled %}disabled{% endif %}>Subir .env</button>
+        <div id="outEnv" style="margin-top:12px;"></div>
+    </div>
+
+    <script>
+        const SK = 'oneviewAdminToken';
+        (function init() {
+            const t = sessionStorage.getItem(SK);
+            if (t) document.getElementById('adminToken').value = t;
+        })();
+        function rememberToken() {
+            const t = document.getElementById('adminToken').value.trim();
+            if (t) sessionStorage.setItem(SK, t);
+            else sessionStorage.removeItem(SK);
+            document.getElementById('outGit').innerHTML = '<div class="ok">Guardado en sessionStorage (solo esta pestaña).</div>';
+        }
+        function tokenHeaders() {
+            const t = document.getElementById('adminToken').value.trim();
+            if (!t) throw new Error('Indica el token de admin.');
+            return { 'X-Admin-Token': t, 'Accept': 'application/json' };
+        }
+        function showPre(el, obj) {
+            el.innerHTML = '<pre>' + JSON.stringify(obj, null, 2) + '</pre>';
+        }
+        async function doGitUpdate() {
+            const el = document.getElementById('outGit');
+            el.textContent = 'Ejecutando…';
+            try {
+                const r = await fetch('/api/admin/git-update', {
+                    method: 'POST',
+                    headers: { ...tokenHeaders(), 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) { el.className = 'err'; showPre(el, { http: r.status, ...data }); return; }
+                el.className = data.success ? 'ok' : 'err';
+                showPre(el, data);
+            } catch (e) {
+                el.className = 'err';
+                el.textContent = String(e);
+            }
+        }
+        async function doEnvUpload() {
+            const el = document.getElementById('outEnv');
+            const f = document.getElementById('envFile').files[0];
+            if (!f) { el.innerHTML = '<div class="err">Selecciona un archivo.</div>'; return; }
+            if (f.name !== '.env') { el.innerHTML = '<div class="err">El nombre del archivo debe ser <code>.env</code> (renómbralo si hace falta).</div>'; return; }
+            el.textContent = 'Subiendo…';
+            const fd = new FormData();
+            fd.append('file', f, '.env');
+            try {
+                const r = await fetch('/api/admin/upload-env', {
+                    method: 'POST',
+                    headers: tokenHeaders(),
+                    body: fd
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) { el.className = 'err'; showPre(el, { http: r.status, ...data }); return; }
+                el.className = data.success ? 'ok' : 'err';
+                showPre(el, data);
+            } catch (e) {
+                el.className = 'err';
+                el.textContent = String(e);
+            }
+        }
+    </script>
+</body>
+</html>

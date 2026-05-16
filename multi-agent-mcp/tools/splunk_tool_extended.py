@@ -66,7 +66,10 @@ def query_splunk(search_query: str, timerange_hours: int, public_ip: str = "Unkn
     }
     
     try:
-        response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
+        from tools.splunk_tool import splunk_ipv4_rest_scope
+
+        with splunk_ipv4_rest_scope():
+            response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(10, 120))
         
         if response.status_code != 200:
             return {

@@ -400,8 +400,8 @@ git clone https://github.com/JorgeGilTV/LLM_ChatBot_Llama3.git
 cd multi-agent-mcp
 
 # 2. Configure environment variables
-cp .env.example .env
-# Edit .env with your credentials (see Configuration section below)
+touch .env
+# Edit .env with your credentials (see DOCKER_DEPLOYMENT.md and Configuration below)
 
 # 3. Start with Docker Compose
 docker-compose up -d
@@ -436,8 +436,8 @@ cd multi-agent-mcp
 pip install -r requirements.txt
 
 # 3. Set environment variables
-cp .env.example .env
-# Edit .env with your credentials
+touch .env
+# Edit .env with your credentials (see DOCKER_DEPLOYMENT.md)
 
 # 4. Start the server
 python3 app.py
@@ -716,8 +716,7 @@ GEMINI_API_KEY=your_gemini_api_key  # For Google Gemini
 
 ### Configuration Files
 
-- **`.env`**: Environment variables (not committed to git)
-- **`.env.example`**: Template for environment variables
+- **`.env`**: Environment variables and secrets (not committed to git; create locally — see `DOCKER_DEPLOYMENT.md`)
 - **`pyproject.toml`**: Python dependencies and project metadata
 - **`requirements.txt`**: Python package requirements
 - **`docker-compose.yml`**: Docker orchestration configuration
@@ -729,7 +728,7 @@ multi-agent-mcp/
 ├── app.py                      # Flask web server and API routes
 ├── pyproject.toml              # Python project configuration
 ├── requirements.txt            # Python dependencies
-├── .env.example               # Environment variables template
+├── .env                       # Local secrets (gitignored; not in repo)
 ├── Dockerfile                 # Docker image definition
 ├── docker-compose.yml         # Docker orchestration
 ├── docker-run.sh             # Docker helper script

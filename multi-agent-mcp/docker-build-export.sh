@@ -101,7 +101,7 @@ echo ""
 
 echo "📚 Para usar la imagen:"
 echo "   1. Cargar: docker load -i ${TAR_FILE}"
-echo "   2. Credenciales NO van dentro de la imagen. Copia .env.example → .env (canal seguro)."
+echo "   2. Credenciales NO van dentro de la imagen. Crea o monta un .env en el host (canal seguro; ver DOCKER_DEPLOYMENT.md)."
 echo "   3. Producción (recomendado): mkdir -p logs data && docker compose -f docker-compose.prod.with-secrets.yml up -d"
 echo "   4. O en una línea: docker run -d -p 8080:8080 --env-file .env ${IMAGE_NAME}:latest"
 echo "   5. Verificar: curl http://localhost:8080/api/health"

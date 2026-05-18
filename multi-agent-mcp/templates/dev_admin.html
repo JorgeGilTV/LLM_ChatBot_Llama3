@@ -14,13 +14,30 @@
         button { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; font-size: 14px; margin-top: 10px; margin-right: 8px; }
         .btn-git { background: #0f766e; color: #fff; }
         .btn-env { background: #1d4ed8; color: #fff; }
+        .btn-secondary { background: #64748b; color: #fff; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; font-size: 11px; max-height: 320px; white-space: pre-wrap; word-break: break-word; }
         .warn { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; font-size: 13px; color: #78350f; margin: 12px 0; border-radius: 0 8px 8px 0; }
         .err { background: #fef2f2; border-left: 4px solid #dc2626; color: #7f1d1d; }
         .ok { background: #ecfdf5; border-left: 4px solid #059669; color: #065f46; }
         a { color: #0369a1; }
-        input[type="file"] { margin-top: 8px; font-size: 13px; }
+        input[type="file"] { margin-top: 8px; font-size: 13px; max-width: 100%; }
+        textarea.env-paste {
+            width: 100%; min-height: 140px; margin-top: 8px; padding: 10px 12px;
+            border: 1px solid #cbd5e1; border-radius: 8px; font-family: ui-monospace, monospace;
+            font-size: 12px; line-height: 1.4; resize: vertical;
+        }
+        .drop-zone {
+            border: 2px dashed #94a3b8; border-radius: 8px; padding: 16px; margin-top: 10px;
+            text-align: center; font-size: 13px; color: #64748b; cursor: pointer;
+            background: #fff;
+        }
+        .drop-zone.dragover { border-color: #1d4ed8; background: #eff6ff; color: #1e40af; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .tab-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; }
+        .tab-btn.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
     </style>
 </head>
 <body>
@@ -42,7 +59,7 @@
         <label for="adminToken">Token (<code>X-Admin-Token</code> = valor de <code>ADMIN_TOKEN</code>)</label>
         <input type="password" id="adminToken" placeholder="Pega el token del servidor" autocomplete="off">
         <p style="font-size: 11px; color: #94a3b8; margin: 6px 0 0;">Se guarda solo en el navegador (sessionStorage) si pulsas «Recordar en este navegador».</p>
-        <button type="button" onclick="rememberToken()" style="background:#64748b;color:#fff;margin-top:8px;">Recordar en este navegador</button>
+        <button type="button" onclick="rememberToken()" class="btn-secondary" style="margin-top:8px;">Recordar en este navegador</button>
     </div>
 
     <div class="card">
@@ -54,9 +71,31 @@
 
     <div class="card">
         <h2 style="font-size:1rem;margin:0 0 8px;">Cargar .env</h2>
-        <p style="font-size:13px;color:#64748b;margin:0 0 8px;">El fichero debe llamarse exactamente <code>.env</code>. Se sobrescribe el <code>.env</code> del servidor y se crea copia <code>.env.bak.&lt;timestamp&gt;</code> si existía.</p>
-        <input type="file" id="envFile" accept=".env,application/octet-stream,text/plain">
-        <button type="button" class="btn-env" id="btnEnv" onclick="doEnvUpload()" {% if not admin_enabled %}disabled{% endif %}>Subir .env</button>
+        <p style="font-size:13px;color:#64748b;margin:0 0 8px;">
+            En macOS el selector de archivos <strong>oculta ficheros que empiezan por punto</strong> (como <code>.env</code>).
+            Usa <strong>pegar contenido</strong> (recomendado), arrastra un fichero, o sube una copia llamada <code>env.txt</code>.
+        </p>
+
+        <div class="tabs">
+            <button type="button" class="tab-btn active" data-tab="paste">Pegar contenido</button>
+            <button type="button" class="tab-btn" data-tab="file">Archivo</button>
+        </div>
+
+        <div id="panel-paste" class="tab-panel active">
+            <label for="envPaste">Contenido del .env (KEY=valor, una línea por variable)</label>
+            <textarea id="envPaste" class="env-paste" placeholder="ATLASSIAN_EMAIL=...&#10;CONFLUENCE_TOKEN=..."></textarea>
+            <button type="button" class="btn-env" onclick="doEnvPaste()" {% if not admin_enabled %}disabled{% endif %}>Guardar .env (pegar)</button>
+        </div>
+
+        <div id="panel-file" class="tab-panel">
+            <p style="font-size:12px;color:#64748b;margin:0 0 6px;">
+                Tip macOS: duplica tu <code>.env</code> como <code>env.txt</code> en el Escritorio, selecciónalo aquí, o en Finder pulsa <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> para ver archivos ocultos.
+            </p>
+            <input type="file" id="envFile">
+            <div class="drop-zone" id="dropZone">Arrastra aquí <code>env.txt</code>, <code>.env</code> o suelta el fichero</div>
+            <button type="button" class="btn-env" id="btnEnv" onclick="doEnvUpload()" {% if not admin_enabled %}disabled{% endif %}>Subir archivo</button>
+        </div>
+
         <div id="outEnv" style="margin-top:12px;"></div>
     </div>
 
@@ -65,6 +104,38 @@
         (function init() {
             const t = sessionStorage.getItem(SK);
             if (t) document.getElementById('adminToken').value = t;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                    btn.classList.add('active');
+                    const id = 'panel-' + btn.dataset.tab;
+                    const panel = document.getElementById(id);
+                    if (panel) panel.classList.add('active');
+                });
+            });
+            const dz = document.getElementById('dropZone');
+            const fi = document.getElementById('envFile');
+            if (dz && fi) {
+                dz.addEventListener('click', () => fi.click());
+                ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => {
+                    e.preventDefault(); dz.classList.add('dragover');
+                }));
+                ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => {
+                    e.preventDefault(); dz.classList.remove('dragover');
+                }));
+                dz.addEventListener('drop', e => {
+                    const files = e.dataTransfer && e.dataTransfer.files;
+                    if (files && files.length) {
+                        fi.files = files;
+                        dz.textContent = 'Seleccionado: ' + files[0].name;
+                    }
+                });
+                fi.addEventListener('change', () => {
+                    const f = fi.files[0];
+                    if (f) dz.textContent = 'Seleccionado: ' + f.name;
+                });
+            }
         })();
         function rememberToken() {
             const t = document.getElementById('adminToken').value.trim();
@@ -72,10 +143,12 @@
             else sessionStorage.removeItem(SK);
             document.getElementById('outGit').innerHTML = '<div class="ok">Guardado en sessionStorage (solo esta pestaña).</div>';
         }
-        function tokenHeaders() {
+        function tokenHeaders(json) {
             const t = document.getElementById('adminToken').value.trim();
             if (!t) throw new Error('Indica el token de admin.');
-            return { 'X-Admin-Token': t, 'Accept': 'application/json' };
+            const h = { 'X-Admin-Token': t, 'Accept': 'application/json' };
+            if (json) h['Content-Type'] = 'application/json';
+            return h;
         }
         function showPre(el, obj) {
             el.innerHTML = '<pre>' + JSON.stringify(obj, null, 2) + '</pre>';
@@ -86,8 +159,34 @@
             try {
                 const r = await fetch('/api/admin/git-update', {
                     method: 'POST',
-                    headers: { ...tokenHeaders(), 'Content-Type': 'application/json' },
+                    headers: { ...tokenHeaders(true), 'Content-Type': 'application/json' },
                     body: '{}'
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) { el.className = 'err'; showPre(el, { http: r.status, ...data }); return; }
+                el.className = data.success ? 'ok' : 'err';
+                showPre(el, data);
+            } catch (e) {
+                el.className = 'err';
+                el.textContent = String(e);
+            }
+        }
+        function envNameOk(name) {
+            if (!name) return false;
+            const n = name.toLowerCase();
+            const allowed = ['.env', 'env', 'env.txt', 'dotenv.txt', '.env.local', '.env.production'];
+            return allowed.includes(n) || n.endsWith('.env') || n.endsWith('.env.txt');
+        }
+        async function doEnvPaste() {
+            const el = document.getElementById('outEnv');
+            const text = document.getElementById('envPaste').value;
+            if (!text.trim()) { el.innerHTML = '<div class="err">Pega el contenido del .env.</div>'; return; }
+            el.textContent = 'Guardando…';
+            try {
+                const r = await fetch('/api/admin/upload-env', {
+                    method: 'POST',
+                    headers: tokenHeaders(true),
+                    body: JSON.stringify({ content: text })
                 });
                 const data = await r.json().catch(() => ({}));
                 if (!r.ok) { el.className = 'err'; showPre(el, { http: r.status, ...data }); return; }
@@ -101,15 +200,18 @@
         async function doEnvUpload() {
             const el = document.getElementById('outEnv');
             const f = document.getElementById('envFile').files[0];
-            if (!f) { el.innerHTML = '<div class="err">Selecciona un archivo.</div>'; return; }
-            if (f.name !== '.env') { el.innerHTML = '<div class="err">El nombre del archivo debe ser <code>.env</code> (renómbralo si hace falta).</div>'; return; }
+            if (!f) { el.innerHTML = '<div class="err">Selecciona o arrastra un archivo.</div>'; return; }
+            if (!envNameOk(f.name)) {
+                el.innerHTML = '<div class="err">Nombre no válido: <code>' + f.name + '</code>. Renómbralo a <code>env.txt</code> o usa la pestaña «Pegar contenido».</div>';
+                return;
+            }
             el.textContent = 'Subiendo…';
             const fd = new FormData();
-            fd.append('file', f, '.env');
+            fd.append('file', f, f.name);
             try {
                 const r = await fetch('/api/admin/upload-env', {
                     method: 'POST',
-                    headers: tokenHeaders(),
+                    headers: tokenHeaders(false),
                     body: fd
                 });
                 const data = await r.json().catch(() => ({}));

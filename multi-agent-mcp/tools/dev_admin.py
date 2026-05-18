@@ -103,22 +103,21 @@ def git_update_status_and_pull(root: Path | None = None) -> dict[str, Any]:
     return out
 
 
-def save_uploaded_dotenv(file_storage, root: Path | None = None) -> dict[str, Any]:
-    """Guarda el cuerpo subido como ``<root>/.env``. ``file_storage`` es un FileStorage de Werkzeug."""
-    root = root or app_root()
-    if file_storage is None or not getattr(file_storage, "filename", None):
-        return {"success": False, "error": "Falta el archivo (campo de formulario `file`)."}
-    name = os.path.basename(str(file_storage.filename))
-    if name != ".env":
-        return {"success": False, "error": "El nombre del archivo debe ser exactamente `.env`."}
-    raw = file_storage.read(MAX_ENV_UPLOAD_BYTES + 1)
-    if len(raw) > MAX_ENV_UPLOAD_BYTES:
-        return {"success": False, "error": f"El archivo supera {MAX_ENV_UPLOAD_BYTES} bytes."}
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return {"success": False, "error": "El archivo debe ser UTF-8 válido."}
+def _env_upload_name_ok(name: str) -> bool:
+    """macOS/Finder often hides dotfiles; accept env.txt, env, *.env, etc."""
+    _allowed = {".env", "env", ".env.local", ".env.production", "env.txt", "dotenv.txt"}
+    _lower = name.lower()
+    return (
+        _lower in _allowed
+        or _lower.endswith(".env")
+        or _lower.endswith(".env.txt")
+    )
 
+
+def _write_dotenv_text(text: str, root: Path, uploaded_as: str) -> dict[str, Any]:
+    raw = text.encode("utf-8")
+    if len(raw) > MAX_ENV_UPLOAD_BYTES:
+        return {"success": False, "error": f"El contenido supera {MAX_ENV_UPLOAD_BYTES} bytes."}
     dest = root / ".env"
     backup = root / f".env.bak.{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
     if dest.is_file():
@@ -126,15 +125,48 @@ def save_uploaded_dotenv(file_storage, root: Path | None = None) -> dict[str, An
             shutil.copy2(dest, backup)
         except OSError:
             backup = None
-
     dest.write_text(text, encoding="utf-8")
     lines = text.count("\n") + (1 if text and not text.endswith("\n") else 0)
     return {
         "success": True,
         "path": str(dest),
-        "bytes": len(raw.encode("utf-8")),
+        "uploaded_as": uploaded_as,
+        "bytes": len(raw),
         "lines": lines,
         "backup": str(backup) if backup else None,
         "restart_required": True,
         "hint": "Reinicia el proceso (o el contenedor) para que la app vuelva a leer todas las variables.",
     }
+
+
+def save_dotenv_text_content(text: str, root: Path | None = None) -> dict[str, Any]:
+    """Guarda texto pegado como ``<root>/.env``."""
+    root = root or app_root()
+    if text is None or not str(text).strip():
+        return {"success": False, "error": "El contenido está vacío."}
+    return _write_dotenv_text(str(text), root, "paste")
+
+
+def save_uploaded_dotenv(file_storage, root: Path | None = None) -> dict[str, Any]:
+    """Guarda el cuerpo subido como ``<root>/.env``. ``file_storage`` es un FileStorage de Werkzeug."""
+    root = root or app_root()
+    if file_storage is None or not getattr(file_storage, "filename", None):
+        return {"success": False, "error": "Falta el archivo (campo de formulario `file`)."}
+    name = os.path.basename(str(file_storage.filename or "").strip())
+    if not name or name in (".", ".."):
+        return {"success": False, "error": "Nombre de archivo no válido."}
+    if not _env_upload_name_ok(name):
+        return {
+            "success": False,
+            "error": (
+                "Nombre no reconocido. Usa .env, env, env.txt o pega el contenido en la caja de texto."
+            ),
+        }
+    raw = file_storage.read(MAX_ENV_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_ENV_UPLOAD_BYTES:
+        return {"success": False, "error": f"El archivo supera {MAX_ENV_UPLOAD_BYTES} bytes."}
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return {"success": False, "error": "El archivo debe ser UTF-8 válido."}
+    return _write_dotenv_text(text, root, name)

@@ -937,7 +937,13 @@ def api_admin_upload_env():
         return jsonify({'success': False, 'error': msg}), code
     try:
         f = request.files.get('file')
-        out = dev_admin_mod.save_uploaded_dotenv(f)
+        if f and f.filename:
+            out = dev_admin_mod.save_uploaded_dotenv(f)
+        elif request.is_json:
+            body = request.get_json(silent=True) or {}
+            out = dev_admin_mod.save_dotenv_text_content(body.get('content'))
+        else:
+            out = {'success': False, 'error': 'Envía un archivo (campo file) o JSON {"content": "..."}.'}
         status = 200 if out.get('success') else 400
         return jsonify(out), status
     except Exception as e:

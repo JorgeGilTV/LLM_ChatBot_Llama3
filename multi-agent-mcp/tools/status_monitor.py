@@ -243,17 +243,21 @@ def _sm_merge_status_with_dd_alerts(current: str, alert_name_count: int) -> str:
     return _sm_status_from_rank(max(_sm_rank_for_status(current), r_dd))
 
 
+def _sm_dd_open_alert_counts(svc: dict) -> tuple[int, int, int]:
+    """(non -a/-b alerts, -a/-b alerts, total open) for pills and tooltips."""
+    n_c = int(svc.get("dd_monitor_alert_count") or 0) or len(svc.get("dd_monitor_alerts") or [])
+    n_s = int(svc.get("dd_monitor_alert_suffix_count") or 0) or len(
+        svc.get("dd_monitor_alerts_suffix_ab") or []
+    )
+    return n_c, n_s, n_c + n_s
+
+
 def _sm_bump_min_warning_for_dd_suffix_alerts(current: str, suffix_alert_count: int) -> str:
     """
-    -a / -b tier monitors are not promoted to critical red, but should show as warning (yellow)
-    when they are the only Datadog alert signal.
+    -a / -b tier monitors do not change tile color (stay green when APM is healthy).
+    Open counts are still shown on the DD pill.
     """
-    n = int(suffix_alert_count or 0)
-    if n <= 0:
-        return current
-    if _sm_rank_for_status(current) >= 2:
-        return current
-    return "warning"
+    return current
 
 
 def _sm_dd_monitor_alerts_enabled() -> bool:
@@ -292,8 +296,7 @@ def _sm_hover_service_payload(svc: dict, env: str, page_environment: str | None 
     if not isinstance(dda_suf, list):
         dda_suf = []
     dda_suf = dda_suf[:32]
-    dd_n = int(svc.get("dd_monitor_alert_count") or len(dda) or 0)
-    dd_n_suf = int(svc.get("dd_monitor_alert_suffix_count") or len(dda_suf) or 0)
+    dd_n, dd_n_suf, dd_n_open = _sm_dd_open_alert_counts(svc)
     ddm = (svc.get("dd_monitors_url") or "").strip()
     if not ddm and svc.get("service") and env:
         ddm = _dd_monitors_manage_url(
@@ -328,6 +331,7 @@ def _sm_hover_service_payload(svc: dict, env: str, page_environment: str | None 
         "dd_monitor_alert_count": dd_n,
         "dd_monitor_alerts_suffix_ab": dda_suf,
         "dd_monitor_alert_suffix_count": dd_n_suf,
+        "dd_monitor_open_count": dd_n_open,
         "dd_monitors_url": ddm,
         "dd_monitors_url_all_alerts": ddm_all,
     }
@@ -423,6 +427,110 @@ def _wall_apm_header_badges_reuse_pd(pd_counts: dict, pd_api_key: str | None) ->
         "pagerduty": pd_badge,
         "splunk": omitted,
     }
+
+
+_ADT_SPLUNK_DASHBOARD_URL = (
+    "https://arlo.splunkcloud.com/en-US/app/search/p0_streaming_dashboard_pp"
+)
+
+
+def _wall_adt_splunk_badge(timerange: int, force_refresh: bool) -> dict:
+    """
+    Splunk pill for ADT Status Wall: P0 ADT outlier summary + in-page embed panel.
+    """
+    base = {
+        "label": "SPL",
+        "href": _ADT_SPLUNK_DASHBOARD_URL,
+        "embed_url": "/embed/splunk-p0-adt",
+        "panel_toggle": True,
+        "p0_id": "p0_adt",
+    }
+    if not (os.getenv("SPLUNK_TOKEN") or "").strip():
+        return {
+            **base,
+            "status": "unknown",
+            "short": "—",
+            "detail": "SPLUNK_TOKEN not set",
+        }
+    try:
+        from tools.splunk_tool import splunk_outliers_monitor_payload
+
+        spl = splunk_outliers_monitor_payload(timerange)
+        if not spl.get("success"):
+            err = spl.get("error") or "unavailable"
+            return {**base, "status": "unknown", "short": "—", "detail": err}
+        adt_tool = None
+        for t in spl.get("tools") or []:
+            if (t or {}).get("id") == "p0_adt":
+                adt_tool = t
+                break
+        tot = int((adt_tool or {}).get("total_outliers") or 0)
+        th = int(spl.get("timerange_hours") or timerange or 0)
+        if tot > 0:
+            return {
+                **base,
+                "status": "warning",
+                "short": f"{tot} out",
+                "detail": (
+                    f"P0 ADT global (zones z1–z4, not the selected tile): {tot} Splunk predict "
+                    f"outlier(s) in the last {th}h. Yellow = outliers detected; not the same as a "
+                    f"red/yellow Datadog tile. Click to open the full P0 ADT dashboard."
+                ),
+            }
+        return {
+            **base,
+            "status": "ok",
+            "short": "OK",
+            "detail": (
+                f"P0 ADT global (zones z1–z4): no Splunk predict outliers in the last {th}h. "
+                f"Click to open the full P0 ADT dashboard (not filtered to one service unless you "
+                f"filter inside Splunk)."
+            ),
+        }
+    except Exception as e:
+        return {
+            **base,
+            "status": "unknown",
+            "short": "—",
+            "detail": str(e)[:200],
+        }
+
+
+def _wall_apm_monitors_for_dd_env(
+    dd_env: str,
+    pd_counts: dict | None,
+    pd_api_key: str | None,
+    timerange: int,
+    force_refresh: bool,
+) -> dict:
+    """PagerDuty + Splunk pills for APM wall; ADT env always gets Splunk embed badge."""
+    if pd_api_key and pd_counts is not None:
+        pd_badge = _wall_pd_badge(pd_counts)
+    elif pd_api_key:
+        try:
+            counts, _ = get_pagerduty_status_counts(pd_api_key, force_refresh)
+            pd_badge = _wall_pd_badge(counts)
+        except Exception as e:
+            pd_badge = {
+                "label": "PD",
+                "status": "unknown",
+                "short": "—",
+                "detail": str(e)[:200],
+            }
+    else:
+        pd_badge = {
+            "label": "PD",
+            "status": "unknown",
+            "short": "—",
+            "detail": "PAGERDUTY_API_TOKEN not set",
+        }
+    if dd_env == "adt_prod":
+        spl_badge = _wall_adt_splunk_badge(timerange, force_refresh)
+    elif _apm_status_wall_header_light():
+        spl_badge = _wall_apm_header_badges_reuse_pd(pd_counts or {}, pd_api_key)["splunk"]
+    else:
+        spl_badge = _wall_fetch_monitor_badges(timerange, force_refresh)["splunk"]
+    return {"pagerduty": pd_badge, "splunk": spl_badge}
 
 
 def _dd_health_worker_count(num_tasks: int) -> int:
@@ -869,7 +977,7 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
       allow_error_override: bool | None — None = no matches / no usable states (keep APM);
         True = all non-problem; False = any Alert/Warn
       alert_names: list[str] — Alert monitors excluding -a/-b suffix (drive red/critical merge).
-      alert_names_suffix_ab: list[str] — Alert monitors with -a/-b suffix (yellow/warning only).
+      alert_names_suffix_ab: list[str] — Alert monitors with -a/-b suffix (do not change tile color; counted on DD pill).
     """
     import requests
 
@@ -1279,6 +1387,7 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
             'dd_monitor_alert_count': len(alert_names),
             'dd_monitor_alerts_suffix_ab': suffix_alert_names,
             'dd_monitor_alert_suffix_count': len(suffix_alert_names),
+            'dd_monitor_open_count': len(alert_names) + len(suffix_alert_names),
             'dd_monitors_url': dd_m_url or None,
             'dd_monitors_url_all_alerts': dd_m_url_all or None,
         }
@@ -1548,7 +1657,21 @@ def build_pagerduty_monitor_api_payload(
             recently_resolved = res
         else:
             active = (tr + ack)[:10]
-            recently_resolved = res[:10]
+            _home_res_n = 3
+            try:
+                _home_res_n = max(
+                    1,
+                    min(
+                        10,
+                        int(
+                            (os.getenv("PAGERDUTY_HOME_RESOLVED_LIST_LIMIT") or "3").strip()
+                            or "3"
+                        ),
+                    ),
+                )
+            except ValueError:
+                _home_res_n = 3
+            recently_resolved = res[:_home_res_n]
         payload = {
             "triggered": int(counts.get("triggered") or 0),
             "acknowledged": int(counts.get("acknowledged") or 0),
@@ -2734,6 +2857,7 @@ def _hub_collect_statuses_by_mode(
 def _wall_status_reason_plain(s: dict) -> str:
     """Plain-text alert context for status wall tooltip (same signals as command center reasons)."""
     parts = []
+    st = s.get("status")
     n_dd = int(s.get("dd_monitor_alert_count") or 0) or len(s.get("dd_monitor_alerts") or [])
     n_suf = int(s.get("dd_monitor_alert_suffix_count") or 0) or len(
         s.get("dd_monitor_alerts_suffix_ab") or []
@@ -2741,7 +2865,10 @@ def _wall_status_reason_plain(s: dict) -> str:
     if n_dd >= 1:
         parts.append(f"{n_dd} DD")
     if n_suf >= 1 and n_dd == 0:
-        parts.append(f"{n_suf} DD")
+        if st == "healthy":
+            parts.append(f"{n_suf} DD open (-a/-b, tile stays green)")
+        else:
+            parts.append(f"{n_suf} DD")
     elif n_suf >= 1 and n_dd >= 1:
         parts.append(f"+{n_suf} DD")
     if s.get("pd_incident"):
@@ -2751,7 +2878,6 @@ def _wall_status_reason_plain(s: dict) -> str:
     if s.get("high_latency"):
         parts.append("High latency (APM)")
     er = float(s.get("error_rate") or 0)
-    st = s.get("status")
     if st == "critical" and er > 5:
         parts.append("Error rate >5%")
     elif st == "warning" and er > 1:
@@ -2980,6 +3106,11 @@ def _wall_serialize_status(
         "dd_monitor_alerts_suffix_ab": list(s.get("dd_monitor_alerts_suffix_ab") or [])[:32],
         "dd_monitor_alert_suffix_count": int(s.get("dd_monitor_alert_suffix_count") or 0)
         or len(s.get("dd_monitor_alerts_suffix_ab") or []),
+        "dd_monitor_open_count": int(s.get("dd_monitor_open_count") or 0)
+        or (
+            int(s.get("dd_monitor_alert_count") or 0)
+            + int(s.get("dd_monitor_alert_suffix_count") or 0)
+        ),
         "dd_monitors_url": ddm,
         "dd_monitors_url_all_alerts": ddm_all,
         "status_reason": _wall_status_reason_plain(s),
@@ -3001,7 +3132,7 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
     unknown are omitted so the screen stays focused on live APM signal + issues.
     """
     global _wall_data_cache
-    cache_version = "wall_v21_dd_suffix_warning"
+    cache_version = "wall_v22_dd_ab_green_pill"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_wall_data_cache, cache_key, force_refresh)
     if hit is not None:
@@ -3712,14 +3843,22 @@ def _software_catalog_wall_payload_for_single_env(
         },
     ]
     region_columns = _wall_filter_nonempty_region_columns(region_columns)
-    if _apm_status_wall_header_light():
-        monitors = _wall_apm_header_badges_reuse_pd(_pd_c, pd_api_key)
-    else:
-        monitors = _wall_fetch_monitor_badges(timerange, force_refresh)
+    monitors = _wall_apm_monitors_for_dd_env(dde, _pd_c, pd_api_key, timerange, force_refresh)
     _wall_label = _apm_wall_group_label(dde)
     _wall_slug = (
         f"software-catalog-{dde}" if dde != "production" else "software-catalog-production"
     )
+    eng_sections: list = []
+    try:
+        from tools.apm_engineering_groups import (
+            apm_engineering_groups_enabled,
+            build_engineering_sections,
+        )
+
+        if apm_engineering_groups_enabled():
+            eng_sections = build_engineering_sections(ser)
+    except Exception as e:
+        print(f"⚠️ Engineering group layout skipped: {e}")
     return {
         "success": True,
         "timerange": timerange,
@@ -3752,6 +3891,7 @@ def _software_catalog_wall_payload_for_single_env(
                 },
                 "services": ser,
                 "region_columns": region_columns,
+                "engineering_sections": eng_sections,
             }
         ],
     }
@@ -3951,7 +4091,7 @@ def status_monitor_software_catalog_wall_data(
     """
     global _software_catalog_wall_cache
     dde = normalize_software_catalog_wall_dd_env(dd_env)
-    cache_version = "sc_wall_v20_main_no_qa"
+    cache_version = "sc_wall_v22_engineering_groups"
     apm_bucket = _apm_status_wall_cache_bucket_secs()
     cache_key = f"{cache_version}_{dde}_{timerange}_{int(time.time() // apm_bucket)}"
     hit = _read_sm_mem_cache(_software_catalog_wall_cache, cache_key, force_refresh)
@@ -3983,7 +4123,7 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
     (Summary panel), for the same timerange — not aggregate-only queries.
     """
     global _hub_summary_cache
-    cache_version = "hub_v17_dd_suffix_warning"
+    cache_version = "hub_v20_all_env_cards"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_hub_summary_cache, cache_key, force_refresh)
     if hit is not None:

@@ -232,6 +232,7 @@ def _monitoring_tool_input_from_analysis(user_query: str, analysis: dict) -> str
 flask_app = Flask(__name__, template_folder='templates')
 CORS(flask_app)
 
+
 # Unified message: Docker image omits .env (.dockerignore); inject vars or mount .env on the host.
 _SLACK_WEBHOOK_MISSING_MSG = (
     "SLACK_WEBHOOK_URL is not set. "
@@ -318,7 +319,7 @@ def identify_cause(text):
 
 @flask_app.route('/')
 def index():
-    return send_from_directory('templates', 'index.html')
+    return render_template('index.html')
 
 @flask_app.route('/api/history')
 def api_history():
@@ -372,6 +373,24 @@ def statusmonitor_adt_page():
 def statusmonitor_redmetrics_us_page():
     """Serve the status monitor dashboard page for RED Metrics US services"""
     return render_template('statusmonitor.html', environment='redmetrics-us')
+
+
+@flask_app.route("/embed/splunk-p0-adt")
+def embed_splunk_p0_adt():
+    """P0 ADT Streaming charts (Splunk REST) for ADT Status Wall in-page panel."""
+    from tools.splunk_tool import read_splunk_p0_adt_dashboard
+
+    tr = request.args.get("timerange", type=int)
+    service = (request.args.get("service") or request.args.get("host") or "").strip()
+    body = read_splunk_p0_adt_dashboard(service, timerange=tr)
+    return (
+        "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        "<title>Splunk P0 ADT</title>"
+        "<style>body{margin:0;padding:12px 14px 24px;background:#0b0c12;color:#e2e8f0;"
+        "font-family:system-ui,sans-serif;} a{color:#7dd3fc;}</style></head><body>"
+        f"{body}</body></html>"
+    )
 
 
 @flask_app.route("/embed/splunk-samsung-latencies")
@@ -455,18 +474,6 @@ def api_aws_cloudtrail_analyze_upload():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@flask_app.route('/statuswall')
-def statuswall_page():
-    """Full-screen wall: all environments as status tiles only (no hub chrome)."""
-    return render_template('statuswall.html')
-
-
-@flask_app.route('/statuswall/preview')
-def statuswall_preview_page():
-    """Static mock of the status wall layout (no Datadog/PagerDuty)."""
-    return render_template('statuswall_preview.html')
-
-
 @flask_app.route('/apm-services')
 def apm_services_page():
     """
@@ -513,26 +520,28 @@ def apm_services_page():
                 qm = "?" if "?" not in datadog_software_href else "&"
                 datadog_software_href = f"{datadog_software_href}{qm}fromUser=true"
     if wall_dd_env == "golden":
-        _slack = "APM Status Wall — Golden (goldendev + goldenqa)"
+        _slack = "Status Wall — Golden (goldendev + goldenqa)"
     elif wall_dd_env == "all":
-        _slack = "APM Status Wall — all envs"
+        _slack = "Status Wall — all envs"
     elif wall_dd_env != "production":
-        _slack = f"APM Status Wall — {wall_dd_env}"
+        _slack = f"Status Wall — {wall_dd_env}"
     else:
-        _slack = "APM Status Wall — production"
+        _slack = "Status Wall — production"
     wall_apm_tab = "golden" if wall_dd_env == "golden" else "main"
     wall_apm_env_labels = {
         e: _apm_wall_group_label(e)
         for e in tuple(SOFTWARE_CATALOG_WALL_APM_ENVS)
         + tuple(SOFTWARE_CATALOG_WALL_GOLDEN_ENVS)
     }
+    _wall_title = "Status Wall"
     return render_template(
         "statuswall.html",
-        wall_title="APM Status Wall",
+        wall_title=_wall_title,
         wall_api="/api/statusmonitor/software-catalog-wall",
         wall_nav="apm_wall",
         wall_slack_title=_slack,
         wall_show_apm_env=True,
+        wall_adt_splunk_embed=(wall_dd_env == "adt_prod"),
         wall_dd_env=wall_dd_env,
         wall_apm_tab=wall_apm_tab,
         datadog_software_href=datadog_software_href,

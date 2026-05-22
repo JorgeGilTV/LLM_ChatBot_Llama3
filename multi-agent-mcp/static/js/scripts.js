@@ -950,10 +950,154 @@ function newChat() {
     console.log('✅ New chat started - all fields cleared');
 }
 
-/** Home page environment strip — same API as /statusmonitor hub */
+/** Home page environment strip — same API and card layout as /statusmonitor hub */
 const HOME_ENV_HUB_TIMERANGE = 1;
 const HOME_ENV_HUB_REFRESH_MS = 360000; // 6 minutes
 const HUB_SUMMARY_CACHE_TTL_MS = 350000; // slightly under 6 min home refresh
+/** Home index only: which hub cards to show (order preserved). */
+const HOME_ENV_HUB_SLUGS = ['production', 'samsung', 'adt'];
+
+function filterHomeEnvironmentHubEnvironments(envs) {
+    const order = HOME_ENV_HUB_SLUGS;
+    const bySlug = {};
+    (envs || []).forEach(e => {
+        const s = String((e && e.slug) || '').trim().toLowerCase();
+        if (s) bySlug[s] = e;
+    });
+    return order.map(s => bySlug[s]).filter(Boolean);
+}
+
+function escEnvHubText(t) {
+    if (t == null) return '';
+    const d = document.createElement('div');
+    d.textContent = String(t);
+    return d.innerHTML;
+}
+
+/** Same card markup as statusmonitor.html applyHubSummaryData */
+function buildEnvHubCardHtml(e) {
+    const cls =
+        e.overall === 'critical'
+            ? 'sm-hub-card--critical'
+            : e.overall === 'warning'
+              ? 'sm-hub-card--warning'
+              : 'sm-hub-card--healthy';
+    const ov = e.overall || 'healthy';
+    const gOn = ov === 'healthy' ? ' is-on' : '';
+    const yOn = ov === 'warning' ? ' is-on' : '';
+    const rOn = ov === 'critical' ? ' is-on' : '';
+    const ddt = e.dd_monitor_alerts_total != null ? Number(e.dd_monitor_alerts_total) : 0;
+    const dds = e.dd_monitor_alerts_services != null ? Number(e.dd_monitor_alerts_services) : 0;
+    const ddtSafe = Number.isFinite(ddt) ? ddt : 0;
+    const ddsSafe = Number.isFinite(dds) ? dds : 0;
+    const metaS =
+        ddsSafe > 0
+            ? '<span class="sm-hub-dd-rollup__meta">' +
+              ddsSafe +
+              ' ' +
+              (ddsSafe === 1 ? 'service' : 'services') +
+              '</span>'
+            : '';
+    const ambRow =
+        '<div class="sm-hub-ambrow">' +
+        '<div class="sm-hub-sema" role="img" aria-label="Environment status: ' +
+        escEnvHubText(ov) +
+        '">' +
+        '<span class="sm-hub-sd sm-hub-sd--g' +
+        gOn +
+        '"></span>' +
+        '<span class="sm-hub-sd sm-hub-sd--y' +
+        yOn +
+        '"></span>' +
+        '<span class="sm-hub-sd sm-hub-sd--r' +
+        rOn +
+        '"></span></div>' +
+        '<div class="sm-hub-dd-rollup" title="Datadog monitors in Alert (sum of service+env; same as status tiles)">' +
+        '<span class="sm-hub-dd-rollup__n">' +
+        ddtSafe +
+        '</span>' +
+        '<span class="sm-hub-dd-rollup__lbl">monitors in Alert</span>' +
+        metaS +
+        '</div></div>';
+    let br = '';
+    if (e.service_breakdown && e.service_breakdown.length) {
+        br =
+            '<div class="sm-hub-svc-breakdown">' +
+            e.service_breakdown
+                .map(function (r) {
+                    const stCls = String(r.status || 'unknown').replace(/[^a-z0-9_-]/gi, '');
+                    return (
+                        '<div class="sm-hub-svc-line sm-hub-svc--' +
+                        stCls +
+                        '">' +
+                        '<span class="sm-hub-svc-n">' +
+                        escEnvHubText(r.service) +
+                        '</span>' +
+                        '<span class="sm-hub-svc-st">' +
+                        escEnvHubText(r.status) +
+                        '</span></div>'
+                    );
+                })
+                .join('') +
+            '</div>';
+    }
+    const hubHref = sanitizeHttpHrefForDom(e.href) || '#';
+    const op =
+        e.operational != null
+            ? e.operational
+            : (Number(e.healthy || 0) + Number(e.warning || 0) + Number(e.critical || 0));
+    const cfg = e.configured != null ? e.configured : e.monitored;
+    const cardHtml =
+        '<a class="sm-hub-card ' +
+        cls +
+        '" href="' +
+        escEnvHubText(hubHref) +
+        '" target="_blank" rel="noopener">' +
+        '<div class="sm-hub-card-title">' +
+        escEnvHubText(e.label || e.slug || '—') +
+        '</div>' +
+        ambRow +
+        '<div class="sm-hub-stats">' +
+        '<span>Healthy</span><span class="sm-hub-stat-val">' +
+        (e.healthy != null ? e.healthy : 0) +
+        '</span>' +
+        '<span>Warning</span><span class="sm-hub-stat-val">' +
+        (e.warning != null ? e.warning : 0) +
+        '</span>' +
+        '<span>Critical</span><span class="sm-hub-stat-val">' +
+        (e.critical != null ? e.critical : 0) +
+        '</span>' +
+        '<span>Inactive</span><span class="sm-hub-stat-val">' +
+        (e.inactive != null ? e.inactive : 0) +
+        '</span>' +
+        '<span>Unknown</span><span class="sm-hub-stat-val">' +
+        (e.unknown != null ? e.unknown : 0) +
+        '</span>' +
+        '<span>Operational</span><span class="sm-hub-stat-val">' +
+        op +
+        '</span>' +
+        '<span>Configured</span><span class="sm-hub-stat-val">' +
+        (cfg != null ? cfg : 0) +
+        '</span>' +
+        '</div>' +
+        br +
+        '</a>';
+    let reasonHtml = '';
+    const lines = e.status_reason_lines;
+    if ((e.overall === 'warning' || e.overall === 'critical') && lines && lines.length) {
+        const rcls =
+            e.overall === 'critical' ? 'sm-hub-tile-reason--critical' : 'sm-hub-tile-reason--warning';
+        reasonHtml =
+            '<div class="sm-hub-tile-reason ' +
+            rcls +
+            '" role="note"><ul>' +
+            lines.map(function (line) {
+                return '<li>' + escEnvHubText(line) + '</li>';
+            }).join('') +
+            '</ul></div>';
+    }
+    return '<div class="sm-hub-cell">' + cardHtml + reasonHtml + '</div>';
+}
 
 function renderHomeEnvironmentHubFromPayload(data, grid, meta, fromSessionCache) {
     if (data.success === false || (data.error && !data.environments)) {
@@ -965,95 +1109,8 @@ function renderHomeEnvironmentHubFromPayload(data, grid, meta, fromSessionCache)
         grid.appendChild(errEl);
         return;
     }
-    const envs = data.environments || [];
-    grid.innerHTML = '';
-    envs.forEach(e => {
-                const cls =
-                    e.overall === 'critical'
-                        ? 'env-hub-tile--critical'
-                        : e.overall === 'warning'
-                          ? 'env-hub-tile--warning'
-                          : 'env-hub-tile--healthy';
-                const cell = document.createElement('div');
-                cell.className = 'env-hub-cell';
-                const a = document.createElement('a');
-                a.className = 'env-hub-tile ' + cls;
-                a.href = sanitizeHttpHrefForDom(e.href) || '#';
-                a.target = '_blank';
-                a.rel = 'noopener';
-                const title = document.createElement('div');
-                title.className = 'env-hub-tile-title';
-                title.textContent = e.label || e.slug || '—';
-                const stats = document.createElement('div');
-                stats.className = 'env-hub-tile-stats';
-                [
-                    ['Healthy', e.healthy],
-                    ['Warning', e.warning],
-                    ['Critical', e.critical],
-                    ['Inactive', e.inactive],
-                    ['Unknown', e.unknown],
-                    // Operational = healthy+warn+crit (same as drill-down "Total listed" / op band)
-                    [
-                        'Operational',
-                        e.operational != null
-                            ? e.operational
-                            : (Number(e.healthy || 0) + Number(e.warning || 0) + Number(e.critical || 0))
-                    ],
-                    ['Configured', e.configured != null ? e.configured : e.monitored]
-                ].forEach(([k, v]) => {
-                    const l = document.createElement('span');
-                    l.textContent = k;
-                    const n = document.createElement('span');
-                    n.textContent = v != null ? String(v) : '0';
-                    stats.appendChild(l);
-                    stats.appendChild(n);
-                });
-                a.appendChild(title);
-                a.appendChild(stats);
-                if (e.service_breakdown && e.service_breakdown.length > 0) {
-                    const br = document.createElement('div');
-                    br.className = 'env-hub-tile-breakdown';
-                    br.setAttribute('aria-label', 'Per-service hub status');
-                    e.service_breakdown.forEach(row => {
-                        const line = document.createElement('div');
-                        line.className =
-                            'env-hub-tile-svc env-hub-tile-svc--' +
-                            String(row.status || 'unknown').replace(/[^a-z0-9_-]/gi, '');
-                        const sn = document.createElement('span');
-                        sn.className = 'env-hub-tile-svc-name';
-                        sn.textContent = row.service || '—';
-                        const st = document.createElement('span');
-                        st.className = 'env-hub-tile-svc-status';
-                        st.textContent = row.status || '—';
-                        line.appendChild(sn);
-                        line.appendChild(st);
-                        br.appendChild(line);
-                    });
-                    a.appendChild(br);
-                }
-                cell.appendChild(a);
-                const reasons = e.status_reason_lines;
-                if (
-                    (e.overall === 'warning' || e.overall === 'critical') &&
-                    Array.isArray(reasons) &&
-                    reasons.length > 0
-                ) {
-                    const box = document.createElement('div');
-                    box.className =
-                        'env-hub-tile-reason env-hub-tile-reason--' +
-                        (e.overall === 'critical' ? 'critical' : 'warning');
-                    box.setAttribute('role', 'note');
-                    const ul = document.createElement('ul');
-                    reasons.forEach(line => {
-                        const li = document.createElement('li');
-                        li.textContent = line;
-                        ul.appendChild(li);
-                    });
-                    box.appendChild(ul);
-                    cell.appendChild(box);
-                }
-                grid.appendChild(cell);
-            });
+    const envs = filterHomeEnvironmentHubEnvironments(data.environments || []);
+    grid.innerHTML = envs.map(buildEnvHubCardHtml).join('');
     if (meta) {
         const now = new Date();
         const ts = now.toLocaleTimeString(undefined, {
@@ -1242,7 +1299,8 @@ function applyPagerDutyMonitorPayload(data) {
                 } else if (!data.recently_resolved || data.recently_resolved.length === 0) {
                     resolvedElement.innerHTML = '<li style="color: #999;">No recent resolutions</li>';
                 } else {
-                    resolvedElement.innerHTML = data.recently_resolved.map(inc => {
+                    const resolvedList = (data.recently_resolved || []).slice(0, 3);
+                    resolvedElement.innerHTML = resolvedList.map(inc => {
                         const url = inc.url || '#';
                         return `
                             <li class="resolved" title="${inc.title}" onclick="window.open('${url}', '_blank')" style="cursor: pointer;">

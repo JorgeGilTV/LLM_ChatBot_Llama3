@@ -594,6 +594,11 @@
         a.sm-hover-tip-chip:hover {
             filter: brightness(1.1);
         }
+        .sm-hover-tip-chip--dd-open {
+            background: rgba(34, 197, 94, 0.18);
+            color: #166534;
+            border-color: rgba(34, 197, 94, 0.45);
+        }
         .sm-hover-tip-chip--splunk {
             background: rgba(14, 165, 233, 0.22);
             color: #bae6fd;
@@ -629,22 +634,15 @@
                 <nav>
                     <ul class="nav-menu">
                         <li><a href="/statusmonitor" class="{{ 'active' if not environment else '' }}">All Environments</a></li>
-                        <li><a href="/statusmonitor/production" class="{{ 'active' if environment == 'production' else '' }}">Production</a></li>
-                        <li><a href="/statusmonitor/goldendev" class="{{ 'active' if environment == 'goldendev' else '' }}">GoldenDev</a></li>
-                        <li><a href="/statusmonitor/goldenqa" class="{{ 'active' if environment == 'goldenqa' else '' }}">GoldenQA</a></li>
-                        <li><a href="/statusmonitor/qa" class="{{ 'active' if environment == 'qa' else '' }}">QA</a></li>
                         <li><a href="/statusmonitor/samsung" class="{{ 'active' if environment == 'samsung' else '' }}">Samsung</a></li>
-                        <li><a href="/statusmonitor/adt" class="{{ 'active' if environment == 'adt' else '' }}">ADT</a></li>
                         <li><a href="/statusmonitor/redmetrics-us" class="{{ 'active' if environment == 'redmetrics-us' else '' }}">RED Metrics US</a></li>
-                        <li><a href="/statuswall">Status wall</a></li>
-                        <li><a href="/apm-services">APM Status Wall</a></li>
+                        <li><a href="/apm-services?dd_env=adt_prod">🔵 Status Wall</a></li>
                     </ul>
                 </nav>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #718096; flex-wrap: wrap;">
                 <button type="button" class="sm-wall-header-btn" onclick="window.sendStatusMonitorToSlack()" title="Resumen Bedrock de la vista → Slack">📤 Slack</button>
-                <a href="/statuswall" class="sm-wall-header-btn">Status wall</a>
-                <a href="/apm-services" class="sm-wall-header-btn" title="APM Status Wall">APM wall</a>
+                <a href="/apm-services?dd_env=adt_prod" class="sm-wall-header-btn" title="Status Wall">Status Wall</a>
                 <span><span style="font-weight: 600; color: #2d3748;">GOC</span> Status Monitor</span>
             </div>
         </div>
@@ -663,8 +661,7 @@
             </select>
             <button type="button" onclick="loadHubSummary({ forceRefresh: true })" style="padding: 6px 14px; background: #0095da; color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">Refresh</button>
             <button type="button" class="sm-slack-btn" onclick="window.sendStatusMonitorToSlack()" title="Resumen Bedrock → Slack">📤 Slack</button>
-            <a href="/statuswall" class="sm-wall-btn">Open status wall</a>
-            <a href="/apm-services" class="sm-wall-btn" title="APM Status Wall">Open APM Status Wall</a>
+            <a href="/apm-services?dd_env=adt_prod" class="sm-wall-btn" title="Status Wall">Open Status Wall</a>
         </div>
         <div id="slack-share-root">
         <div id="loading">
@@ -1100,38 +1097,35 @@
                 }
                 const ddc2 = d.dd_monitor_alert_count != null ? Number(d.dd_monitor_alert_count) : 0;
                 const ddcSuf2 = d.dd_monitor_alert_suffix_count != null ? Number(d.dd_monitor_alert_suffix_count) : 0;
-                if (ddc2 > 0) {
-                    const ddmH = smSafeHttpHref(d.dd_monitors_url);
-                    if (ddmH) {
+                let ddTotal2 =
+                    d.dd_monitor_open_count != null ? Number(d.dd_monitor_open_count) : ddc2 + ddcSuf2;
+                if (!Number.isFinite(ddTotal2)) ddTotal2 = ddc2 + ddcSuf2;
+                if (ddTotal2 > 0) {
+                    const onlyAb2 = ddc2 === 0 && ddcSuf2 > 0;
+                    const hrefDd = smSafeHttpHref(
+                        ddcSuf2 > 0 ? d.dd_monitors_url_all_alerts || d.dd_monitors_url : d.dd_monitors_url
+                    );
+                    const chipCls2 =
+                        'sm-hover-tip-chip ' +
+                        (onlyAb2 ? 'sm-hover-tip-chip--dd-open' : 'sm-hover-tip-chip--alert');
+                    const titleDd = onlyAb2
+                        ? ddTotal2 + ' DD open (-a/-b); tile stays green'
+                        : ddTotal2 + ' DD in Alert';
+                    if (hrefDd) {
                         const cdd = document.createElement('a');
-                        cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                        cdd.href = ddmH;
+                        cdd.className = chipCls2;
+                        cdd.href = hrefDd;
                         cdd.target = '_blank';
                         cdd.rel = 'noopener noreferrer';
-                        cdd.textContent = ddc2 + ' DD';
+                        cdd.textContent = ddTotal2 + ' DD';
+                        cdd.title = titleDd;
                         chips.appendChild(cdd);
                     } else {
                         const cdd = document.createElement('span');
-                        cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                        cdd.textContent = ddc2 + ' DD';
+                        cdd.className = chipCls2;
+                        cdd.textContent = ddTotal2 + ' DD';
+                        cdd.title = titleDd;
                         chips.appendChild(cdd);
-                    }
-                }
-                if (ddcSuf2 > 0) {
-                    const hrefAll = smSafeHttpHref(d.dd_monitors_url_all_alerts);
-                    if (hrefAll) {
-                        const cws = document.createElement('a');
-                        cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
-                        cws.href = hrefAll;
-                        cws.target = '_blank';
-                        cws.rel = 'noopener noreferrer';
-                        cws.textContent = ddcSuf2 + ' DD';
-                        chips.appendChild(cws);
-                    } else {
-                        const cws = document.createElement('span');
-                        cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
-                        cws.textContent = ddcSuf2 + ' DD';
-                        chips.appendChild(cws);
                     }
                 }
                 if (chips.children.length) inner.appendChild(chips);
@@ -1672,7 +1666,7 @@
                         '<div style="padding:28px 24px;max-width:720px;margin:0 auto;">' +
                         '<p style="color:#b91c1c;font-weight:700;font-size:15px;margin:0 0 10px 0;">Status Monitor failed to load</p>' +
                         '<p style="color:#475569;font-size:13px;line-height:1.5;margin:0;">' + escHubText(error.message || String(error)) + '</p>' +
-                        '<p style="color:#64748b;font-size:12px;margin:14px 0 0 0;">If you see <strong>504</strong>: set ALB/nginx idle timeout and <strong>GUNICORN_TIMEOUT</strong> to at least <strong>600s</strong>. Optional (skip slow EKS): <code>STATUS_MONITOR_WALL_ATTACH_EKS=0</code> for <code>/statuswall</code>, <code>STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0</code> for <code>/statusmonitor/&lt;env&gt;</code>. See DOCKER_DEPLOYMENT.md.</p>' +
+                        '<p style="color:#64748b;font-size:12px;margin:14px 0 0 0;">If you see <strong>504</strong>: set ALB/nginx idle timeout and <strong>GUNICORN_TIMEOUT</strong> to at least <strong>600s</strong>. Optional (skip slow EKS): <code>APM_STATUS_WALL_ATTACH_EKS=0</code> for <code>/apm-services</code>, <code>STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0</code> for <code>/statusmonitor/&lt;env&gt;</code>. See DOCKER_DEPLOYMENT.md.</p>' +
                         '</div>';
                 }
                 const errorDiv = document.createElement('div');

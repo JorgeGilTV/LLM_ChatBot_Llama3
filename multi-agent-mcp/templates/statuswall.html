@@ -137,6 +137,59 @@
             border-color: #475569;
         }
         .sw-main { padding: 8px 12px 16px; }
+        .sw-eng-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .sw-eng-block {
+            border: 1px solid #1e3a5f;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #0f172a;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+        }
+        .sw-eng-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            padding: 10px 14px;
+            background: linear-gradient(115deg, #1e40af 0%, #1d4ed8 48%, #2563eb 100%);
+            border-bottom: 1px solid #3b82f6;
+            color: #f8fafc;
+        }
+        .sw-eng-head-title {
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+        .sw-eng-head-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-left: auto;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .sw-eng-head-badges span {
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: rgba(15, 23, 42, 0.35);
+        }
+        .sw-eng-tiles-wrap {
+            padding: 10px 10px 12px;
+        }
+        .sw-eng-tiles-wrap .sw-tiles {
+            --sw-tile-col-min: 7.25rem;
+        }
+        body.sw-theme-apm-light .sw-eng-block {
+            border-color: #334155;
+            background: #0c1018;
+        }
+        body.sw-theme-apm-light .sw-eng-head {
+            background: linear-gradient(115deg, #1e3a8a 0%, #1d4ed8 55%, #2563eb 100%);
+        }
         .sw-group {
             margin-bottom: 12px;
         }
@@ -646,6 +699,11 @@
             color: #bae6fd;
             border-color: rgba(56, 189, 248, 0.45);
         }
+        .sm-hover-tip-chip--dd-open {
+            background: rgba(34, 197, 94, 0.22);
+            color: #bbf7d0;
+            border-color: rgba(74, 222, 128, 0.55);
+        }
         .sm-hover-tip-why {
             margin-top: 10px;
             padding-top: 10px;
@@ -901,6 +959,92 @@
         a.sw-monitor-pill:hover {
             filter: brightness(1.08);
         }
+        button.sw-monitor-pill {
+            cursor: pointer;
+            font: inherit;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        button.sw-monitor-pill:hover {
+            filter: brightness(1.12);
+        }
+        button.sw-monitor-pill--open {
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.45);
+        }
+        .sw-splunk-embed-panel {
+            display: none;
+            margin: 0 0 18px;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #0b0c12;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        }
+        .sw-splunk-embed-panel--open {
+            display: block;
+        }
+        .sw-splunk-embed-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px 12px;
+            padding: 10px 14px;
+            background: linear-gradient(135deg, #ff6f00 0%, #e65100 100%);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .sw-splunk-embed-head a {
+            color: #fff;
+            text-decoration: underline;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .sw-splunk-embed-head button {
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            background: rgba(0, 0, 0, 0.2);
+            color: #fff;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .sw-splunk-embed-frame-wrap {
+            position: relative;
+            min-height: 320px;
+            background: #0b0c12;
+        }
+        .sw-splunk-embed-load {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            padding: 20px;
+            line-height: 1.45;
+        }
+        .sw-splunk-embed-panel--open .sw-splunk-embed-load {
+            display: flex;
+        }
+        .sw-splunk-embed-panel--loaded .sw-splunk-embed-load {
+            display: none;
+        }
+        .sw-splunk-embed-iframe {
+            width: 100%;
+            height: min(72vh, 920px);
+            border: 0;
+            display: block;
+            background: #0b0c12;
+            vertical-align: top;
+        }
 
         body.sw-theme-apm-light {
             background: #080a10;
@@ -1003,8 +1147,7 @@
         </div>
         <nav class="sw-nav-group" aria-label="OneView views">
             <a href="/statusmonitor" class="sw-nav-hub">Status monitor hub</a>
-            <a href="/statuswall" class="sw-nav-hub{% if (wall_nav|default('wall')) == 'wall' %} sw-nav-hub--active{% endif %}"{% if (wall_nav|default('wall')) == 'wall' %} aria-current="page"{% endif %}>Status wall</a>
-            <a href="/apm-services" class="sw-nav-hub{% if (wall_nav|default('wall')) == 'apm_wall' %} sw-nav-hub--active{% endif %}"{% if (wall_nav|default('wall')) == 'apm_wall' %} aria-current="page"{% endif %}>APM Status Wall</a>
+            <a href="/apm-services?dd_env=adt_prod" class="sw-nav-hub{% if (wall_nav|default('wall')) == 'apm_wall' %} sw-nav-hub--active{% endif %}"{% if (wall_nav|default('wall')) == 'apm_wall' %} aria-current="page"{% endif %}>Status Wall</a>
         </nav>
         {% if datadog_software_href is defined and datadog_software_href %}
         <a href="{{ datadog_software_href }}" id="sw-datadog-software-link" class="sw-nav-hub" target="_blank" rel="noopener noreferrer" title="Open APM / Software list in Datadog (optional)">Datadog UI ↗</a>
@@ -1252,6 +1395,10 @@
             const st = s.status || '';
             if (st === 'inactive') return 'No APM traffic in window';
             if (st === 'unknown') return 'No data / query issue';
+            const ddOpen = ddcR + ddcSuf;
+            if (st === 'healthy' && ddOpen > 0 && ddcR === 0) {
+                return ddOpen + ' DD open (-a/-b)';
+            }
             if (st === 'healthy' && !(ddcR > 0) && !(ddcSuf > 0)) return 'Healthy';
             if (bits.length) return bits.join(' · ');
             return st || '—';
@@ -1532,61 +1679,54 @@
                 c.textContent = 'Traffic ' + Math.round(Number(s.traffic_variance)) + '% vs 7d';
                 container.appendChild(c);
             }
+            wallAppendDdOpenPill(container, s, useSpan);
+        }
+
+        /** One pill: total open DD monitors; green chip when only -a/-b alerts (tile stays green). */
+        function wallAppendDdOpenPill(container, s, useSpan) {
             const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
             const wddSuf = s.dd_monitor_alert_suffix_count != null ? Number(s.dd_monitor_alert_suffix_count) : 0;
-            if (wddc > 0) {
-                const ddmH = swSafeHttpHref(s.dd_monitors_url);
-                const label = wddc + ' DD';
-                if (useSpan) {
-                    const cdd = document.createElement('span');
-                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    cdd.textContent = label;
-                    if (ddmH) {
-                        cdd.setAttribute('data-href', ddmH);
-                        cdd.style.cursor = 'pointer';
-                    }
-                    container.appendChild(cdd);
-                } else if (s.dd_monitors_url) {
-                    const cdd = document.createElement('a');
-                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    setSafeAnchorHref(cdd, s.dd_monitors_url);
-                    cdd.target = '_blank';
-                    cdd.rel = 'noopener noreferrer';
-                    cdd.textContent = label;
-                    container.appendChild(cdd);
-                } else {
-                    const cdd = document.createElement('span');
-                    cdd.className = 'sm-hover-tip-chip sm-hover-tip-chip--alert';
-                    cdd.textContent = label;
-                    container.appendChild(cdd);
+            let total =
+                s.dd_monitor_open_count != null ? Number(s.dd_monitor_open_count) : wddc + wddSuf;
+            if (!Number.isFinite(total)) total = wddc + wddSuf;
+            if (total <= 0) return;
+            const onlyAb = wddc === 0 && wddSuf > 0;
+            const href = swSafeHttpHref(
+                wddSuf > 0
+                    ? s.dd_monitors_url_all_alerts || s.dd_monitors_url
+                    : s.dd_monitors_url
+            );
+            const chipCls =
+                'sm-hover-tip-chip ' + (onlyAb ? 'sm-hover-tip-chip--dd-open' : 'sm-hover-tip-chip--alert');
+            const label = total + ' DD';
+            const title = onlyAb
+                ? total + ' Datadog alert(s) (-a/-b tier); tile stays green'
+                : total + ' Datadog monitor(s) in Alert';
+            if (useSpan) {
+                const cdd = document.createElement('span');
+                cdd.className = chipCls;
+                cdd.textContent = label;
+                cdd.title = title;
+                if (href) {
+                    cdd.setAttribute('data-href', href);
+                    cdd.style.cursor = 'pointer';
                 }
-            }
-            if (wddSuf > 0) {
-                const hrefAll = swSafeHttpHref(s.dd_monitors_url_all_alerts || '');
-                const label = wddSuf + ' DD';
-                if (useSpan) {
-                    const cws = document.createElement('span');
-                    cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
-                    cws.textContent = label;
-                    if (hrefAll) {
-                        cws.setAttribute('data-href', hrefAll);
-                        cws.style.cursor = 'pointer';
-                    }
-                    container.appendChild(cws);
-                } else if (s.dd_monitors_url_all_alerts) {
-                    const cws = document.createElement('a');
-                    cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
-                    setSafeAnchorHref(cws, s.dd_monitors_url_all_alerts);
-                    cws.target = '_blank';
-                    cws.rel = 'noopener noreferrer';
-                    cws.textContent = label;
-                    container.appendChild(cws);
-                } else {
-                    const cws = document.createElement('span');
-                    cws.className = 'sm-hover-tip-chip sm-hover-tip-chip--warn';
-                    cws.textContent = label;
-                    container.appendChild(cws);
-                }
+                container.appendChild(cdd);
+            } else if (href) {
+                const cdd = document.createElement('a');
+                cdd.className = chipCls;
+                setSafeAnchorHref(cdd, href);
+                cdd.target = '_blank';
+                cdd.rel = 'noopener noreferrer';
+                cdd.textContent = label;
+                cdd.title = title;
+                container.appendChild(cdd);
+            } else {
+                const cdd = document.createElement('span');
+                cdd.className = chipCls;
+                cdd.textContent = label;
+                cdd.title = title;
+                container.appendChild(cdd);
             }
         }
 
@@ -1608,10 +1748,18 @@
 
         function appendTileIssueChipsStrip(tileEl, s) {
             const st = s.status || '';
-            if (st !== 'critical' && st !== 'warning') return;
+            const wddc = s.dd_monitor_alert_count != null ? Number(s.dd_monitor_alert_count) : 0;
+            const wddSuf = s.dd_monitor_alert_suffix_count != null ? Number(s.dd_monitor_alert_suffix_count) : 0;
+            const ddOpen =
+                s.dd_monitor_open_count != null ? Number(s.dd_monitor_open_count) : wddc + wddSuf;
+            if (st !== 'critical' && st !== 'warning' && !(ddOpen > 0)) return;
             const chips = document.createElement('div');
             chips.className = 'sm-hover-tip-chips sw-tile-inline-chips';
-            wallAppendServiceMonitorChips(chips, s, 'span');
+            if (st === 'critical' || st === 'warning') {
+                wallAppendServiceMonitorChips(chips, s, 'span');
+            } else {
+                wallAppendDdOpenPill(chips, s, 'span');
+            }
             if (!chips.children.length) return;
             chips.addEventListener('click', function (ev) {
                 const t = ev.target.closest('[data-href]');
@@ -1625,6 +1773,92 @@
             tileEl.appendChild(chips);
         }
 
+        function swSplunkEmbedUrl(base, timerangeHours, serviceName) {
+            var u = String(base || '/embed/splunk-p0-adt');
+            var tr = parseInt(timerangeHours, 10);
+            if (!Number.isFinite(tr) || tr < 1) tr = 4;
+            var sep = u.indexOf('?') >= 0 ? '&' : '?';
+            var out = u + sep + 'timerange=' + encodeURIComponent(String(tr));
+            var svc = serviceName != null ? String(serviceName).trim() : '';
+            if (svc) {
+                out += '&service=' + encodeURIComponent(svc);
+            }
+            return out;
+        }
+
+        function buildSplunkEmbedPanel(splMon) {
+            var panel = document.createElement('div');
+            panel.className = 'sw-splunk-embed-panel';
+            panel.id = 'sw-splunk-embed-panel';
+            var head = document.createElement('div');
+            head.className = 'sw-splunk-embed-head';
+            head.innerHTML =
+                '<span>📊 Splunk P0 ADT <span style="font-weight:500;opacity:0.92;font-size:11px;">(global ADT zones — not the tile you clicked)</span></span>' +
+                '<span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
+            var ext = document.createElement('a');
+            ext.href = splMon.href || 'https://arlo.splunkcloud.com/en-US/app/search/p0_streaming_dashboard_pp';
+            ext.target = '_blank';
+            ext.rel = 'noopener noreferrer';
+            ext.textContent = 'Open in Splunk ↗';
+            head.lastElementChild.appendChild(ext);
+            var closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.textContent = 'Close';
+            closeBtn.addEventListener('click', function () {
+                swCloseSplunkPanel();
+            });
+            head.lastElementChild.appendChild(closeBtn);
+            panel.appendChild(head);
+            var wrap = document.createElement('div');
+            wrap.className = 'sw-splunk-embed-frame-wrap';
+            var load = document.createElement('div');
+            load.className = 'sw-splunk-embed-load';
+            load.innerHTML = 'Loading Splunk P0 ADT charts…<br><span style="font-size:11px;font-weight:500;opacity:0.85;">May take 20s–2m.</span>';
+            wrap.appendChild(load);
+            var iframe = document.createElement('iframe');
+            iframe.className = 'sw-splunk-embed-iframe';
+            iframe.title = 'Splunk P0 ADT';
+            iframe.loading = 'lazy';
+            iframe.dataset.embedBase = splMon.embed_url || '/embed/splunk-p0-adt';
+            iframe.addEventListener('load', function () {
+                panel.classList.add('sw-splunk-embed-panel--loaded');
+            });
+            wrap.appendChild(iframe);
+            panel.appendChild(wrap);
+            return panel;
+        }
+
+        function swCloseSplunkPanel() {
+            var panel = document.getElementById('sw-splunk-embed-panel');
+            if (panel) panel.classList.remove('sw-splunk-embed-panel--open');
+            document.querySelectorAll('button.sw-monitor-pill--splunk-toggle').forEach(function (b) {
+                b.classList.remove('sw-monitor-pill--open');
+            });
+        }
+
+        function swOpenSplunkPanel(splMon) {
+            var panel = document.getElementById('sw-splunk-embed-panel');
+            if (!panel) return;
+            var trEl = document.getElementById('sw-timerange');
+            var tr = trEl ? parseInt(trEl.value, 10) : 4;
+            var iframe = panel.querySelector('iframe.sw-splunk-embed-iframe');
+            if (iframe) {
+                var want = swSplunkEmbedUrl(
+                    iframe.dataset.embedBase || splMon.embed_url,
+                    tr,
+                    iframe.dataset.embedService || ''
+                );
+                if (!iframe.src || iframe.src.indexOf('/embed/splunk-p0-adt') < 0) {
+                    iframe.src = want;
+                } else if (iframe.src !== want && iframe.src.indexOf('timerange=') >= 0) {
+                    iframe.src = want;
+                }
+            }
+            panel.classList.add('sw-splunk-embed-panel--open');
+            panel.classList.remove('sw-splunk-embed-panel--loaded');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
         function appendMonitorPills(head, monitors) {
             if (!monitors || typeof monitors !== 'object') return;
             const cluster = document.createElement('div');
@@ -1634,6 +1868,32 @@
                 const m = monitors[k];
                 if (!m || !m.label) return;
                 const txt = m.label + ': ' + (m.short != null ? m.short : '');
+                if (k === 'splunk' && m.panel_toggle && m.embed_url) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className =
+                        'sw-monitor-pill sw-monitor-pill--splunk-toggle sw-monitor-pill--' +
+                        (m.status || 'unknown');
+                    btn.title =
+                        (m.detail || '') +
+                        ' — opens global P0 ADT charts (Splunk zones), not the Datadog tile you selected';
+                    btn.textContent = txt;
+                    btn.addEventListener('click', function () {
+                        var panel = document.getElementById('sw-splunk-embed-panel');
+                        var open = panel && panel.classList.contains('sw-splunk-embed-panel--open');
+                        document.querySelectorAll('button.sw-monitor-pill--splunk-toggle').forEach(function (b) {
+                            b.classList.remove('sw-monitor-pill--open');
+                        });
+                        if (open) {
+                            swCloseSplunkPanel();
+                        } else {
+                            btn.classList.add('sw-monitor-pill--open');
+                            swOpenSplunkPanel(m);
+                        }
+                    });
+                    cluster.appendChild(btn);
+                    return;
+                }
                 if (k === 'pagerduty' && m.href) {
                     const safe = swWallSafePdHref(m.href);
                     if (safe) {
@@ -1643,6 +1903,20 @@
                         a.target = '_blank';
                         a.rel = 'noopener noreferrer';
                         a.title = (m.detail || '') + ' — open PD';
+                        a.textContent = txt;
+                        cluster.appendChild(a);
+                        return;
+                    }
+                }
+                if (k === 'splunk' && m.href) {
+                    const splH = swSafeHttpHref(m.href);
+                    if (splH) {
+                        const a = document.createElement('a');
+                        a.className = 'sw-monitor-pill sw-monitor-pill--' + (m.status || 'unknown');
+                        a.href = splH;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        a.title = m.detail || '';
                         a.textContent = txt;
                         cluster.appendChild(a);
                         return;
@@ -1973,40 +2247,102 @@
             head.appendChild(badges);
             section.appendChild(head);
 
-            const regionWrap = document.createElement('div');
-            regionWrap.className = 'sw-region-grid';
-            const allSvcs = g.services || [];
-            const hasAny = allSvcs.length > 0;
-            if (!hasAny) {
-                const empty = document.createElement('div');
-                empty.className = 'sw-meta';
-                empty.textContent = 'No services to display for this range (inactive/unknown are omitted).';
-                regionWrap.appendChild(empty);
-            } else {
-                let columns = g.region_columns;
-                if (!columns || !columns.length) {
-                    columns = buildRegionColumnsFromServices(allSvcs);
-                }
-                columns = filterNonEmptyRegionColumns(columns);
-                for (const col of columns) {
-                    const colEl = document.createElement('div');
-                    colEl.className = 'sw-region-col';
-                    const hrow = document.createElement('div');
-                    hrow.className = 'sw-region-col-head';
-                    const ct = document.createElement('div');
-                    ct.className = 'sw-region-col-title';
-                    ct.textContent = col.label || '';
-                    const ch = document.createElement('span');
-                    ch.className = 'sw-region-col-hint';
-                    ch.textContent = col.subtitle || '';
-                    hrow.appendChild(ct);
-                    hrow.appendChild(ch);
-                    colEl.appendChild(hrow);
-                    appendRegionColumnTiles(colEl, col.services || []);
-                    regionWrap.appendChild(colEl);
-                }
+            if (
+                monitors &&
+                monitors.splunk &&
+                monitors.splunk.panel_toggle &&
+                monitors.splunk.embed_url &&
+                !document.getElementById('sw-splunk-embed-panel')
+            ) {
+                section.appendChild(buildSplunkEmbedPanel(monitors.splunk));
+            } else if (
+                monitors &&
+                monitors.splunk &&
+                monitors.splunk.panel_toggle &&
+                document.getElementById('sw-splunk-embed-panel')
+            ) {
+                /* panel already mounted on first ADT section */
             }
-            section.appendChild(regionWrap);
+
+            const engSections = g.engineering_sections;
+            if (engSections && engSections.length) {
+                const engLayout = document.createElement('div');
+                engLayout.className = 'sw-eng-layout';
+                for (const eng of engSections) {
+                    const block = document.createElement('div');
+                    block.className = 'sw-eng-block';
+                    if (eng.slug) {
+                        block.id = (section.id ? section.id + '-' : 'sw-eng-') + String(eng.slug);
+                    }
+                    const ehead = document.createElement('div');
+                    ehead.className = 'sw-eng-head';
+                    const et = document.createElement('div');
+                    et.className = 'sw-eng-head-title';
+                    et.textContent = eng.label || eng.key || 'Engineering';
+                    ehead.appendChild(et);
+                    const ec = eng.counts || {};
+                    const ebadges = document.createElement('div');
+                    ebadges.className = 'sw-eng-head-badges';
+                    ebadges.innerHTML =
+                        '<span>✓ ' + (ec.healthy != null ? ec.healthy : 0) + '</span>' +
+                        '<span>⚠ ' + (ec.warning != null ? ec.warning : 0) + '</span>' +
+                        '<span>✕ ' + (ec.critical != null ? ec.critical : 0) + '</span>';
+                    ehead.appendChild(ebadges);
+                    block.appendChild(ehead);
+                    const tilesWrap = document.createElement('div');
+                    tilesWrap.className = 'sw-eng-tiles-wrap';
+                    const grid = document.createElement('div');
+                    grid.className = 'sw-tiles sw-tiles--region';
+                    const esvcs = eng.services || [];
+                    if (!esvcs.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'sw-meta';
+                        empty.textContent = 'No services in this engineering group.';
+                        tilesWrap.appendChild(empty);
+                    } else {
+                        appendTilesToGrid(grid, esvcs);
+                        tilesWrap.appendChild(grid);
+                    }
+                    block.appendChild(tilesWrap);
+                    engLayout.appendChild(block);
+                }
+                section.appendChild(engLayout);
+            } else {
+                const regionWrap = document.createElement('div');
+                regionWrap.className = 'sw-region-grid';
+                const allSvcs = g.services || [];
+                const hasAny = allSvcs.length > 0;
+                if (!hasAny) {
+                    const empty = document.createElement('div');
+                    empty.className = 'sw-meta';
+                    empty.textContent = 'No services to display for this range (inactive/unknown are omitted).';
+                    regionWrap.appendChild(empty);
+                } else {
+                    let columns = g.region_columns;
+                    if (!columns || !columns.length) {
+                        columns = buildRegionColumnsFromServices(allSvcs);
+                    }
+                    columns = filterNonEmptyRegionColumns(columns);
+                    for (const col of columns) {
+                        const colEl = document.createElement('div');
+                        colEl.className = 'sw-region-col';
+                        const hrow = document.createElement('div');
+                        hrow.className = 'sw-region-col-head';
+                        const ct = document.createElement('div');
+                        ct.className = 'sw-region-col-title';
+                        ct.textContent = col.label || '';
+                        const ch = document.createElement('span');
+                        ch.className = 'sw-region-col-hint';
+                        ch.textContent = col.subtitle || '';
+                        hrow.appendChild(ct);
+                        hrow.appendChild(ch);
+                        colEl.appendChild(hrow);
+                        appendRegionColumnTiles(colEl, col.services || []);
+                        regionWrap.appendChild(colEl);
+                    }
+                }
+                section.appendChild(regionWrap);
+            }
             return section;
         }
 
@@ -2039,6 +2375,8 @@
         }
 
         const WALL_DATA_URL = {{ (wall_api|default('/api/statusmonitor/wall'))|tojson }};
+        const SW_ADT_SPLUNK_EMBED = {{ wall_adt_splunk_embed|default(false)|tojson }};
+        const WALL_DD_ENV = {{ (wall_dd_env|default('adt_prod'))|tojson }};
         const SW_APM_TAB = {{ (wall_apm_tab|default('main'))|tojson }};
         const WALL_INCREMENTAL_APM = {{ wall_incremental_apm|default(false)|tojson }};
         const WALL_APM_PARALLEL_MAIN = {{ wall_apm_parallel_main_envs|default([])|tojson }};
@@ -2291,6 +2629,8 @@
                 body.dd_env = 'golden';
             } else if (ddEl) {
                 body.dd_env = ddEl.value;
+            } else if (WALL_DD_ENV) {
+                body.dd_env = WALL_DD_ENV;
             }
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
@@ -2367,8 +2707,8 @@
                         'Error: HTTP 504 (gateway timeout). The wall API can take 2–4 minutes. ' +
                         'Increase your load balancer / reverse proxy idle & read timeout to ≥600s, ' +
                         'and set GUNICORN_TIMEOUT=600 (or higher) for Gunicorn. ' +
-                        'Optional: STATUS_MONITOR_WALL_ATTACH_EKS=0 skips EKS lookups on /statuswall (faster). ' +
-                        'Details: DOCKER_DEPLOYMENT.md (section 504 / Status wall).';
+                        'Optional: APM_STATUS_WALL_ATTACH_EKS=0 skips EKS lookups on /apm-services (faster). ' +
+                        'Details: DOCKER_DEPLOYMENT.md (section 504 / APM Status Wall).';
                 } else {
                     statusEl.textContent = 'Error: ' + msg;
                 }

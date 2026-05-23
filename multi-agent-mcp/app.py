@@ -491,7 +491,7 @@ def apm_services_page():
     import re
 
     tab = (request.args.get("tab") or "").strip().lower()
-    q_raw = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "all").strip()
+    q_raw = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "production").strip()
     if tab == "golden":
         wall_dd_env = normalize_software_catalog_wall_dd_env("golden")
     else:
@@ -629,7 +629,7 @@ def api_statusmonitor_software_catalog_wall():
         )
 
         data = request.get_json() or {}
-        timerange = int(data.get("timerange", 1))
+        timerange = int(data.get("timerange", 24))
         force_refresh = bool(
             data.get("force_refresh") or data.get("forceRefresh")
         )
@@ -2177,21 +2177,59 @@ def _team_calendar_base_candidates() -> list:
     ]
 
 
-def _fetch_subcalendars_from_bases(bases, email, token) -> tuple[object, str] | tuple[None, list]:
-    """(json, base_used) on first HTTP 200, else (None, [status lines])."""
+def _fetch_subcalendars_from_bases(
+    bases, email, token, *, space_key: str | None = None, include_id: str | None = None
+) -> tuple[object, str] | tuple[None, list]:
+    """(json, base_used) on first HTTP 200 with a non-empty payload, else (None, [status lines])."""
     import requests
+
+    from tools.grm_calendar_browser import deployments_space_key
 
     auth = (email, token)
     lines = []
+    sk = (space_key or deployments_space_key()).strip()
+
+    def _has_payload(data: object) -> bool:
+        if not isinstance(data, dict):
+            return False
+        payload = data.get("payload")
+        if isinstance(payload, list) and payload:
+            return True
+        return bool(_collect_subcalendars_for_match(data))
+
     for base in bases:
         url = f"{base.rstrip('/')}/subcalendars.json"
         try:
             r = requests.get(url, auth=auth, timeout=22)
-            lines.append(f"{base} -> {r.status_code}")
+            lines.append(f"{base} bare -> {r.status_code}")
             if r.status_code == 200:
-                return (r.json(), base)
+                data = r.json()
+                if _has_payload(data):
+                    return (data, base)
         except Exception as e:
             lines.append(f"{base} -> err {e!s}")
+
+    # Browser widget: spaceCalendars + viewingSpaceKey (+ optional include parent id)
+    import time
+
+    for base in bases:
+        url = f"{base.rstrip('/')}/subcalendars.json"
+        params = {
+            "calendarContext": "spaceCalendars",
+            "viewingSpaceKey": sk,
+            "_": time.time_ns(),
+        }
+        if include_id:
+            params["include"] = include_id
+        try:
+            r = requests.get(url, auth=auth, params=params, timeout=22)
+            lines.append(f"{base} space:{sk} -> {r.status_code}")
+            if r.status_code == 200:
+                data = r.json()
+                if _has_payload(data):
+                    return (data, base)
+        except Exception as e:
+            lines.append(f"{base} space -> err {e!s}")
     return (None, lines)
 
 
@@ -2263,6 +2301,16 @@ def _resolve_subcalendar_id_by_name(
 
     bases = _team_calendar_base_candidates()
     data, used_or_lines = _fetch_subcalendars_from_bases(bases, email, token)
+    if data is None:
+        from tools.grm_calendar_browser import (
+            deployments_space_key,
+            list_space_subcalendars_for_name_match,
+        )
+
+        sk = deployments_space_key()
+        data2, base2 = list_space_subcalendars_for_name_match(email, token, sk, bases=bases)
+        if data2 is not None:
+            data, used_or_lines = data2, base2
     if data is None:
         logging.warning("subcalendars.json: no 200 from any base: %s", used_or_lines)
         return None, []
@@ -2499,13 +2547,47 @@ def _load_team_calendar_events_for_id(
     end_ymd: str,
 ) -> tuple[list, dict]:
     """
-    Try each Team Calendars base URL and subCalendarId / calendarId. Confluence Cloud may 404 on
-    one path (e.g. /wiki/rest/...) and work on the other. If ISO window returns 200 with 0 events,
-    we also try YYYY-MM-DD (some Cloud builds only return data with date-only params).
+    Load GRM events the same way as the Confluence calendar widget: space subcalendars.json
+    with include=parent id, then events.json per child sub-calendar. Falls back to a single
+    parent subCalendarId request if the browser-style path returns nothing.
     """
-    import requests
+    from tools.grm_calendar_browser import (
+        deployments_space_key,
+        load_calendar_events_browser_style,
+    )
 
     bases = _team_calendar_base_candidates()
+    browser_partial: dict = {}
+    try:
+        raw_events, browser_partial = load_calendar_events_browser_style(
+            email,
+            token,
+            sub_calendar_id,
+            start_date_iso,
+            end_date_iso,
+            space_key=deployments_space_key(),
+            normalize_events=_normalize_team_calendar_events,
+            bases=bases,
+        )
+        browser_rows = []
+        for event in raw_events:
+            try:
+                row = _grm_event_to_deployment(event, cst)
+                if row:
+                    browser_rows.append(row)
+            except Exception as e:
+                logging.error("Error parsing browser-style event: %s", e)
+        if browser_rows:
+            browser_partial["raw_events_primary"] = len(raw_events)
+            browser_partial["saw_200"] = True
+            browser_partial["grm_fetch_mode"] = "browser"
+            return browser_rows, browser_partial
+    except Exception as e:
+        logging.warning("Team Calendar browser-style fetch failed: %s", e)
+        browser_partial["browser_error"] = str(e)
+
+    import requests
+
     auth = (email, token)
     common_iso = {
         "start": start_date_iso,
@@ -2527,7 +2609,9 @@ def _load_team_calendar_events_for_id(
         "calendar_base_used": None,
         "event_fetch_log": [],
         "grm_date_mode_used": "iso",
+        "grm_fetch_mode": "legacy_single_id",
     }
+    partial.update({k: v for k, v in browser_partial.items() if v is not None})
 
     def events_from_raw(raw) -> tuple[list, int]:
         evs = _normalize_team_calendar_events(raw)
@@ -2689,9 +2773,9 @@ def api_deployments_upcoming():
         )
         lookback_days = _deployments_int_env("DEPLOYMENTS_CALENDAR_LOOKBACK_DAYS", 2, 0, 30)
         filter_hours_future = _deployments_int_env(
-            "DEPLOYMENTS_FILTER_HOURS_FUTURE", 720, 24, 2160
+            "DEPLOYMENTS_FILTER_HOURS_FUTURE", 24, 1, 2160
         )
-        filter_hours_past = _deployments_int_env("DEPLOYMENTS_FILTER_HOURS_PAST", 2, 0, 168)
+        filter_hours_past = _deployments_int_env("DEPLOYMENTS_FILTER_HOURS_PAST", 0, 0, 168)
         max_rows = _deployments_int_env("DEPLOYMENTS_MAX_ROWS", 50, 5, 150)
         now_cst = datetime.now(cst)
         start_date_iso, end_date_iso, start_ymd, end_ymd = _team_calendar_cst_range_iso(
@@ -2726,6 +2810,12 @@ def api_deployments_upcoming():
                 "sample_event_keys",
                 "calendar_base_used",
                 "empty_calendar_200",
+                "grm_fetch_mode",
+                "deployments_space_key",
+                "browser_child_subcalendar_count",
+                "browser_raw_events",
+                "browser_child_hits",
+                "browser_skip_reason",
             ):
                 if k in partial and partial[k] is not None:
                     diag[k] = partial[k]
@@ -2782,6 +2872,12 @@ def api_deployments_upcoming():
                         "sample_event_keys",
                         "calendar_base_used",
                         "empty_calendar_200",
+                        "grm_fetch_mode",
+                        "deployments_space_key",
+                        "browser_child_subcalendar_count",
+                        "browser_raw_events",
+                        "browser_child_hits",
+                        "browser_skip_reason",
                     ):
                         if k in partial2 and partial2[k] is not None:
                             diag[k] = partial2[k]
@@ -2806,7 +2902,11 @@ def api_deployments_upcoming():
                 deduped.append(d)
             deployments = deduped
 
-        deployment_source = "calendar_api" if deployments else "empty"
+        deployment_source = (
+            "calendar_api_browser"
+            if deployments and (partial.get("grm_fetch_mode") == "browser" or diag.get("grm_fetch_mode") == "browser")
+            else ("calendar_api" if deployments else "empty")
+        )
         # Demo rows only when explicitly enabled (never pass as real GRM data)
         if not deployments and use_mock_deployments:
             logging.warning(
@@ -2880,7 +2980,7 @@ def api_deployments_upcoming():
         upcoming = deployments[:max_rows]
 
         logging.info(
-            f"✅ Deployments ({deployment_source}): {len(upcoming)} row(s) in last 2h + next 24h window"
+            f"✅ Deployments ({deployment_source}): {len(upcoming)} row(s) in next {filter_hours_future}h window"
         )
 
         grm_wiki = (
@@ -2925,6 +3025,11 @@ def api_deployments_upcoming():
                 "grm_fallback_resolved_id": diag.get("grm_fallback_resolved_id"),
                 "grm_fallback_match_candidates": diag.get("grm_fallback_match_candidates"),
                 "grm_fallback_skip_reason": diag.get("grm_fallback_skip_reason"),
+                "grm_fetch_mode": diag.get("grm_fetch_mode"),
+                "deployments_space_key": diag.get("deployments_space_key"),
+                "browser_child_subcalendar_count": diag.get("browser_child_subcalendar_count"),
+                "browser_raw_events": diag.get("browser_raw_events"),
+                "browser_child_hits": diag.get("browser_child_hits"),
             },
         }
         if deployment_source == "empty":
@@ -2952,6 +3057,7 @@ def api_deployments_upcoming():
                 )
             elif ok_200 and raw_total == 0:
                 sr = diag.get("grm_fallback_skip_reason")
+                mode = diag.get("grm_fetch_mode") or partial.get("grm_fetch_mode")
                 extra = ""
                 if sr == "name_resolved_to_same_id_as_request_events_api_returned_zero_in_range":
                     extra = (
@@ -2963,6 +3069,11 @@ def api_deployments_upcoming():
                     extra = (
                         " Could not match a sub-calendar by fallback name (check CONFLUENCE_ATLASSIAN_HOST "
                         "and token scope). Set DEPLOYMENTS_SUBCALENDAR_ID from the wiki Team Calendar macro."
+                    )
+                elif mode == "browser":
+                    extra = (
+                        " Browser-style fetch (spaceCalendars + child sub-calendars) ran but returned 0 events "
+                        f"for DEPLOYMENTS_CONFLUENCE_SPACE_KEY={diag.get('deployments_space_key', 'RM')}."
                     )
                 payload["warning"] = (
                     "API returned OK but 0 events in the selected range. Set DEPLOYMENTS_SUBCALENDAR_NAME "

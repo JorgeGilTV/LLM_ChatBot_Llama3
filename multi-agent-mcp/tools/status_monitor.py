@@ -2121,6 +2121,21 @@ def _dd_health_cache_key(service: str, env: str, timerange_hours: int, dd_site: 
     return f"{service}\x1f{env}\x1f{int(timerange_hours)}\x1f{dd_site}"
 
 
+def _apm_wall_inactive_lookback_hours() -> int:
+    """
+    If the selected wall window has 0 APM hits but a longer window does (e.g. collector),
+    re-query with this lookback so tiles are not falsely gray. Default 24h.
+    Set APM_STATUS_WALL_INACTIVE_LOOKBACK_HOURS=0 to disable.
+    """
+    raw = (os.getenv("APM_STATUS_WALL_INACTIVE_LOOKBACK_HOURS", "24") or "24").strip()
+    if raw.lower() in ("0", "false", "no", "off", "none"):
+        return 0
+    try:
+        return max(1, min(168, int(raw)))
+    except (TypeError, ValueError):
+        return 24
+
+
 def _sm_fetch_one_service_health_cached(
     service,
     env,
@@ -2140,6 +2155,26 @@ def _sm_fetch_one_service_health_cached(
     out = get_service_health_status(
         service, env, dd_api_key, dd_app_key, dd_site, from_time, current_time, False
     )
+    lookback_h = _apm_wall_inactive_lookback_hours()
+    if (
+        lookback_h > 0
+        and int(timerange_hours) < lookback_h
+        and out.get("status") == "inactive"
+        and int(out.get("requests") or 0) == 0
+    ):
+        fb_from = current_time - (lookback_h * 3600)
+        fb_out = get_service_health_status(
+            service, env, dd_api_key, dd_app_key, dd_site, fb_from, current_time, False
+        )
+        if int(fb_out.get("requests") or 0) > 0 or fb_out.get("status") in (
+            "healthy",
+            "warning",
+            "critical",
+        ):
+            fb_out = dict(fb_out)
+            fb_out["wall_timerange_hours"] = int(timerange_hours)
+            fb_out["wall_effective_lookback_hours"] = lookback_h
+            out = fb_out
     if out.get("status") == "unknown" and _UNKNOWN_RETRY_COUNT > 0:
         for attempt in range(_UNKNOWN_RETRY_COUNT):
             delay = 0.22 * (attempt + 1)
@@ -3237,6 +3272,131 @@ def _software_catalog_fallback_service_names() -> list:
     return sorted(merged, key=str.lower)
 
 
+def _software_catalog_wall_use_dd_apm_list(dd_env: str) -> bool:
+    """Use GET /api/v2/apm/services?filter[env]=… (same source as Datadog Software UI)."""
+    env = (dd_env or "").strip()
+    if env not in ("production", "adt_prod"):
+        return False
+    raw = (os.getenv("SOFTWARE_CATALOG_WALL_DD_APM_LIST") or "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    try:
+        from tools.apm_engineering_groups import apm_engineering_groups_enabled
+
+        return apm_engineering_groups_enabled()
+    except Exception:
+        return True
+
+
+def _fetch_datadog_apm_service_names_for_env(
+    dd_api_key: str,
+    dd_app_key: str,
+    dd_site: str,
+    dd_env: str,
+) -> list | None:
+    """
+    Services registered in Datadog APM for this env (Software Catalog /software?env=…).
+    GET /api/v2/apm/services — matches the production list (~129–133), not a static file.
+    """
+    import requests
+
+    env = (dd_env or "production").strip() or "production"
+    base = f"{datadog_rest_api_base(dd_site)}/api/v2/apm/services"
+    headers = {
+        "DD-API-KEY": dd_api_key,
+        "DD-APPLICATION-KEY": dd_app_key,
+        "Accept": "application/json",
+    }
+    try:
+        r = requests.get(
+            base,
+            headers=headers,
+            params={"filter[env]": env},
+            timeout=(15, 90),
+        )
+    except Exception as e:
+        print(f"⚠️ Datadog APM services list failed: {e}")
+        return None
+    if r.status_code != 200:
+        print(
+            f"⚠️ Datadog APM services list {r.status_code} (env={env}): {(r.text or '')[:300]}"
+        )
+        return None
+    try:
+        payload = r.json()
+    except Exception:
+        return None
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        return None
+    attr = data.get("attributes") or {}
+    services = attr.get("services") if isinstance(attr, dict) else None
+    if not isinstance(services, list):
+        return None
+    names = sorted(
+        {(str(s) or "").strip() for s in services if (s or "").strip()},
+        key=str.lower,
+    )
+    return names if names else None
+
+
+def _resolve_software_catalog_wall_from_dd_apm(
+    dd_env: str,
+    dd_api: str,
+    dd_app: str,
+    dd_site: str,
+) -> tuple[list, str] | None:
+    """Live APM service list for org-wall envs (production, adt_prod)."""
+    if not _software_catalog_wall_use_dd_apm_list(dd_env):
+        return None
+    apm_names = _fetch_datadog_apm_service_names_for_env(
+        dd_api, dd_app, dd_site, dd_env
+    )
+    if not apm_names:
+        return None
+    try:
+        from tools.apm_engineering_groups import (
+            apm_engineering_groups_enabled,
+            apm_status_wall_use_dd_team,
+            fetch_datadog_catalog_service_owners,
+            order_services_for_engineering_wall,
+        )
+
+        if apm_engineering_groups_enabled():
+            owners = None
+            if apm_status_wall_use_dd_team(dd_env):
+                owners = fetch_datadog_catalog_service_owners(
+                    dd_api, dd_app, dd_site
+                )
+            ordered = order_services_for_engineering_wall(
+                apm_names,
+                dd_env=dd_env,
+                owner_by_service=owners,
+            )
+            team_note = (
+                ", Datadog groupBy=Team"
+                if owners
+                else ", org tile order"
+            )
+            print(
+                f"🧭 Software catalog wall: {len(ordered)} service(s) from "
+                f"Datadog APM services API (env={dd_env}{team_note})"
+            )
+            return (
+                ordered,
+                "dd_apm_services_dd_team" if owners else "dd_apm_services_org_order",
+            )
+    except Exception:
+        pass
+    print(
+        f"🧭 Software catalog wall: {len(apm_names)} service(s) from "
+        f"Datadog APM services API (env={dd_env})"
+    )
+    return apm_names, "dd_apm_services"
+
+
 def _fetch_software_catalog_service_names_from_api(
     dd_api_key: str,
     dd_app_key: str,
@@ -3386,6 +3546,28 @@ def _bundled_samsung_apm_path() -> str:
     )
 
 
+def _filter_samsung_apm_wall_services(names: list) -> list:
+    """
+    Samsung Status Wall: only `*samsung*` service names (no production/ADT extras).
+    Default SAMSUNG_WALL_PROD_ONLY=0 shows all six canonical tiers (prod, qa, dev).
+    Set SAMSUNG_WALL_PROD_ONLY=1 to drop *-dev / *-qa on the samsung_prod wall.
+    """
+    raw_only = (os.getenv("SAMSUNG_WALL_PROD_ONLY") or "0").strip().lower()
+    prod_only = raw_only in ("1", "true", "yes", "on")
+    out: list = []
+    for n in names or []:
+        k = (n or "").strip()
+        if not k:
+            continue
+        lk = k.lower()
+        if "samsung" not in lk:
+            continue
+        if prod_only and ("-dev" in lk or "-qa" in lk):
+            continue
+        out.append(k)
+    return sorted(set(out), key=str.lower)
+
+
 # APM Software Catalog /apm-services: "all" = one block per environment below (order preserved).
 # Golden (goldendev, goldenqa) is not included here — use dd_env=golden or ?tab=golden on /apm-services.
 SOFTWARE_CATALOG_WALL_APM_ENVS: tuple[str, ...] = (
@@ -3506,6 +3688,16 @@ def resolve_software_catalog_wall_service_names(
                 )
                 return sorted(set(file_names), key=str.lower), "file"
 
+    dd_api = os.getenv("DATADOG_API_KEY")
+    dd_app = os.getenv("DATADOG_APP_KEY")
+    dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+    if dd_api and dd_app and _dd_env in ("production", "adt_prod"):
+        dd_apm = _resolve_software_catalog_wall_from_dd_apm(
+            _dd_env, dd_api, dd_app, dd_site
+        )
+        if dd_apm:
+            return dd_apm
+
     if _dd_env == "production" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_127", "1").strip().lower() not in (
         "0",
         "false",
@@ -3526,11 +3718,33 @@ def resolve_software_catalog_wall_service_names(
                 print(f"⚠️ APM wall bundled list {bundled!r}: {e}")
             else:
                 if bnames:
+                    try:
+                        from tools.apm_engineering_groups import (
+                            apm_engineering_groups_enabled,
+                            merge_bundled_names_with_org_catalog,
+                        )
+
+                        if apm_engineering_groups_enabled():
+                            merged = merge_bundled_names_with_org_catalog(bnames)
+                            print(
+                                f"🧭 Software catalog wall: {len(merged)} service(s) "
+                                f"(org wall catalog + production extras, env=production)"
+                            )
+                            return merged, "bundled_127_org_wall"
+                    except Exception:
+                        pass
+                    deduped_p: list = []
+                    seen_p: set = set()
+                    for n in bnames:
+                        k = (n or "").strip().lower()
+                        if k and k not in seen_p:
+                            seen_p.add(k)
+                            deduped_p.append(n.strip())
                     print(
-                        f"🧭 Software catalog wall: {len(bnames)} service(s) from "
+                        f"🧭 Software catalog wall: {len(deduped_p)} service(s) from "
                         f"bundled production_apm_127.txt (env=production)"
                     )
-                    return sorted(set(bnames), key=str.lower), "bundled_127"
+                    return deduped_p, "bundled_127"
 
     if _dd_env == "goldendev" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_GOLDENDEV", "1").strip().lower() not in (
         "0",
@@ -3608,7 +3822,29 @@ def resolve_software_catalog_wall_service_names(
                         f"🧭 Software catalog wall: {len(anames)} service(s) from "
                         f"bundled adt_apm_services.txt (env=adt_prod)"
                     )
-                    return sorted(set(anames), key=str.lower), "bundled_adt"
+                    try:
+                        from tools.apm_engineering_groups import (
+                            apm_engineering_groups_enabled,
+                            merge_bundled_names_with_org_catalog,
+                        )
+
+                        if apm_engineering_groups_enabled():
+                            merged = merge_bundled_names_with_org_catalog(anames)
+                            print(
+                                f"🧭 Software catalog wall: {len(merged)} service(s) "
+                                f"(org wall catalog + adt extras, env=adt_prod)"
+                            )
+                            return merged, "bundled_adt_org_wall"
+                    except Exception:
+                        pass
+                    deduped: list = []
+                    seen_adt: set = set()
+                    for n in anames:
+                        k = (n or "").strip().lower()
+                        if k and k not in seen_adt:
+                            seen_adt.add(k)
+                            deduped.append(n.strip())
+                    return deduped, "bundled_adt"
 
     if _dd_env == "qa" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_QA", "1").strip().lower() not in (
         "0",
@@ -3656,15 +3892,25 @@ def resolve_software_catalog_wall_service_names(
                 print(f"⚠️ APM wall bundled list {s_path!r}: {e}")
             else:
                 if snames:
-                    print(
-                        f"🧭 Software catalog wall: {len(snames)} service(s) from "
-                        f"bundled samsung_apm_services.txt (Samsung / SAMSUNG_DD_ENV)"
-                    )
-                    return sorted(set(snames), key=str.lower), "bundled_samsung"
+                    filtered = _filter_samsung_apm_wall_services(snames)
+                    if filtered:
+                        print(
+                            f"🧭 Software catalog wall: {len(filtered)} Samsung service(s) "
+                            f"(from samsung_apm_services.txt, env=samsung_prod)"
+                        )
+                        return filtered, "bundled_samsung"
 
-    dd_api = os.getenv("DATADOG_API_KEY")
-    dd_app = os.getenv("DATADOG_APP_KEY")
-    dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+    if _dd_env == "samsung_prod":
+        samsung_only = _filter_samsung_apm_wall_services(list(SAMSUNG_MONITOR_SERVICES))
+        if samsung_only:
+            print(
+                f"🧭 Software catalog wall: {len(samsung_only)} Samsung service(s) "
+                f"(built-in list, env=samsung_prod)"
+            )
+            return samsung_only, "samsung_builtin"
+        print("🧭 Software catalog wall: no Samsung services resolved")
+        return [], "samsung_empty"
+
     if dd_api and dd_app:
         api_list = _fetch_software_catalog_service_names_from_api(
             dd_api, dd_app, dd_site
@@ -3714,10 +3960,15 @@ def resolve_software_catalog_wall_service_names(
             f"ADT+GENERAL union (fallback) — rellena o habilita lists/qa_apm_services.txt"
         )
     elif _dd_env == "samsung_prod":
-        print(
-            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
-            f"ADT+GENERAL union (fallback) — rellena o habilita lists/samsung_apm_services.txt"
-        )
+        samsung_fb = _filter_samsung_apm_wall_services(list(SAMSUNG_MONITOR_SERVICES))
+        if samsung_fb:
+            print(
+                f"🧭 Software catalog wall: {len(samsung_fb)} Samsung service(s) "
+                f"(built-in SAMSUNG_MONITOR_SERVICES fallback)"
+            )
+            return samsung_fb, "samsung_builtin"
+        print("🧭 Software catalog wall: no Samsung services resolved")
+        return [], "samsung_empty"
     else:
         print(
             f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
@@ -3803,12 +4054,68 @@ def _software_catalog_wall_payload_for_single_env(
     )
     n_inactive = sum(1 for s in all_statuses if s.get("status") == "inactive")
     n_unknown = sum(1 for s in all_statuses if s.get("status") == "unknown")
-    statuses = [
-        s
-        for s in all_statuses
-        if s.get("status") in ("healthy", "warning", "critical")
-    ]
-    statuses.sort(key=_wall_service_sort_key)
+    try:
+        from tools.apm_engineering_groups import (
+            apm_engineering_groups_enabled,
+            engineering_wall_uses_org_catalog,
+            merge_engineering_wall_statuses,
+        )
+
+        if apm_engineering_groups_enabled() and engineering_wall_uses_org_catalog(dde):
+            statuses = merge_engineering_wall_statuses(
+                all_statuses,
+                dde,
+                environments[0] if environments else dde,
+                scope_service_names=services,
+            )
+        elif dde == "samsung_prod":
+            # Same six tiles as /statusmonitor/samsung — include inactive/unknown (qa/dev often idle).
+            by_svc = {(s.get("service") or "").strip(): s for s in all_statuses if s.get("service")}
+            statuses = []
+            for name in services:
+                row = by_svc.get(name)
+                if row is not None:
+                    statuses.append(row)
+                else:
+                    statuses.append(
+                        {
+                            "service": name,
+                            "status": "inactive",
+                            "environment": environments[0] if environments else dde,
+                        }
+                    )
+            statuses.sort(key=_wall_service_sort_key)
+        else:
+            statuses = [
+                s
+                for s in all_statuses
+                if s.get("status") in ("healthy", "warning", "critical")
+            ]
+            statuses.sort(key=_wall_service_sort_key)
+    except Exception:
+        if dde == "samsung_prod":
+            by_svc = {(s.get("service") or "").strip(): s for s in all_statuses if s.get("service")}
+            statuses = []
+            for name in services:
+                row = by_svc.get(name)
+                if row is not None:
+                    statuses.append(row)
+                else:
+                    statuses.append(
+                        {
+                            "service": name,
+                            "status": "inactive",
+                            "environment": environments[0] if environments else dde,
+                        }
+                    )
+            statuses.sort(key=_wall_service_sort_key)
+        else:
+            statuses = [
+                s
+                for s in all_statuses
+                if s.get("status") in ("healthy", "warning", "critical")
+            ]
+            statuses.sort(key=_wall_service_sort_key)
     if _apm_status_wall_attach_eks():
         eks_wall_cache: dict = {}
         _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache, force_refresh)
@@ -3827,36 +4134,63 @@ def _software_catalog_wall_payload_for_single_env(
 
     dd_site_ser = os.getenv("DD_SITE", "datadoghq.com")
     ser = [_wall_serialize_status(s, dd_site_ser, wall_mode, timerange) for s in statuses]
-    ag, ar_eu = _wall_split_services_by_region(ser)
-    region_columns = [
-        {
-            "key": "arlo_global",
-            "label": "Arlo Global",
-            "subtitle": "Oregon",
-            "services": ag,
-        },
-        {
-            "key": "arlo_eu",
-            "label": "Arlo EU",
-            "subtitle": "Ireland",
-            "services": ar_eu,
-        },
-    ]
-    region_columns = _wall_filter_nonempty_region_columns(region_columns)
+    if dde == "samsung_prod":
+        region_columns = [
+            {
+                "key": "samsung",
+                "label": "Samsung",
+                "subtitle": "",
+                "services": list(ser),
+            },
+        ]
+    else:
+        ag, ar_eu = _wall_split_services_by_region(ser)
+        region_columns = [
+            {
+                "key": "arlo_global",
+                "label": "Arlo Global",
+                "subtitle": "Oregon",
+                "services": ag,
+            },
+            {
+                "key": "arlo_eu",
+                "label": "Arlo EU",
+                "subtitle": "Ireland",
+                "services": ar_eu,
+            },
+        ]
+        region_columns = _wall_filter_nonempty_region_columns(region_columns)
     monitors = _wall_apm_monitors_for_dd_env(dde, _pd_c, pd_api_key, timerange, force_refresh)
     _wall_label = _apm_wall_group_label(dde)
     _wall_slug = (
         f"software-catalog-{dde}" if dde != "production" else "software-catalog-production"
     )
     eng_sections: list = []
+    eng_column_layout: list = []
+    wall_group_by_team = False
     try:
         from tools.apm_engineering_groups import (
             apm_engineering_groups_enabled,
+            apm_status_wall_use_dd_team,
             build_engineering_sections,
+            engineering_column_layout,
+            engineering_wall_uses_org_catalog,
+            fetch_datadog_catalog_service_owners,
         )
 
-        if apm_engineering_groups_enabled():
-            eng_sections = build_engineering_sections(ser)
+        if apm_engineering_groups_enabled() and engineering_wall_uses_org_catalog(dde):
+            owner_by_service = None
+            if apm_status_wall_use_dd_team(dde) and dd_api_key and dd_app_key:
+                owner_by_service = fetch_datadog_catalog_service_owners(
+                    dd_api_key, dd_app_key, dd_site
+                )
+                wall_group_by_team = bool(owner_by_service)
+            eng_sections = build_engineering_sections(
+                ser,
+                dd_env=dde,
+                owner_by_service=owner_by_service,
+            )
+            eng_column_layout = engineering_column_layout(dde)
     except Exception as e:
         print(f"⚠️ Engineering group layout skipped: {e}")
     return {
@@ -3874,6 +4208,7 @@ def _software_catalog_wall_payload_for_single_env(
             "apm_environment": dde,
             "header_light": _apm_status_wall_header_light(),
             "eks_hints": _apm_status_wall_attach_eks(),
+            "group_by": "team" if wall_group_by_team else None,
         },
         "groups": [
             {
@@ -3892,6 +4227,7 @@ def _software_catalog_wall_payload_for_single_env(
                 "services": ser,
                 "region_columns": region_columns,
                 "engineering_sections": eng_sections,
+                "engineering_column_layout": eng_column_layout,
             }
         ],
     }
@@ -4091,7 +4427,7 @@ def status_monitor_software_catalog_wall_data(
     """
     global _software_catalog_wall_cache
     dde = normalize_software_catalog_wall_dd_env(dd_env)
-    cache_version = "sc_wall_v22_engineering_groups"
+    cache_version = "sc_wall_v49_adt_column_layout"
     apm_bucket = _apm_status_wall_cache_bucket_secs()
     cache_key = f"{cache_version}_{dde}_{timerange}_{int(time.time() // apm_bucket)}"
     hit = _read_sm_mem_cache(_software_catalog_wall_cache, cache_key, force_refresh)

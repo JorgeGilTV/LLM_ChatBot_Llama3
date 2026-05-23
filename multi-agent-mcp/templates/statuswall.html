@@ -136,67 +136,518 @@
             background: #334155;
             border-color: #475569;
         }
-        .sw-main { padding: 8px 12px 16px; }
+        .sw-main { padding: 4px 6px 8px; }
+        /* Org wall: 4 balanced columns; teams stack inside each column. */
         .sw-eng-layout {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            align-items: start;
+            gap: 0;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+        }
+        .sw-eng-col {
+            min-width: 0;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 0;
+        }
+        .sw-eng-col + .sw-eng-col {
+            margin-left: -1px;
         }
         .sw-eng-block {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
             border: 1px solid #1e3a5f;
-            border-radius: 10px;
-            overflow: hidden;
+            border-radius: 0;
+            margin: -1px 0 0 0;
+            overflow: visible;
             background: #0f172a;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+            box-shadow: none;
+        }
+        .sw-eng-col .sw-eng-block + .sw-eng-block {
+            margin-top: -1px;
+        }
+        .sw-eng-block.sw-eng-block--half {
+            width: 50%;
+            max-width: 50%;
+            align-self: flex-start;
+        }
+        .sw-eng-block-row {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            align-items: stretch;
+        }
+        .sw-eng-col > .sw-eng-block-row + .sw-eng-block,
+        .sw-eng-col > .sw-eng-block + .sw-eng-block-row {
+            margin-top: -1px;
+        }
+        .sw-eng-block-row .sw-eng-block--half {
+            width: auto;
+            max-width: none;
+            flex: 1 1 50%;
+            min-width: 0;
+            align-self: stretch;
+        }
+        .sw-eng-block-row .sw-eng-block + .sw-eng-block {
+            margin-top: 0;
+            margin-left: -1px;
+        }
+        .sw-eng-block-row--trio .sw-eng-block--quarter {
+            flex: 0 0 25%;
+            max-width: 25%;
+            min-width: 0;
+            width: auto;
+            align-self: stretch;
+        }
+        .sw-eng-block-row--trio .sw-eng-block--half {
+            flex: 0 0 50%;
+            max-width: 50%;
+            min-width: 0;
+            width: auto;
+            align-self: stretch;
+        }
+        @media (max-width: 1100px) {
+            .sw-eng-layout {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .sw-eng-col:nth-child(2n + 1) {
+                margin-left: 0;
+            }
+        }
+        @media (max-width: 640px) {
+            .sw-eng-layout {
+                grid-template-columns: minmax(0, 1fr);
+            }
+            .sw-eng-col {
+                max-width: 100%;
+            }
         }
         .sw-eng-head {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             gap: 8px 12px;
-            padding: 10px 14px;
-            background: linear-gradient(115deg, #1e40af 0%, #1d4ed8 48%, #2563eb 100%);
-            border-bottom: 1px solid #3b82f6;
-            color: #f8fafc;
+            padding: 8px 12px;
+            background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
+            border-bottom: 1px solid #1e3a55;
+            box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38), 0 2px 8px rgba(0, 10, 24, 0.4);
+            color: #ffffff;
         }
         .sw-eng-head-title {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 800;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.01em;
+            line-height: 1.25;
+            color: #ffffff;
         }
         .sw-eng-head-badges {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
+            align-items: center;
+            gap: 4px;
             margin-left: auto;
-            font-size: 12px;
-            font-weight: 700;
+            font-size: 11px;
+            font-weight: 800;
         }
         .sw-eng-head-badges span {
-            padding: 2px 8px;
-            border-radius: 6px;
-            background: rgba(15, 23, 42, 0.35);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.35rem;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.2;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        .sw-eng-head-badges .sw-eng-head-badge--ok {
+            color: #052e16;
+            background: linear-gradient(165deg, #4ade80 0%, #22c55e 55%, #16a34a 100%);
+            border-color: #166534;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+        }
+        .sw-eng-head-badges .sw-eng-head-badge--warn {
+            color: #1c1917;
+            background: linear-gradient(165deg, #fef08a 0%, #facc15 55%, #f59e0b 100%);
+            border-color: #b45309;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        .sw-eng-head-badges .sw-eng-head-badge--crit {
+            color: #fff;
+            background: linear-gradient(165deg, #fca5a5 0%, #ef4444 55%, #b91c1c 100%);
+            border-color: #7f1d1d;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
         }
         .sw-eng-tiles-wrap {
-            padding: 10px 10px 12px;
+            padding: 0;
+            overflow: visible;
         }
-        .sw-eng-tiles-wrap .sw-tiles {
-            --sw-tile-col-min: 7.25rem;
+        .sw-eng-tiles-wrap .sw-tile-wrap:hover,
+        .sw-eng-tiles-wrap .sw-tile-wrap:focus-within {
+            z-index: 60;
+        }
+        /* Mosaic org: altura por líneas reales de texto (medido en JS) + pie con pills. */
+        .sw-eng-tiles-wrap .sw-tiles.sw-tiles--org-wall,
+        .sw-eng-tiles-wrap .sw-tiles,
+        .sw-compact-org-wrap .sw-tiles--org-wall {
+            --sw-org-row-unit: 1.4rem;
+            --sw-tile-row-unit: var(--sw-org-row-unit);
+            --sw-tile-col-min: 8.5rem;
+            grid-auto-rows: var(--sw-tile-row-unit);
+            align-items: stretch;
+        }
+        .sw-eng-tiles-wrap .sw-tile-wrap {
+            min-height: 0;
+            align-self: stretch;
+            width: 100%;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile {
+            position: relative;
+            border-radius: 3px;
+            padding: 6px 8px 7px;
+            gap: 4px;
+            box-shadow: none;
+            align-items: flex-start;
+            justify-content: flex-start;
+            text-align: left;
+            min-height: 100%;
+            height: 100%;
+            flex: 1 1 auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+        }
+        .sw-eng-tiles-wrap .sw-tile-wrap .sw-tile {
+            height: 100%;
+            min-height: 100%;
+            flex: 1 1 auto;
+        }
+        .sw-eng-tiles-wrap .sw-tile {
+            border-radius: 2px;
+            padding: 3px 4px;
+            gap: 0;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--healthy,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--neutral {
+            box-shadow: none;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile:hover {
+            transform: none;
+            z-index: 2;
+            filter: brightness(1.06);
+        }
+        .sw-eng-tiles-wrap .sw-tile:hover {
+            transform: none;
+            z-index: 2;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-icon {
+            display: none;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-apm-errline {
+            display: none !important;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-foot {
+            position: static;
+            left: auto;
+            bottom: auto;
+            margin-top: auto;
+            padding-top: 2px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+            line-height: 1;
+            pointer-events: none;
+            flex-shrink: 0;
+            max-width: 100%;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-chips {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            align-items: center;
+            pointer-events: auto;
+            margin: 0;
+            max-width: 100%;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-chips .sm-hover-tip-chip {
+            font-size: 9px;
+            font-weight: 800;
+            line-height: 1.15;
+            padding: 2px 5px;
+            border-radius: 3px;
+            color: #0a0a0a;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-chips [data-href] {
+            cursor: pointer;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-chips [data-href]:hover {
+            filter: brightness(1.1);
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-name-compact {
+            width: 100%;
+            align-items: flex-start;
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.22;
+            font-weight: 700;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: visible;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-name-scroll {
+            text-align: left;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            overflow: visible;
+            white-space: normal;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--warn .sw-tile-name-compact,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--warn .sw-tile-name-scroll {
+            color: #1c1917;
+            text-shadow: none;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--healthy .sw-tile-name-compact,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--healthy .sw-tile-name-scroll {
+            color: #ffffff;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            padding: 2px 5px;
+            border-radius: 3px;
+            background: rgba(15, 23, 42, 0.72);
+            color: #f8fafc;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-badge--warn {
+            background: rgba(28, 25, 23, 0.82);
+            color: #fbbf24;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-badge--crit {
+            background: rgba(69, 10, 10, 0.88);
+            color: #fecaca;
+        }
+        .sw-eng-tiles-wrap .sw-tile-org-inc {
+            font-size: 10px;
+            font-weight: 700;
+            color: #1c1917;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--warn.sw-tile--alert,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--crit.sw-tile--alert {
+            position: relative;
+            z-index: 3;
+            overflow: visible;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--warn.sw-tile--alert {
+            animation: sw-farola-warn 1.75s ease-in-out infinite;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--crit.sw-tile--alert {
+            animation: sw-farola-crit 1.45s ease-in-out infinite;
+        }
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn-wide,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit-wide {
+            overflow: visible;
+            z-index: 2;
+        }
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn:hover,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn-wide:hover,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit:hover,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit-wide:hover {
+            z-index: 6;
+        }
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-ok,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-ok-wide,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn-wide,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit-wide {
+            grid-column: span 1;
+        }
+        .sw-eng-block[id$="xcloud-engineering"] .sw-tiles--org-wall {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+        /* Sre: 2 columnas */
+        .sw-eng-block[id$="sre"] .sw-tiles--org-wall,
+        .sw-eng-block[id$="-sre"] .sw-tiles--org-wall {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        .sw-eng-block-row--trio > .sw-eng-block {
+            display: flex;
+            flex-direction: column;
+            align-self: stretch;
+        }
+        .sw-eng-block-row--trio > .sw-eng-block .sw-eng-tiles-wrap {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .sw-eng-block-row--trio > .sw-eng-block .sw-tiles--org-wall {
+            flex: 1 1 auto;
+            min-height: 100%;
+        }
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn .sw-tile-name-compact,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn-wide .sw-tile-name-compact,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit .sw-tile-name-compact,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit-wide .sw-tile-name-compact,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-warn .sw-tile-name-scroll.sw-tile-name-hyphen-split,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-warn-wide .sw-tile-name-scroll.sw-tile-name-hyphen-split,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-crit .sw-tile-name-scroll.sw-tile-name-hyphen-split,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-wrap--hyphen-split.sw-tile-wrap--size-crit-wide .sw-tile-name-scroll.sw-tile-name-hyphen-split,
+        .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile-wrap--size-warn .sw-tile-name-compact,
+        .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile-wrap--size-warn-wide .sw-tile-name-compact,
+        .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile-wrap--size-crit .sw-tile-name-compact,
+        .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile-wrap--size-crit-wide .sw-tile-name-compact {
+            font-size: 13px;
+            line-height: 1.22;
+            font-weight: 700;
+        }
+        .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile--warn.sw-tile--alert {
+            animation: sw-farola-warn 1.75s ease-in-out infinite;
+        }
+        .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile--crit.sw-tile--alert {
+            animation: sw-farola-crit 1.45s ease-in-out infinite;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--warn,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--crit {
+            padding: 5px 7px 5px;
+            gap: 3px;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-name-compact,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile-name-scroll {
+            overflow: visible !important;
+        }
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn .sw-tile,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-warn-wide .sw-tile,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit .sw-tile,
+        .sw-eng-tiles-wrap .sw-tile-wrap--size-crit-wide .sw-tile {
+            overflow: visible;
+        }
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--warn,
+        .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--crit {
+            overflow: visible;
+        }
+        .sw-group.sw-group--eng-mosaic {
+            margin-bottom: 0;
+        }
+        /* Barra de ambiente (Production, etc.): negro/azul oscuro + título blanco, como al cargar. */
+        .sw-group.sw-group--eng-mosaic .sw-group-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            margin: 0;
+            padding: 8px 12px;
+            border-radius: 0;
+            background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
+            border: none;
+            border-bottom: 1px solid #1e3a55;
+            box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38), 0 2px 8px rgba(0, 10, 24, 0.4);
+        }
+        .sw-group.sw-group--eng-mosaic .sw-group-head .sw-group-title {
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+        }
+        .sw-group.sw-group--eng-mosaic .sw-group-head .sw-meta {
+            color: rgba(248, 250, 252, 0.92);
+            font-size: 13px;
+        }
+        .sw-group.sw-group--eng-mosaic .sw-group-head .sw-monitor-cluster {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .sw-group.sw-group--eng-mosaic .sw-group-head .sw-badges {
+            margin-left: auto;
+        }
+        /* Samsung / ADT / otros envs sin equipos: misma barra de ambiente oscura. */
+        .sw-group.sw-group--compact-org .sw-group-head {
+            margin: 0;
+            padding: 8px 12px;
+            border-radius: 0;
+            background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
+            border: none;
+            border-bottom: 1px solid #1e3a55;
+            box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38);
+        }
+        .sw-group.sw-group--compact-org .sw-group-title {
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+        }
+        .sw-group.sw-group--compact-org .sw-group-head .sw-monitor-cluster {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .sw-group.sw-group--compact-org .sw-group-head .sw-badges {
+            margin-left: auto;
+        }
+        .sw-group.sw-group--compact-org {
+            margin-bottom: 0;
+            border-top: 2px solid #0f172a;
+        }
+        .sw-compact-org-wrap {
+            padding: 0;
+        }
+        .sw-tile--inactive {
+            opacity: 0.55;
+        }
+        .sw-eng-tiles-wrap > .sw-meta {
+            margin: 0;
+            padding: 4px 6px;
+            font-size: 11px;
         }
         body.sw-theme-apm-light .sw-eng-block {
             border-color: #334155;
             background: #0c1018;
         }
         body.sw-theme-apm-light .sw-eng-head {
-            background: linear-gradient(115deg, #1e3a8a 0%, #1d4ed8 55%, #2563eb 100%);
+            background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
+            border-bottom: 1px solid #1e3a55;
+            box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38), 0 2px 12px rgba(0, 10, 24, 0.45);
+            color: #ffffff;
+        }
+        body.sw-theme-apm-light .sw-eng-head-title {
+            color: #ffffff;
         }
         .sw-group {
             margin-bottom: 12px;
         }
+        .sw-group--apm-pending .sw-group-head {
+            margin: 0;
+            padding: 8px 12px;
+            border-radius: 0;
+            background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
+            border: none;
+            border-bottom: 1px solid #1e3a55;
+            box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38);
+        }
+        .sw-group--apm-pending .sw-group-title {
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+        }
         .sw-group--apm-pending .sw-meta {
-            margin-left: 12px;
-            font-style: italic;
-            opacity: 0.95;
+            margin-left: 8px;
+            font-style: normal;
+            color: rgba(248, 250, 252, 0.9);
+            opacity: 1;
         }
         .sw-group-head {
             display: flex;
@@ -369,6 +820,12 @@
         .sw-region-grid > .sw-meta {
             grid-column: 1 / -1;
         }
+        .sw-region-grid--compact .sw-region-col-head {
+            display: none;
+        }
+        .sw-region-grid--compact {
+            margin: 0;
+        }
         .sw-region-col {
             min-width: 0;
             border: 1px solid #334155;
@@ -490,9 +947,10 @@
             display: flex;
             flex-direction: column;
         }
-        /* Healthy (verde): 1 fila de la cuadrícula; *-wide ocupa 2 columnas. */
+        /* Healthy (verde): 1×1; nombre largo → 2×1. Warn/crit: 2×2. */
         .sw-tile-wrap--size-ok {
             grid-row: span 1;
+            grid-column: span 1;
             width: auto;
             max-width: 100%;
         }
@@ -502,9 +960,9 @@
             width: auto;
             max-width: 100%;
         }
-        /* Warning / critical: 2 y 3 filas respecto al verde (misma --sw-tile-row-unit). */
         .sw-tile-wrap--size-warn {
             grid-row: span 2;
+            grid-column: span 2;
             width: auto;
             max-width: 100%;
         }
@@ -515,12 +973,13 @@
             max-width: 100%;
         }
         .sw-tile-wrap--size-crit {
-            grid-row: span 3;
+            grid-row: span 2;
+            grid-column: span 2;
             width: auto;
             max-width: 100%;
         }
         .sw-tile-wrap--size-crit-wide {
-            grid-row: span 3;
+            grid-row: span 2;
             grid-column: span 2;
             width: auto;
             max-width: 100%;
@@ -602,7 +1061,8 @@
         .sm-hover-tip.sm-hover-tip--visible {
             display: block;
             visibility: visible;
-            pointer-events: none;
+            pointer-events: auto;
+            z-index: 100000;
         }
         .sm-hover-tip-inner {
             padding: 12px 14px 14px;
@@ -830,7 +1290,11 @@
         }
         @media (prefers-reduced-motion: reduce) {
             .sw-tile--warn.sw-tile--alert,
-            .sw-tile--crit.sw-tile--alert {
+            .sw-tile--crit.sw-tile--alert,
+            .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--warn.sw-tile--alert,
+            .sw-eng-tiles-wrap .sw-tiles--org-wall .sw-tile--crit.sw-tile--alert,
+            .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile--warn.sw-tile--alert,
+            .sw-compact-org-wrap .sw-tiles--org-wall .sw-tile--crit.sw-tile--alert {
                 animation: none;
             }
         }
@@ -1156,12 +1620,12 @@
         <div>
             <label for="sw-timerange">Time range</label>
             <select id="sw-timerange">
-                <option value="1" selected>Last 1 hour</option>
+                <option value="1">Last 1 hour</option>
                 <option value="2">Last 2 hours</option>
                 <option value="4">Last 4 hours</option>
                 <option value="8">Last 8 hours</option>
                 <option value="12">Last 12 hours</option>
-                <option value="24">Last 24 hours</option>
+                <option value="24" selected>Last 24 hours</option>
             </select>
             {% if wall_show_apm_env|default(false) %}
             <span class="sw-apm-tabs" role="tablist" aria-label="APM wall scope">
@@ -1171,10 +1635,10 @@
             {% if (wall_apm_tab|default('main')) == 'main' %}
             <label for="sw-apm-dd-env" style="margin-left:10px">APM env</label>
             <select id="sw-apm-dd-env" title="All main envs, or one APM tag">
-                <option value="all"{% if (wall_dd_env|default('all')) == 'all' %} selected{% endif %}>All (main envs)</option>
-                <option value="production"{% if (wall_dd_env|default('all')) == 'production' %} selected{% endif %}>production</option>
-                <option value="samsung_prod"{% if (wall_dd_env|default('all')) == 'samsung_prod' %} selected{% endif %}>Samsung (samsung_prod)</option>
-                <option value="adt_prod"{% if (wall_dd_env|default('all')) == 'adt_prod' %} selected{% endif %}>ADT (adt_prod)</option>
+                <option value="all"{% if (wall_dd_env|default('production')) == 'all' %} selected{% endif %}>All (main envs)</option>
+                <option value="production"{% if (wall_dd_env|default('production')) == 'production' %} selected{% endif %}>production</option>
+                <option value="samsung_prod"{% if (wall_dd_env|default('production')) == 'samsung_prod' %} selected{% endif %}>Samsung (samsung_prod)</option>
+                <option value="adt_prod"{% if (wall_dd_env|default('production')) == 'adt_prod' %} selected{% endif %}>ADT (adt_prod)</option>
             </select>
             {% else %}
             <span class="sw-meta sw-apm-golden-hint" style="margin-left:12px;font-size:16px;">goldendev · goldenqa</span>
@@ -1275,6 +1739,14 @@
             }
         }
 
+        function swReturnWallTipToHome(tip) {
+            if (!tip) return;
+            const home = tip._wallHomeWrap;
+            if (home && tip.parentNode !== home) {
+                home.appendChild(tip);
+            }
+        }
+
         function resetWallTipInlineStyles(tip) {
             tip.classList.remove('sm-hover-tip--visible');
             tip.style.removeProperty('display');
@@ -1285,11 +1757,13 @@
             tip.style.removeProperty('transform');
             tip.style.maxHeight = '';
             tip.style.overflowY = '';
+            tip.style.zIndex = '';
         }
 
         function hideAllWallTips() {
             document.querySelectorAll('.sm-hover-tip').forEach(function(t) {
                 resetWallTipInlineStyles(t);
+                swReturnWallTipToHome(t);
             });
         }
 
@@ -1346,18 +1820,31 @@
             tip.style.left = Math.round(left) + 'px';
             tip.style.top = Math.round(top) + 'px';
             tip.style.visibility = 'visible';
+            tip.style.zIndex = '100000';
         }
 
         function attachTipBehavior(wrap) {
             const tip = wrap.querySelector('.sm-hover-tip');
             if (!tip) return;
+            tip._wallHomeWrap = wrap;
             if (wrap._wallHoverAbort) {
                 wrap._wallHoverAbort.abort();
+            }
+            if (wrap._wallTipHideT) {
+                clearTimeout(wrap._wallTipHideT);
+                wrap._wallTipHideT = null;
             }
             wrap._wallHoverAbort = new AbortController();
             const sig = wrap._wallHoverAbort.signal;
             function show() {
+                if (wrap._wallTipHideT) {
+                    clearTimeout(wrap._wallTipHideT);
+                    wrap._wallTipHideT = null;
+                }
                 hideAllWallTips();
+                if (tip.parentNode !== document.body) {
+                    document.body.appendChild(tip);
+                }
                 tip.classList.add('sm-hover-tip--visible');
                 requestAnimationFrame(function() {
                     positionTipPanel(wrap, tip);
@@ -1365,11 +1852,24 @@
             }
             function hide() {
                 resetWallTipInlineStyles(tip);
+                swReturnWallTipToHome(tip);
+            }
+            function scheduleHide() {
+                if (wrap._wallTipHideT) clearTimeout(wrap._wallTipHideT);
+                wrap._wallTipHideT = setTimeout(hide, 150);
+            }
+            function cancelHide() {
+                if (wrap._wallTipHideT) {
+                    clearTimeout(wrap._wallTipHideT);
+                    wrap._wallTipHideT = null;
+                }
             }
             wrap.addEventListener('mouseenter', show, { signal: sig });
-            wrap.addEventListener('mouseleave', hide, { signal: sig });
+            wrap.addEventListener('mouseleave', scheduleHide, { signal: sig });
             wrap.addEventListener('focusin', show, { signal: sig });
-            wrap.addEventListener('focusout', hide, { signal: sig });
+            wrap.addEventListener('focusout', scheduleHide, { signal: sig });
+            tip.addEventListener('mouseenter', cancelHide, { signal: sig });
+            tip.addEventListener('mouseleave', scheduleHide, { signal: sig });
         }
 
         function fmtErr(v) {
@@ -1960,58 +2460,71 @@
             return px || 1;
         }
 
+        function swCountWrappedLines(text, widthPx) {
+            const probe = document.createElement('div');
+            probe.style.cssText =
+                'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:normal;' +
+                'overflow-wrap:anywhere;word-break:break-word;width:' +
+                Math.max(32, widthPx) +
+                'px;font-size:13px;line-height:1.22;font-weight:700;font-family:inherit;';
+            probe.textContent = text || '';
+            document.body.appendChild(probe);
+            const lh = parseFloat(getComputedStyle(probe).lineHeight) || 16;
+            const lines = Math.max(1, Math.ceil(probe.scrollHeight / lh));
+            probe.remove();
+            return Math.min(4, lines);
+        }
+
+        /** Altura org-wall según líneas reales del nombre + filas para OK/SPL/DD. */
+        function swMeasureOrgWallTileSpans(grid, colCount) {
+            if (!colCount || colCount < 1) return;
+            const innerW = Math.max(48, grid.clientWidth / colCount - 16);
+            const wraps = grid.querySelectorAll(':scope > .sw-tile-wrap');
+            for (let i = 0; i < wraps.length; i++) {
+                const wrap = wraps[i];
+                const nameScroll = wrap.querySelector('.sw-tile-name-scroll');
+                if (!nameScroll) continue;
+                const lines = swCountWrappedLines(nameScroll.textContent || '', innerW);
+                const hasChips = !!wrap.querySelector('.sw-tile-org-chips');
+                const isAlert =
+                    wrap.classList.contains('sw-tile-wrap--size-warn') ||
+                    wrap.classList.contains('sw-tile-wrap--size-warn-wide') ||
+                    wrap.classList.contains('sw-tile-wrap--size-crit') ||
+                    wrap.classList.contains('sw-tile-wrap--size-crit-wide');
+                const footRows = hasChips ? (isAlert ? 1 : 2) : 1;
+                const nameRows = Math.max(1, lines);
+                let rowSpan = nameRows + footRows;
+                if (isAlert) {
+                    rowSpan = Math.max(rowSpan + 1, Math.ceil(rowSpan * 1.4));
+                }
+                wrap.setAttribute('data-org-row-span', String(rowSpan));
+                wrap.setAttribute('data-org-text-lines', String(lines));
+            }
+        }
+
         function swPackTilesGrid(grid) {
             const wraps = Array.prototype.slice.call(grid.querySelectorAll(':scope > .sw-tile-wrap'));
             if (!wraps.length) {
                 grid.style.gridTemplateColumns = '';
                 grid.style.gridAutoFlow = '';
+                grid.style.gridAutoRows = '';
                 return;
             }
+            const orgWall = grid.classList.contains('sw-tiles--org-wall');
             const w = grid.clientWidth;
             if (w < 2) return;
-            const cs = getComputedStyle(grid);
-            let colMinStr = (cs.getPropertyValue('--sw-tile-col-min') || '').trim();
-                if (!colMinStr) colMinStr = '7.75rem';
-            const colMinPx = swCssWidthToPx(colMinStr, grid);
-            const colCount = Math.max(1, Math.floor(w / colMinPx));
-            grid.style.gridTemplateColumns = 'repeat(' + colCount + ', minmax(0, 1fr))';
-            grid.style.gridAutoFlow = 'row';
 
-            const occ = Object.create(null);
-            function occKey(r, c) {
-                return r + ',' + c;
-            }
-            function canPlace(r, c, rowSpan, colSpan) {
-                if (c + colSpan > colCount) return false;
-                for (let dr = 0; dr < rowSpan; dr++) {
-                    for (let dc = 0; dc < colSpan; dc++) {
-                        if (occ[occKey(r + dr, c + dc)]) return false;
-                    }
+            function tileSpans(wrap, colCount) {
+                if (orgWall) {
+                    const rs = parseInt(wrap.getAttribute('data-org-row-span') || '', 10);
+                    return { rowSpan: rs > 0 ? rs : 4, colSpan: 1 };
                 }
-                return true;
-            }
-            function markOcc(r, c, rowSpan, colSpan) {
-                for (let dr = 0; dr < rowSpan; dr++) {
-                    for (let dc = 0; dc < colSpan; dc++) {
-                        occ[occKey(r + dr, c + dc)] = 1;
-                    }
-                }
-            }
-
-            for (let i = 0; i < wraps.length; i++) {
-                const wrap = wraps[i];
-                wrap.style.gridRow = '';
-                wrap.style.gridColumn = '';
-                wrap.style.removeProperty('max-width');
                 let rowSpan = 1;
                 if (
                     wrap.classList.contains('sw-tile-wrap--size-crit') ||
-                    wrap.classList.contains('sw-tile-wrap--size-crit-wide')
-                ) {
-                    rowSpan = 3;
-                } else if (
-                    wrap.classList.contains('sw-tile-wrap--size-warn') ||
-                    wrap.classList.contains('sw-tile-wrap--size-warn-wide')
+                        wrap.classList.contains('sw-tile-wrap--size-crit-wide') ||
+                        wrap.classList.contains('sw-tile-wrap--size-warn') ||
+                        wrap.classList.contains('sw-tile-wrap--size-warn-wide')
                 ) {
                     rowSpan = 2;
                 }
@@ -2020,25 +2533,96 @@
                     colSpan = 3;
                 } else if (
                     wrap.classList.contains('sw-tile-wrap--size-ok-wide') ||
+                    wrap.classList.contains('sw-tile-wrap--size-warn') ||
                     wrap.classList.contains('sw-tile-wrap--size-warn-wide') ||
+                    wrap.classList.contains('sw-tile-wrap--size-crit') ||
                     wrap.classList.contains('sw-tile-wrap--size-crit-wide')
                 ) {
                     colSpan = 2;
                 }
                 if (colSpan > colCount) colSpan = colCount;
+                return { rowSpan: rowSpan, colSpan: colSpan };
+            }
 
-                let placed = false;
-                for (let r = 0; r < 900 && !placed; r++) {
-                    for (let c = 0; c <= colCount - colSpan; c++) {
-                        if (canPlace(r, c, rowSpan, colSpan)) {
-                            wrap.style.gridRow = r + 1 + ' / span ' + rowSpan;
-                            wrap.style.gridColumn = c + 1 + ' / span ' + colSpan;
-                            markOcc(r, c, rowSpan, colSpan);
-                            placed = true;
-                            break;
+            function packWithColCount(colCount) {
+                grid.style.gridTemplateColumns = 'repeat(' + colCount + ', minmax(0, 1fr))';
+                grid.style.gridAutoFlow = 'row';
+                grid.style.gridAutoRows = orgWall ? 'var(--sw-tile-row-unit, 1.52rem)' : '';
+
+                const occ = Object.create(null);
+                let maxColUsed = 0;
+                function occKey(r, c) {
+                    return r + ',' + c;
+                }
+                function canPlace(r, c, rowSpan, colSpan) {
+                    if (c + colSpan > colCount) return false;
+                    for (let dr = 0; dr < rowSpan; dr++) {
+                        for (let dc = 0; dc < colSpan; dc++) {
+                            if (occ[occKey(r + dr, c + dc)]) return false;
+                        }
+                    }
+                    return true;
+                }
+                function markOcc(r, c, rowSpan, colSpan) {
+                    for (let dr = 0; dr < rowSpan; dr++) {
+                        for (let dc = 0; dc < colSpan; dc++) {
+                            occ[occKey(r + dr, c + dc)] = 1;
                         }
                     }
                 }
+
+                for (let i = 0; i < wraps.length; i++) {
+                    const wrap = wraps[i];
+                    wrap.style.gridRow = '';
+                    wrap.style.gridColumn = '';
+                    wrap.style.removeProperty('max-width');
+                    const sp = tileSpans(wrap, colCount);
+                    let placed = false;
+                    for (let r = 0; r < 900 && !placed; r++) {
+                        for (let c = 0; c <= colCount - sp.colSpan; c++) {
+                            if (canPlace(r, c, sp.rowSpan, sp.colSpan)) {
+                                wrap.style.gridRow = r + 1 + ' / span ' + sp.rowSpan;
+                                wrap.style.gridColumn = c + 1 + ' / span ' + sp.colSpan;
+                                markOcc(r, c, sp.rowSpan, sp.colSpan);
+                                maxColUsed = Math.max(maxColUsed, c + sp.colSpan);
+                                placed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                return maxColUsed;
+            }
+
+            const cs = getComputedStyle(grid);
+            let colMinStr = (cs.getPropertyValue('--sw-tile-col-min') || '').trim();
+            if (!colMinStr) colMinStr = '7.75rem';
+            const colMinPx = swCssWidthToPx(colMinStr, grid);
+            let colCount = Math.max(1, Math.floor(w / colMinPx));
+            const minCols = parseInt(grid.getAttribute('data-tile-cols') || '0', 10);
+            if (minCols > 0) {
+                colCount = Math.max(colCount, minCols);
+            }
+
+            function runPack(cols) {
+                if (orgWall) {
+                    swMeasureOrgWallTileSpans(grid, cols);
+                    wraps.sort(function (a, b) {
+                        const ra = parseInt(a.getAttribute('data-org-row-span') || '4', 10);
+                        const rb = parseInt(b.getAttribute('data-org-row-span') || '4', 10);
+                        return rb - ra;
+                    });
+                }
+                return packWithColCount(cols);
+            }
+
+            let maxColUsed = runPack(colCount);
+            if (orgWall && maxColUsed > 0 && maxColUsed < colCount) {
+                colCount = maxColUsed;
+                maxColUsed = runPack(colCount);
+            }
+            if (orgWall && maxColUsed > 0) {
+                grid.style.gridTemplateColumns = 'repeat(' + maxColUsed + ', minmax(0, 1fr))';
             }
         }
 
@@ -2047,7 +2631,7 @@
             clearTimeout(_swPackWallT);
             _swPackWallT = setTimeout(function () {
                 _swPackWallT = null;
-                document.querySelectorAll('.sw-tiles.sw-tiles--region').forEach(function (el) {
+                document.querySelectorAll('.sw-tiles.sw-tiles--region, .sw-tiles.sw-tiles--org-wall').forEach(function (el) {
                     swPackTilesGrid(el);
                 });
             }, 32);
@@ -2070,13 +2654,29 @@
             ro.observe(root);
         }
 
+        function buildCompactOrgWallGrid(services, opts) {
+            opts = opts || {};
+            const wrap = document.createElement('div');
+            wrap.className = 'sw-eng-tiles-wrap sw-compact-org-wrap';
+            const grid = document.createElement('div');
+            grid.className = 'sw-tiles sw-tiles--org-wall';
+            const cols = parseInt(opts.tileColumns, 10) || 0;
+            if (cols > 0) {
+                grid.setAttribute('data-tile-cols', String(cols));
+                grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+            }
+            appendTilesToGrid(grid, services || [], { orgWallStyle: true });
+            wrap.appendChild(grid);
+            return wrap;
+        }
+
         function appendRegionColumnTiles(colEl, services) {
             const sp = splitServicesBknd(services);
             let hasMainGrid = false;
             if (sp.main.length) {
                 const grid = document.createElement('div');
-                grid.className = 'sw-tiles sw-tiles--region';
-                appendTilesToGrid(grid, sp.main);
+                grid.className = 'sw-tiles sw-tiles--org-wall';
+                appendTilesToGrid(grid, sp.main, { orgWallStyle: true });
                 colEl.appendChild(grid);
                 hasMainGrid = true;
             }
@@ -2089,16 +2689,90 @@
                 sh.textContent = 'Backend';
                 block.appendChild(sh);
                 const gridB = document.createElement('div');
-                gridB.className = 'sw-tiles sw-tiles--region sw-tiles--backend';
-                appendTilesToGrid(gridB, sp.backend, { backendSection: true });
+                gridB.className = 'sw-tiles sw-tiles--org-wall';
+                appendTilesToGrid(gridB, sp.backend, { backendSection: true, orgWallStyle: true });
                 block.appendChild(gridB);
                 colEl.appendChild(block);
             }
         }
 
+        function swOrgWallIncidentCount(s) {
+            let n = 0;
+            if (s && s.pd_incident) n += 1;
+            const dd = Number(s && s.dd_monitor_alert_count);
+            if (Number.isFinite(dd) && dd > 0) n += dd;
+            const suff = Number(s && s.dd_monitor_alert_suffix_count);
+            if (Number.isFinite(suff) && suff > 0) n += suff;
+            return n;
+        }
+
+        function appendOrgWallMonitorChips(footEl, s) {
+            const chips = document.createElement('div');
+            chips.className = 'sw-tile-org-chips sw-tile-inline-chips sm-hover-tip-chips';
+            const st = s.status || '';
+            if (st === 'critical' || st === 'warning') {
+                wallAppendServiceMonitorChips(chips, s, 'span');
+            } else {
+                if (s.splunk_url) {
+                    const splH = swSafeHttpHref(s.splunk_url);
+                    if (splH) {
+                        const sp = document.createElement('span');
+                        sp.className = 'sm-hover-tip-chip sm-hover-tip-chip--splunk';
+                        sp.textContent = 'SPL';
+                        sp.setAttribute('data-href', splH);
+                        sp.style.cursor = 'pointer';
+                        chips.appendChild(sp);
+                    }
+                }
+                wallAppendDdOpenPill(chips, s, 'span');
+            }
+            if (!chips.children.length) return;
+            chips.addEventListener('click', function (ev) {
+                const t = ev.target.closest('[data-href]');
+                if (!t || !chips.contains(t)) return;
+                const h = t.getAttribute('data-href');
+                if (!h) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                window.open(h, '_blank', 'noopener');
+            });
+            footEl.appendChild(chips);
+        }
+
+        function appendOrgWallStatusFoot(tileEl, s) {
+            const st = s.status || 'unknown';
+            const foot = document.createElement('div');
+            foot.className = 'sw-tile-org-foot';
+            const badge = document.createElement('span');
+            badge.className = 'sw-tile-org-badge';
+            if (st === 'warning') {
+                badge.textContent = 'WARN';
+                badge.classList.add('sw-tile-org-badge--warn');
+            } else if (st === 'critical') {
+                badge.textContent = 'CRIT';
+                badge.classList.add('sw-tile-org-badge--crit');
+            } else {
+                badge.textContent = 'OK';
+            }
+            foot.appendChild(badge);
+            const inc = swOrgWallIncidentCount(s);
+            if ((st === 'warning' || st === 'critical') && inc > 0) {
+                const incEl = document.createElement('span');
+                incEl.className = 'sw-tile-org-inc';
+                incEl.textContent = inc + ' inc';
+                foot.appendChild(incEl);
+            }
+            appendOrgWallMonitorChips(foot, s);
+            tileEl.appendChild(foot);
+        }
+
         function appendTilesToGrid(grid, svcs, opts) {
             opts = opts || {};
             const backendSection = !!opts.backendSection;
+            const orgWallStyle = !!opts.orgWallStyle;
+            if (orgWallStyle) {
+                grid.classList.add('sw-tiles--org-wall');
+            }
             if (!svcs || !svcs.length) {
                 const empty = document.createElement('div');
                 empty.className = 'sw-meta';
@@ -2116,28 +2790,21 @@
                 wrap.className = 'sw-tile-wrap';
                 const labLen = tileLabel.length;
                 if (st === 'critical') {
-                    if (labLen > 30) {
-                        wrap.classList.add('sw-tile-wrap--span-3', 'sw-tile-wrap--size-crit');
-                    } else if (labLen > 17) {
+                    if (labLen > 17) {
                         wrap.classList.add('sw-tile-wrap--size-crit-wide');
                     } else {
                         wrap.classList.add('sw-tile-wrap--size-crit');
                     }
                 } else if (st === 'warning') {
-                    if (labLen > 30) {
-                        wrap.classList.add('sw-tile-wrap--span-3', 'sw-tile-wrap--size-warn');
-                    } else if (labLen > 17) {
+                    if (labLen > 17) {
                         wrap.classList.add('sw-tile-wrap--size-warn-wide');
                     } else {
                         wrap.classList.add('sw-tile-wrap--size-warn');
                     }
                 } else {
-                    if (labLen > 30) {
-                        wrap.classList.add('sw-tile-wrap--span-3', 'sw-tile-wrap--size-ok');
-                    } else if (labLen > 17) {
+                    wrap.classList.add('sw-tile-wrap--size-ok');
+                    if (!orgWallStyle && labLen > 17) {
                         wrap.classList.add('sw-tile-wrap--size-ok-wide');
-                    } else {
-                        wrap.classList.add('sw-tile-wrap--size-ok');
                     }
                 }
 
@@ -2152,19 +2819,23 @@
                 } else if (st === 'warning') {
                     el.classList.add('sw-tile--warn', 'sw-tile--alert');
                 } else if (st === 'healthy') {
-                    /* green default */
+                    el.classList.add('sw-tile--healthy');
+                } else if (st === 'inactive') {
+                    el.classList.add('sw-tile--neutral', 'sw-tile--inactive');
                 } else {
                     el.classList.add('sw-tile--neutral');
                 }
 
                 const icon = document.createElement('div');
-                icon.className = 'sw-tile-icon';
-                if (st === 'critical') icon.textContent = '✕';
-                else if (st === 'warning') icon.textContent = '⚠';
-                else if (st === 'healthy') icon.textContent = '✓';
-                else if (st === 'inactive') icon.textContent = '○';
-                else icon.textContent = '?';
-                el.appendChild(icon);
+                if (!orgWallStyle) {
+                    icon.className = 'sw-tile-icon';
+                    if (st === 'critical') icon.textContent = '✕';
+                    else if (st === 'warning') icon.textContent = '⚠';
+                    else if (st === 'healthy') icon.textContent = '✓';
+                    else if (st === 'inactive') icon.textContent = '○';
+                    else icon.textContent = '?';
+                    el.appendChild(icon);
+                }
 
                 const met = document.createElement('div');
                 met.className = 'sw-tile-name-compact';
@@ -2173,7 +2844,9 @@
                 nameScroll.textContent = tileLabel || '—';
                 met.appendChild(nameScroll);
                 el.appendChild(met);
-                appendCritApmTrafficLine(met, s);
+                if (!orgWallStyle) {
+                    appendCritApmTrafficLine(met, s);
+                }
 
                 if ((st === 'warning' || st === 'critical') && tileLabel.indexOf('-') !== -1) {
                     const segs = tileLabel.split(/-+/).map(function (p) { return p.trim(); }).filter(Boolean);
@@ -2183,7 +2856,11 @@
                     }
                 }
 
-                appendTileIssueChipsStrip(el, s);
+                if (orgWallStyle) {
+                    appendOrgWallStatusFoot(el, s);
+                } else {
+                    appendTileIssueChipsStrip(el, s);
+                }
 
                 wrap.appendChild(el);
                 wrap.appendChild(buildTileTip(s));
@@ -2203,6 +2880,212 @@
             requestAnimationFrame(function() {
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
+        }
+
+        /* Org Status Wall column mosaic (matches screenshot left→right). */
+        const WALL_ENG_HALF_WIDTH_SLUGS = {
+            'client-engineering': true,
+            'firmware': true,
+            'windows': true,
+            'onecloud-engineering': true,
+            'ecommerce': true,
+            'infrared-services': true,
+            'samsung-partner': true,
+            'smart-vision': true,
+            'sre': true,
+            'oci': true,
+        };
+        const WALL_ENG_HALF_WIDTH_PAIR_LEAD = {
+            'samsung-partner': ['samsung-partner', 'sre'],
+            'smart-vision': ['smart-vision', 'oci'],
+            'windows': ['windows', 'onecloud-engineering'],
+            'ecommerce': ['ecommerce', 'infrared-services'],
+            'client-engineering': ['client-engineering', 'firmware'],
+        };
+        const WALL_ENG_HALF_WIDTH_PAIR_SKIP = {
+            'sre': true,
+            'oci': true,
+            'onecloud-engineering': true,
+            'infrared-services': true,
+            'firmware': true,
+        };
+
+        const WALL_ENG_COLUMN_SLUGS_DEFAULT = [
+            ['xcloud-engineering', 'platform-engineering'],
+            [
+                'partner-engineering',
+                'core-services',
+                'samsung-partner',
+                'sre',
+                'smart-vision',
+                'oci',
+            ],
+            [
+                'subscription-engineering',
+                'verisure-engineering',
+                'windows',
+                'onecloud-engineering',
+                'ecommerce',
+                'infrared-services',
+                'client-engineering',
+                'firmware',
+            ],
+            ['cicd', 'smart-vision-streaming', 'noc', 'npnoc', 'other'],
+        ];
+        const WALL_ENG_COLUMN_SLUGS_ADT = [
+            ['xcloud-engineering'],
+            [
+                'partner-engineering',
+                'platform-engineering',
+                'samsung-partner',
+                'sre',
+                'smart-vision',
+                'oci',
+            ],
+            [
+                'subscription-engineering',
+                'verisure-engineering',
+                'windows',
+                'onecloud-engineering',
+                'ecommerce',
+                'infrared-services',
+                'client-engineering',
+                'firmware',
+            ],
+            ['cicd', 'smart-vision-streaming', 'noc', 'npnoc', 'other', 'core-services'],
+        ];
+
+        function wallEngColumnLayoutDefault(columnLayout) {
+            if (columnLayout && columnLayout.length) {
+                return columnLayout;
+            }
+            if (typeof WALL_DD_ENV !== 'undefined' && WALL_DD_ENV === 'adt_prod') {
+                return WALL_ENG_COLUMN_SLUGS_ADT;
+            }
+            return WALL_ENG_COLUMN_SLUGS_DEFAULT;
+        }
+
+        function appendEngHalfPairRow(colEl, pairSlugs, bySlug, sectionIdPrefix, placed) {
+            const row = document.createElement('div');
+            row.className = 'sw-eng-block-row';
+            let any = false;
+            for (let pi = 0; pi < pairSlugs.length; pi++) {
+                const ps = String(pairSlugs[pi]);
+                const eng = bySlug[ps];
+                if (!eng) continue;
+                const blk = buildEngineeringBlock(eng, sectionIdPrefix);
+                if (blk) {
+                    row.appendChild(blk);
+                    placed.add(ps);
+                    any = true;
+                }
+            }
+            if (!any) return false;
+            colEl.appendChild(row);
+            return true;
+        }
+
+        function buildEngineeringBlock(eng, sectionIdPrefix, widthMode) {
+            const esvcs = eng.services || [];
+            if (!esvcs.length) {
+                return null;
+            }
+            const block = document.createElement('div');
+            block.className = 'sw-eng-block';
+            if (eng.slug) {
+                block.id = (sectionIdPrefix ? sectionIdPrefix + '-' : 'sw-eng-') + String(eng.slug);
+                const slug = String(eng.slug);
+                if (widthMode === 'quarter') {
+                    block.classList.add('sw-eng-block--quarter');
+                } else if (widthMode === 'half' || WALL_ENG_HALF_WIDTH_SLUGS[slug]) {
+                    block.classList.add('sw-eng-block--half');
+                }
+            }
+            const ehead = document.createElement('div');
+            ehead.className = 'sw-eng-head';
+            const et = document.createElement('div');
+            et.className = 'sw-eng-head-title';
+            et.textContent = eng.label || eng.key || 'Engineering';
+            ehead.appendChild(et);
+            const ec = eng.counts || {};
+            const ebadges = document.createElement('div');
+            ebadges.className = 'sw-eng-head-badges';
+            ebadges.innerHTML =
+                '<span class="sw-eng-head-badge--ok" title="Healthy">' + (ec.healthy != null ? ec.healthy : 0) + '</span>' +
+                '<span class="sw-eng-head-badge--warn" title="Warning">' + (ec.warning != null ? ec.warning : 0) + '</span>' +
+                '<span class="sw-eng-head-badge--crit" title="Critical">' + (ec.critical != null ? ec.critical : 0) + '</span>';
+            ehead.appendChild(ebadges);
+            block.appendChild(ehead);
+            const tilesWrap = document.createElement('div');
+            tilesWrap.className = 'sw-eng-tiles-wrap';
+            const grid = document.createElement('div');
+            grid.className = 'sw-tiles sw-tiles--org-wall';
+            const cols = Math.max(1, parseInt(eng.tile_columns, 10) || 2);
+            grid.setAttribute('data-tile-cols', String(cols));
+            grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+            appendTilesToGrid(grid, esvcs, { orgWallStyle: true });
+            tilesWrap.appendChild(grid);
+            block.appendChild(tilesWrap);
+            return block;
+        }
+
+        function buildEngineeringColumnLayout(engSections, sectionIdPrefix, columnLayout) {
+            const layout = document.createElement('div');
+            layout.className = 'sw-eng-layout';
+            const bySlug = {};
+            for (const eng of engSections || []) {
+                if (eng && eng.slug && (eng.services || []).length) {
+                    bySlug[String(eng.slug)] = eng;
+                }
+            }
+            const cols = wallEngColumnLayoutDefault(columnLayout);
+            const placed = new Set();
+            for (let ci = 0; ci < cols.length; ci++) {
+                const colEl = document.createElement('div');
+                colEl.className = 'sw-eng-col';
+                const slugs = cols[ci] || [];
+                for (let si = 0; si < slugs.length; si++) {
+                    const slug = String(slugs[si]);
+                    if (WALL_ENG_HALF_WIDTH_PAIR_SKIP[slug]) {
+                        continue;
+                    }
+                    if (WALL_ENG_HALF_WIDTH_PAIR_LEAD[slug]) {
+                        appendEngHalfPairRow(
+                            colEl,
+                            WALL_ENG_HALF_WIDTH_PAIR_LEAD[slug],
+                            bySlug,
+                            sectionIdPrefix,
+                            placed
+                        );
+                        continue;
+                    }
+                    const eng = bySlug[slug];
+                    if (eng) {
+                        const blk = buildEngineeringBlock(eng, sectionIdPrefix);
+                        if (blk) {
+                            colEl.appendChild(blk);
+                            placed.add(slug);
+                        }
+                    }
+                }
+                if (colEl.childNodes.length) {
+                    layout.appendChild(colEl);
+                }
+            }
+            for (const eng of engSections || []) {
+                const slug = eng && eng.slug ? String(eng.slug) : '';
+                if (slug && !placed.has(slug) && (eng.services || []).length) {
+                    const lastCol = layout.querySelector('.sw-eng-col:last-child');
+                    if (lastCol) {
+                        const blk = buildEngineeringBlock(eng, sectionIdPrefix);
+                        if (blk) {
+                            lastCol.appendChild(blk);
+                            placed.add(slug);
+                        }
+                    }
+                }
+            }
+            return layout;
         }
 
         function buildApmGroupSection(g, monitors) {
@@ -2266,82 +3149,56 @@
 
             const engSections = g.engineering_sections;
             if (engSections && engSections.length) {
-                const engLayout = document.createElement('div');
-                engLayout.className = 'sw-eng-layout';
-                for (const eng of engSections) {
-                    const block = document.createElement('div');
-                    block.className = 'sw-eng-block';
-                    if (eng.slug) {
-                        block.id = (section.id ? section.id + '-' : 'sw-eng-') + String(eng.slug);
-                    }
-                    const ehead = document.createElement('div');
-                    ehead.className = 'sw-eng-head';
-                    const et = document.createElement('div');
-                    et.className = 'sw-eng-head-title';
-                    et.textContent = eng.label || eng.key || 'Engineering';
-                    ehead.appendChild(et);
-                    const ec = eng.counts || {};
-                    const ebadges = document.createElement('div');
-                    ebadges.className = 'sw-eng-head-badges';
-                    ebadges.innerHTML =
-                        '<span>✓ ' + (ec.healthy != null ? ec.healthy : 0) + '</span>' +
-                        '<span>⚠ ' + (ec.warning != null ? ec.warning : 0) + '</span>' +
-                        '<span>✕ ' + (ec.critical != null ? ec.critical : 0) + '</span>';
-                    ehead.appendChild(ebadges);
-                    block.appendChild(ehead);
-                    const tilesWrap = document.createElement('div');
-                    tilesWrap.className = 'sw-eng-tiles-wrap';
-                    const grid = document.createElement('div');
-                    grid.className = 'sw-tiles sw-tiles--region';
-                    const esvcs = eng.services || [];
-                    if (!esvcs.length) {
-                        const empty = document.createElement('div');
-                        empty.className = 'sw-meta';
-                        empty.textContent = 'No services in this engineering group.';
-                        tilesWrap.appendChild(empty);
-                    } else {
-                        appendTilesToGrid(grid, esvcs);
-                        tilesWrap.appendChild(grid);
-                    }
-                    block.appendChild(tilesWrap);
-                    engLayout.appendChild(block);
-                }
-                section.appendChild(engLayout);
+                section.classList.add('sw-group--eng-mosaic');
+                const sectionIdPrefix = section.id ? section.id : '';
+                section.appendChild(
+                    buildEngineeringColumnLayout(
+                        engSections,
+                        sectionIdPrefix,
+                        g.engineering_column_layout
+                    )
+                );
             } else {
-                const regionWrap = document.createElement('div');
-                regionWrap.className = 'sw-region-grid';
+                section.classList.add('sw-group--compact-org');
                 const allSvcs = g.services || [];
-                const hasAny = allSvcs.length > 0;
-                if (!hasAny) {
+                if (!allSvcs.length) {
                     const empty = document.createElement('div');
                     empty.className = 'sw-meta';
                     empty.textContent = 'No services to display for this range (inactive/unknown are omitted).';
-                    regionWrap.appendChild(empty);
+                    section.appendChild(empty);
                 } else {
                     let columns = g.region_columns;
-                    if (!columns || !columns.length) {
-                        columns = buildRegionColumnsFromServices(allSvcs);
-                    }
-                    columns = filterNonEmptyRegionColumns(columns);
-                    for (const col of columns) {
-                        const colEl = document.createElement('div');
-                        colEl.className = 'sw-region-col';
-                        const hrow = document.createElement('div');
-                        hrow.className = 'sw-region-col-head';
-                        const ct = document.createElement('div');
-                        ct.className = 'sw-region-col-title';
-                        ct.textContent = col.label || '';
-                        const ch = document.createElement('span');
-                        ch.className = 'sw-region-col-hint';
-                        ch.textContent = col.subtitle || '';
-                        hrow.appendChild(ct);
-                        hrow.appendChild(ch);
-                        colEl.appendChild(hrow);
-                        appendRegionColumnTiles(colEl, col.services || []);
-                        regionWrap.appendChild(colEl);
+                    const slugLc = String(g.slug || '').toLowerCase();
+                    const useSimpleGrid =
+                        slugLc.indexOf('samsung') >= 0 || !columns || !columns.length;
+                    if (useSimpleGrid) {
+                        const n = allSvcs.length;
+                        const tileCols = Math.min(6, Math.max(2, n));
+                        section.appendChild(buildCompactOrgWallGrid(allSvcs, { tileColumns: tileCols }));
+                    } else {
+                        columns = filterNonEmptyRegionColumns(columns);
+                        const regionWrap = document.createElement('div');
+                        regionWrap.className = 'sw-region-grid sw-region-grid--compact';
+                        for (const col of columns) {
+                            const colEl = document.createElement('div');
+                            colEl.className = 'sw-region-col';
+                            const hrow = document.createElement('div');
+                            hrow.className = 'sw-region-col-head';
+                            const ct = document.createElement('div');
+                            ct.className = 'sw-region-col-title';
+                            ct.textContent = col.label || '';
+                            const ch = document.createElement('span');
+                            ch.className = 'sw-region-col-hint';
+                            ch.textContent = col.subtitle || '';
+                            hrow.appendChild(ct);
+                            hrow.appendChild(ch);
+                            colEl.appendChild(hrow);
+                            appendRegionColumnTiles(colEl, col.services || []);
+                            regionWrap.appendChild(colEl);
+                        }
+                        section.appendChild(regionWrap);
                     }
                 }
-                section.appendChild(regionWrap);
             }
             return section;
         }

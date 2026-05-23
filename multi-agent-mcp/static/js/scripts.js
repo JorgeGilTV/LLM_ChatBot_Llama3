@@ -1694,7 +1694,7 @@ function applyDeploymentsPayload(data) {
 
 function loadUpcomingDeployments(forceRefresh) {
     const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
-    const ck = 'deployments_upcoming_v3_grm_window';
+    const ck = 'deployments_upcoming_v4_24h';
     if (!forceRefresh && C) {
         const hit = C.get(ck);
         if (hit) {

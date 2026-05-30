@@ -1659,6 +1659,121 @@
         let wallLoadGeneration = 0;
         /** After first successful paint, keep tiles visible until new data replaces them (auto-refresh / manual refresh). */
         let wallDomEverPainted = false;
+        /** Tracks all-vs-single env mode so we never append onto stale sections missing data-sw-dd-env. */
+        let wallLastViewKey = '';
+
+        function swEnvFromGroupSlug(slug) {
+            if (!slug) return '';
+            var s = String(slug);
+            if (s === 'software-catalog-production') return 'production';
+            var prefix = 'software-catalog-';
+            if (s.indexOf(prefix) === 0) return s.slice(prefix.length);
+            return '';
+        }
+
+        function inferSectionDdEnv(section) {
+            if (!section) return '';
+            if (section.dataset && section.dataset.swDdEnv) return section.dataset.swDdEnv;
+            var id = section.id || '';
+            if (id.indexOf('sw-group-') === 0) {
+                return swEnvFromGroupSlug(id.slice('sw-group-'.length));
+            }
+            return '';
+        }
+
+        function tagLegacyWallSections(root) {
+            if (!root) return;
+            var sections = root.querySelectorAll('section.sw-group');
+            for (var i = 0; i < sections.length; i++) {
+                var sec = sections[i];
+                if (!sec.dataset.swDdEnv) {
+                    var env = inferSectionDdEnv(sec);
+                    if (env) sec.dataset.swDdEnv = env;
+                }
+            }
+        }
+
+        function reorderWallEnvSections(root, envOrder) {
+            if (!root || !envOrder || !envOrder.length) return;
+            for (var i = 0; i < envOrder.length; i++) {
+                var env = envOrder[i];
+                var sec = root.querySelector('section[data-sw-dd-env="' + env + '"]');
+                if (sec) root.appendChild(sec);
+            }
+        }
+
+        function insertWallEnvSection(root, env, node, envOrder) {
+            if (!root || !node) return;
+            node.dataset.swDdEnv = env;
+            var idx = envOrder ? envOrder.indexOf(env) : -1;
+            if (idx < 0) {
+                root.appendChild(node);
+                return;
+            }
+            var ref = null;
+            for (var j = idx + 1; j < envOrder.length; j++) {
+                ref = root.querySelector('section[data-sw-dd-env="' + envOrder[j] + '"]');
+                if (ref) break;
+            }
+            if (ref) root.insertBefore(node, ref);
+            else root.appendChild(node);
+        }
+
+        function replaceWallEnvSlot(root, env, newChild, envOrder) {
+            if (!root || !newChild) return;
+            newChild.dataset.swDdEnv = env;
+            tagLegacyWallSections(root);
+            var slots = root.querySelectorAll('section[data-sw-dd-env="' + env + '"]');
+            if (slots.length) {
+                root.replaceChild(newChild, slots[0]);
+                for (var i = 1; i < slots.length; i++) slots[i].remove();
+            } else {
+                insertWallEnvSection(root, env, newChild, envOrder);
+            }
+        }
+
+        function prepareIncrementalWallRoot(root, envOrder, retainExistingWidgets) {
+            if (!root) return;
+            var loading = document.getElementById('sw-loading');
+            if (loading) loading.remove();
+            if (!retainExistingWidgets) {
+                root.textContent = '';
+                for (var i = 0; i < envOrder.length; i++) {
+                    root.appendChild(buildApmPendingPlaceholder(envOrder[i]));
+                }
+                return;
+            }
+            tagLegacyWallSections(root);
+            var allowed = {};
+            for (var a = 0; a < envOrder.length; a++) allowed[envOrder[a]] = true;
+            var allSections = root.querySelectorAll('section.sw-group');
+            for (var r = 0; r < allSections.length; r++) {
+                var sec = allSections[r];
+                var env = inferSectionDdEnv(sec);
+                if (env) sec.dataset.swDdEnv = env;
+                if (env && !allowed[env]) sec.remove();
+            }
+            for (var e = 0; e < envOrder.length; e++) {
+                var envKey = envOrder[e];
+                var dupes = root.querySelectorAll('section[data-sw-dd-env="' + envKey + '"]');
+                for (var d = 1; d < dupes.length; d++) dupes[d].remove();
+                if (!root.querySelector('section[data-sw-dd-env="' + envKey + '"]')) {
+                    root.appendChild(buildApmPendingPlaceholder(envKey));
+                }
+            }
+            reorderWallEnvSections(root, envOrder);
+        }
+
+        function dedupeIncrementalWallRoot(root, envOrder) {
+            if (!root || !envOrder) return;
+            tagLegacyWallSections(root);
+            for (var i = 0; i < envOrder.length; i++) {
+                var env = envOrder[i];
+                var slots = root.querySelectorAll('section[data-sw-dd-env="' + env + '"]');
+                for (var j = 1; j < slots.length; j++) slots[j].remove();
+            }
+            reorderWallEnvSections(root, envOrder);
+        }
 
         /** WebKit: invalid href or URL can throw (\"The string did not match the expected pattern\"). */
         function setSafeAnchorHref(anchor, href) {
@@ -2917,8 +3032,6 @@
                 'core-services',
                 'samsung-partner',
                 'sre',
-                'smart-vision',
-                'oci',
             ],
             [
                 'subscription-engineering',
@@ -2930,7 +3043,7 @@
                 'client-engineering',
                 'firmware',
             ],
-            ['cicd', 'smart-vision-streaming', 'noc', 'npnoc', 'other'],
+            ['cicd', 'smart-vision-streaming', 'smart-vision', 'oci', 'noc', 'npnoc'],
         ];
         const WALL_ENG_COLUMN_SLUGS_ADT = [
             ['xcloud-engineering'],
@@ -2939,8 +3052,6 @@
                 'platform-engineering',
                 'samsung-partner',
                 'sre',
-                'smart-vision',
-                'oci',
             ],
             [
                 'subscription-engineering',
@@ -2952,7 +3063,7 @@
                 'client-engineering',
                 'firmware',
             ],
-            ['cicd', 'smart-vision-streaming', 'noc', 'npnoc', 'other', 'core-services'],
+            ['cicd', 'smart-vision-streaming', 'smart-vision', 'oci', 'noc', 'npnoc', 'core-services'],
         ];
 
         function wallEngColumnLayoutDefault(columnLayout) {
@@ -3091,6 +3202,9 @@
         function buildApmGroupSection(g, monitors) {
             const section = document.createElement('section');
             section.className = 'sw-group';
+            if (g.mode) {
+                section.dataset.swDdEnv = String(g.mode);
+            }
             if (g.slug) {
                 section.id = 'sw-group-' + String(g.slug).replace(/[^a-z0-9_-]/gi, '-');
             }
@@ -3300,14 +3414,8 @@
             retainExistingWidgets
         ) {
             const root = document.getElementById('sw-root');
-            const loading = document.getElementById('sw-loading');
-            if (loading) loading.remove();
-            if (!retainExistingWidgets) {
-                root.textContent = '';
-                for (let i = 0; i < envList.length; i++) {
-                    root.appendChild(buildApmPendingPlaceholder(envList[i]));
-                }
-            } else {
+            prepareIncrementalWallRoot(root, envList, retainExistingWidgets);
+            if (retainExistingWidgets && root) {
                 root.classList.add('sw-root--refreshing');
                 root.dataset.swRefreshGen = String(myGen);
             }
@@ -3339,12 +3447,8 @@
             bumpStatus();
 
             function replaceSlot(env, newChild) {
-                const slot = root.querySelector('section[data-sw-dd-env="' + env + '"]');
-                if (slot && slot.parentNode === root) {
-                    root.replaceChild(newChild, slot);
-                } else {
-                    root.appendChild(newChild);
-                }
+                if (myGen !== wallLoadGeneration) return;
+                replaceWallEnvSlot(root, env, newChild, envList);
             }
 
             await Promise.all(
@@ -3439,6 +3543,7 @@
             );
 
             if (myGen !== wallLoadGeneration) return;
+            dedupeIncrementalWallRoot(root, envList);
             if (
                 retainExistingWidgets &&
                 root &&
@@ -3476,7 +3581,6 @@
         async function loadWall(options) {
             wallLoadGeneration++;
             const myGen = wallLoadGeneration;
-            const retainExistingWidgets = wallDomEverPainted;
             const forceRefresh = options && options.forceRefresh === true;
             const trEl = document.getElementById('sw-timerange');
             const timerange = trEl ? parseInt(trEl.value, 10) : 1;
@@ -3491,8 +3595,6 @@
             }
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
-            statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
-
             const useIncremental =
                 WALL_INCREMENTAL_APM &&
                 ((SW_APM_TAB === 'golden' &&
@@ -3503,11 +3605,20 @@
                         ddEl.value === 'all' &&
                         Array.isArray(WALL_APM_PARALLEL_MAIN) &&
                         WALL_APM_PARALLEL_MAIN.length > 0));
+            const envList =
+                useIncremental
+                    ? (SW_APM_TAB === 'golden' ? WALL_APM_PARALLEL_GOLDEN : WALL_APM_PARALLEL_MAIN)
+                    : [];
+            const viewKey = useIncremental
+                ? 'inc:' + envList.join(',')
+                : 'single:' + String(body.dd_env || '');
+            const viewChanged = wallLastViewKey !== '' && wallLastViewKey !== viewKey;
+            wallLastViewKey = viewKey;
+            const retainExistingWidgets = wallDomEverPainted && !viewChanged;
+            statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
 
             try {
                 if (useIncremental) {
-                    const envList =
-                        SW_APM_TAB === 'golden' ? WALL_APM_PARALLEL_GOLDEN : WALL_APM_PARALLEL_MAIN;
                     await loadWallApmIncremental(
                         timerange,
                         forceRefresh,
@@ -3603,6 +3714,12 @@
         if (document.getElementById('sw-apm-dd-env')) {
             swApmUpdateDatadogLink();
         }
+        window.addEventListener('pageshow', function(ev) {
+            if (ev && ev.persisted) {
+                wallDomEverPainted = false;
+                wallLastViewKey = '';
+            }
+        });
         loadWall();
         setInterval(loadWall, WALL_REFRESH_MS);
     </script>

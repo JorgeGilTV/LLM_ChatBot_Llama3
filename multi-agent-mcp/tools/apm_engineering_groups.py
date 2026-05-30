@@ -22,8 +22,9 @@ ENGINEERING_GROUP_ORDER: tuple[str, ...] = (
     "Partner Engineering",
     "Platform Engineering",
     "Core Services",
-    "Smart Vision",
     "Smart Vision Streaming",
+    "Smart Vision",
+    "Oci",
     "Samsung Partner",
     "Sre",
     "Subscription Engineering",
@@ -37,7 +38,6 @@ ENGINEERING_GROUP_ORDER: tuple[str, ...] = (
     "Ecommerce",
     "Infrared Services",
     "Npnoc",
-    "Oci",
     "Other",
 )
 
@@ -52,8 +52,6 @@ ENGINEERING_COLUMN_SLUGS: tuple[tuple[str, ...], ...] = (
         "core-services",
         "samsung-partner",
         "sre",
-        "smart-vision",
-        "oci",
     ),
     (
         "subscription-engineering",
@@ -65,7 +63,7 @@ ENGINEERING_COLUMN_SLUGS: tuple[tuple[str, ...], ...] = (
         "client-engineering",
         "firmware",
     ),
-    ("cicd", "smart-vision-streaming", "noc", "npnoc", "other"),
+    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "npnoc"),
 )
 
 # ADT org wall: Platform under Partner; Core Services under Other.
@@ -76,8 +74,6 @@ ENGINEERING_COLUMN_SLUGS_ADT: tuple[tuple[str, ...], ...] = (
         "platform-engineering",
         "samsung-partner",
         "sre",
-        "smart-vision",
-        "oci",
     ),
     (
         "subscription-engineering",
@@ -89,7 +85,7 @@ ENGINEERING_COLUMN_SLUGS_ADT: tuple[tuple[str, ...], ...] = (
         "client-engineering",
         "firmware",
     ),
-    ("cicd", "smart-vision-streaming", "noc", "npnoc", "other", "core-services"),
+    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "npnoc", "core-services"),
 )
 
 
@@ -262,6 +258,7 @@ _CATALOG_DD_ALIASES: dict[str, tuple[str, ...]] = {
     "backend-hmsdeviceauth": ("backend-hmsdevicesauth",),
     "backend-hmscsapi": ("backend-hmscscapi",),
     "arlosafeapi": ("backend-arlosafeapi",),
+    "backend-arlosafe-partners": ("backend-arlosafepartners",),
 }
 
 
@@ -627,15 +624,31 @@ def merge_engineering_wall_statuses(
     consumed_dd: set[str] = set()
     for name in catalog:
         row = _lookup_status_for_catalog_name(name, by_key)
+        legacy_org = (
+            active_only
+            and engineering_wall_uses_org_catalog(dd_env)
+            and is_org_wall_legacy_service(name, dd_env)
+        )
         if row is not None:
             st = row.get("status") or "inactive"
             if active_only and st not in active:
+                if legacy_org:
+                    out.append(row)
                 consumed_dd.update(_dd_keys_for_catalog_name(name))
                 continue
             if not active_only and st in (*active, "inactive", "unknown"):
                 out.append(row)
             elif active_only and st in active:
                 out.append(row)
+        elif legacy_org:
+            out.append(
+                {
+                    "service": name,
+                    "status": "healthy",
+                    "environment": environment,
+                    "wall_idle": True,
+                }
+            )
         consumed_dd.update(_dd_keys_for_catalog_name(name))
 
     for s in all_statuses or []:
@@ -646,6 +659,165 @@ def merge_engineering_wall_statuses(
             out.append(s)
             consumed_dd.add(k)
     return out
+
+
+_ORG_WALL_LEGACY_LIST_BY_ENV: dict[str, Path] = {
+    "production": _REPO_ROOT / "lists" / "production_apm_127.txt",
+    "adt_prod": _REPO_ROOT / "lists" / "adt_apm_services.txt",
+}
+
+
+def org_wall_legacy_list_path(dd_env: str) -> Path | None:
+    return _ORG_WALL_LEGACY_LIST_BY_ENV.get((dd_env or "").strip())
+
+
+def org_wall_legacy_service_names(dd_env: str = "production") -> list[str]:
+    """Bundled org wall list for production or adt_prod."""
+    path = org_wall_legacy_list_path(dd_env)
+    if path is None or not path.is_file():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for ln in lines:
+        s = ln.strip()
+        if not s or s.lstrip().startswith("#"):
+            continue
+        k = _norm_service_key(s)
+        if k and k not in seen:
+            seen.add(k)
+            out.append(s)
+    return out
+
+
+def org_wall_legacy_service_keys(dd_env: str = "production") -> set[str]:
+    keys: set[str] = set()
+    for name in org_wall_legacy_service_names(dd_env):
+        keys.update(_dd_keys_for_catalog_name(name))
+        keys.add(_norm_service_key(name))
+    return keys
+
+
+def is_org_wall_legacy_service(name: str, dd_env: str = "production") -> bool:
+    """True if name is in the env org wall bundled list (incl. DD aliases)."""
+    legacy = org_wall_legacy_service_keys(dd_env)
+    if not legacy:
+        return False
+    k = _norm_service_key(name)
+    if not k:
+        return False
+    return k in legacy or bool(_dd_keys_for_catalog_name(name) & legacy)
+
+
+def normalize_org_wall_legacy_tile_statuses(
+    statuses: list[dict],
+    dd_env: str,
+) -> list[dict]:
+    """
+    Org wall bundled list (production / adt_prod): show idle/unknown tiles as healthy
+    (green OK) unless Datadog reported warning or critical.
+    """
+    if not engineering_wall_uses_org_catalog(dd_env):
+        return list(statuses or [])
+    out: list[dict] = []
+    for s in statuses or []:
+        if not isinstance(s, dict):
+            continue
+        name = str(s.get("service") or "")
+        if not is_org_wall_legacy_service(name, dd_env):
+            out.append(s)
+            continue
+        st = (s.get("status") or "inactive").strip().lower()
+        if st in ("warning", "critical"):
+            out.append(s)
+            continue
+        if st in ("inactive", "unknown"):
+            row = dict(s)
+            row["status"] = "healthy"
+            row["wall_idle"] = True
+            out.append(row)
+            continue
+        out.append(s)
+    return out
+
+
+def merge_apm_names_with_org_wall_legacy(
+    apm_names: list[str],
+    dd_env: str = "production",
+) -> tuple[list[str], int]:
+    """
+    Union the env org wall bundled list into the Datadog APM scope so legacy names
+    stay in scope even when missing from GET /api/v2/apm/services.
+    """
+    if not engineering_wall_uses_org_catalog(dd_env):
+        return list(apm_names or []), 0
+    legacy = org_wall_legacy_service_names(dd_env)
+    if not legacy:
+        return list(apm_names or []), 0
+    by_key: dict[str, str] = {}
+    for n in apm_names or []:
+        k = _norm_service_key(n)
+        if k and k not in by_key:
+            by_key[k] = (n or "").strip()
+    added = 0
+    for n in legacy:
+        k = _norm_service_key(n)
+        if k and k not in by_key:
+            by_key[k] = n
+            added += 1
+    out: list[str] = []
+    seen: set[str] = set()
+    for n in apm_names or []:
+        k = _norm_service_key(n)
+        if k and k not in seen:
+            seen.add(k)
+            out.append(by_key[k])
+    for n in legacy:
+        k = _norm_service_key(n)
+        if k and k not in seen:
+            seen.add(k)
+            out.append(by_key[k])
+    return out, added
+
+
+def drop_other_unlisted_org_wall_tiles(
+    statuses: list[dict],
+    dd_env: str,
+    owner_by_service: dict[str, str] | None,
+) -> tuple[list[dict], int]:
+    """
+    Production/adt_prod + Datadog Team grouping: omit tiles that fall in Other and are
+    not in the bundled org wall list for that env.
+    """
+    if not engineering_wall_uses_org_catalog(dd_env) or not apm_status_wall_use_dd_team(dd_env):
+        return list(statuses or []), 0
+    org_keys = org_wall_legacy_service_keys(dd_env)
+    if not org_keys:
+        return list(statuses or []), 0
+    use_dd = owner_by_service is not None
+    out: list[dict] = []
+    dropped = 0
+    for s in statuses or []:
+        if not isinstance(s, dict):
+            continue
+        name = str(s.get("service") or "")
+        k = _norm_service_key(name)
+        if k in org_keys:
+            out.append(s)
+            continue
+        group = engineering_group_for_service(
+            name,
+            dd_env=dd_env,
+            owner_by_service=owner_by_service if use_dd else None,
+        )
+        if group == "Other":
+            dropped += 1
+            continue
+        out.append(s)
+    return out, dropped
 
 
 # Canonical service name -> engineering group (lowercase keys)
@@ -679,6 +851,7 @@ _SERVICE_TO_GROUP: dict[str, str] = {
     "backend-hmsfwa": "Partner Engineering",
     "backend-hmshomekit-app": "Partner Engineering",
     "backend-arlosafepartners": "Partner Engineering",
+    "backend-arlosafe-partners": "Partner Engineering",
     "backend-hmshomekit-scheduler": "Partner Engineering",
     "backend-hmsreportingservice": "Partner Engineering",
     "backend-partnercloud": "Partner Engineering",
@@ -858,12 +1031,14 @@ def _counts_from_services(services: list[dict]) -> dict:
     h = sum(1 for s in services if s.get("status") == "healthy")
     w = sum(1 for s in services if s.get("status") == "warning")
     c = sum(1 for s in services if s.get("status") == "critical")
+    unk = sum(1 for s in services if s.get("status") == "unknown")
+    inn = sum(1 for s in services if s.get("status") == "inactive")
     return {
         "healthy": h,
         "warning": w,
         "critical": c,
-        "unknown": 0,
-        "inactive": 0,
+        "unknown": unk,
+        "inactive": inn,
         "total": len(services),
     }
 
@@ -898,8 +1073,11 @@ def build_engineering_sections(
     show_empty = show_empty_engineering_groups()
     out: list[dict] = []
     for label in section_order:
-        if label == "Other" and not (buckets.get("Other") or []):
-            continue
+        if label == "Other":
+            if apm_status_wall_use_dd_team(dd_env) and engineering_wall_uses_org_catalog(dd_env):
+                continue
+            if not (buckets.get("Other") or []):
+                continue
         svcs = buckets.get(label) or []
         if not svcs and not show_empty:
             continue

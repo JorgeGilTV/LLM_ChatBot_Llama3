@@ -365,10 +365,13 @@ def _apm_status_wall_cache_bucket_secs() -> int:
     return _status_monitor_int_env("APM_STATUS_WALL_CACHE_SECS", 300, 60, 1200)
 
 
-def _apm_status_wall_attach_eks() -> bool:
+def _apm_status_wall_attach_eks(dd_env: str = "") -> bool:
     """Default on: EKS names feed region split (Oregon / Ireland). Set APM_STATUS_WALL_ATTACH_EKS=0 to skip (faster)."""
     v = (os.getenv("APM_STATUS_WALL_ATTACH_EKS") or "1").strip().lower()
     if v in ("0", "false", "no", "off"):
+        return False
+    # ADT wall is single-region (Oregon); per-tile EKS fan-out adds minutes and causes 504/timeouts.
+    if (dd_env or "").strip() == "adt_prod":
         return False
     return v in ("1", "true", "yes", "on", "")
 
@@ -432,6 +435,23 @@ def _wall_apm_header_badges_reuse_pd(pd_counts: dict, pd_api_key: str | None) ->
 _ADT_SPLUNK_DASHBOARD_URL = (
     "https://arlo.splunkcloud.com/en-US/app/search/p0_streaming_dashboard_pp"
 )
+
+
+def _wall_adt_splunk_badge_light() -> dict:
+    """ADT Splunk pill without live P0 outlier queries (fast wall load; embed link preserved)."""
+    return {
+        "label": "SPL",
+        "href": _ADT_SPLUNK_DASHBOARD_URL,
+        "embed_url": "/embed/splunk-p0-adt",
+        "panel_toggle": True,
+        "p0_id": "p0_adt",
+        "status": "ok",
+        "short": "—",
+        "detail": (
+            "P0 ADT Splunk summary omitted for fast load. Click to open the dashboard, or set "
+            "APM_STATUS_WALL_HEADER_LIGHT=0 to fetch live outlier counts (slower)."
+        ),
+    }
 
 
 def _wall_adt_splunk_badge(timerange: int, force_refresh: bool) -> dict:
@@ -525,7 +545,10 @@ def _wall_apm_monitors_for_dd_env(
             "detail": "PAGERDUTY_API_TOKEN not set",
         }
     if dd_env == "adt_prod":
-        spl_badge = _wall_adt_splunk_badge(timerange, force_refresh)
+        if _apm_status_wall_header_light():
+            spl_badge = _wall_adt_splunk_badge_light()
+        else:
+            spl_badge = _wall_adt_splunk_badge(timerange, force_refresh)
     elif _apm_status_wall_header_light():
         spl_badge = _wall_apm_header_badges_reuse_pd(pd_counts or {}, pd_api_key)["splunk"]
     else:
@@ -866,8 +889,9 @@ earliest=-{timerange_hours}h latest=now
         }
         
         print(f"🔍 Querying Splunk for US Infra Exceptions (last {timerange_hours}h)...")
-        from tools.splunk_tool import splunk_ipv4_rest_scope
+        from tools.splunk_tool import splunk_ipv4_rest_scope, splunk_rest_dispatch_form_fields
 
+        data.update(splunk_rest_dispatch_form_fields())
         with splunk_ipv4_rest_scope():
             response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(15, 60))
         
@@ -935,8 +959,9 @@ earliest=-{timerange_hours}h latest=now
         }
         
         print(f"🔍 Querying Splunk for outliers (last {timerange_hours}h)...")
-        from tools.splunk_tool import splunk_ipv4_rest_scope
+        from tools.splunk_tool import splunk_ipv4_rest_scope, splunk_rest_dispatch_form_fields
 
+        data.update(splunk_rest_dispatch_form_fields())
         with splunk_ipv4_rest_scope():
             response = requests.post(search_url, headers=headers, data=data, verify=True, timeout=(15, 90))
         
@@ -967,6 +992,23 @@ earliest=-{timerange_hours}h latest=now
 def _sm_dd_monitor_error_override_enabled() -> bool:
     v = (os.getenv("STATUS_MONITOR_DD_MONITOR_ERROR_OVERRIDE") or "1").strip().lower()
     return v not in ("0", "false", "no", "off")
+
+
+def _sm_expected_err_rate_ok_services() -> frozenset[str]:
+    """Services whose high APM error rate is expected (Cicd delegates, etc.)."""
+    names = {"harness-delegate-svn-ireland"}
+    extra = (os.getenv("STATUS_MONITOR_EXPECTED_ERR_RATE_OK") or "").strip()
+    if extra:
+        for part in extra.split(","):
+            s = re.sub(r"\s+", "", (part or "").strip().lower())
+            if s:
+                names.add(s)
+    return frozenset(names)
+
+
+def _sm_is_expected_err_rate_ok(service_name: str) -> bool:
+    k = re.sub(r"\s+", "", (service_name or "").strip().lower())
+    return k in _sm_expected_err_rate_ok_services()
 
 
 def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, dd_site):
@@ -1351,6 +1393,21 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
             status = _sm_bump_min_warning_for_dd_suffix_alerts(status, len(suffix_alert_names))
             if status != "healthy":
                 dd_monitor_override = False
+
+        if (
+            _sm_is_expected_err_rate_ok(service_name)
+            and status in ("critical", "warning")
+            and not traffic_drop
+            and not high_latency
+            and error_rate > 1
+        ):
+            prev = status
+            status = "healthy"
+            dd_monitor_override = True
+            print(
+                f"   ✅ {service_name} ({environment}): expected error-rate — "
+                f"{prev} → healthy (ERR {error_rate:.2f}%)"
+            )
 
         dd_m_url = _dd_monitors_manage_url(service_name, environment, dd_site)
         dd_m_url_all = (
@@ -1867,6 +1924,8 @@ def _attach_eks_clusters_wall(
 
     def work(row: dict) -> None:
         if row.get("status") not in ("healthy", "warning", "critical"):
+            return
+        if row.get("wall_idle"):
             return
         if row.get("eks_clusters"):
             return
@@ -3361,8 +3420,21 @@ def _resolve_software_catalog_wall_from_dd_apm(
             apm_engineering_groups_enabled,
             apm_status_wall_use_dd_team,
             fetch_datadog_catalog_service_owners,
+            merge_apm_names_with_org_wall_legacy,
             order_services_for_engineering_wall,
         )
+
+        apm_names, n_org_legacy = merge_apm_names_with_org_wall_legacy(
+            apm_names, dd_env
+        )
+        if n_org_legacy:
+            from tools.apm_engineering_groups import org_wall_legacy_list_path
+
+            leg_path = org_wall_legacy_list_path(dd_env)
+            print(
+                f"🧭 Software catalog wall: merged {n_org_legacy} org-wall name(s) "
+                f"from {leg_path} into APM scope"
+            )
 
         if apm_engineering_groups_enabled():
             owners = None
@@ -3495,7 +3567,7 @@ def _fetch_software_catalog_service_names_from_api(
 
 
 def _bundled_production_apm_127_path() -> str:
-    """Path to committed list of 127 APM `service` names for env:production."""
+    """Path to committed list of 90 APM `service` names for env:production."""
     return os.path.normpath(
         os.path.join(os.path.dirname(__file__), "..", "lists", "production_apm_127.txt")
     )
@@ -4116,7 +4188,43 @@ def _software_catalog_wall_payload_for_single_env(
                 if s.get("status") in ("healthy", "warning", "critical")
             ]
             statuses.sort(key=_wall_service_sort_key)
-    if _apm_status_wall_attach_eks():
+    n_dropped_other = 0
+    owner_by_service: dict | None = None
+    try:
+        from tools.apm_engineering_groups import (
+            apm_engineering_groups_enabled,
+            apm_status_wall_use_dd_team,
+            drop_other_unlisted_org_wall_tiles,
+            engineering_wall_uses_org_catalog,
+            fetch_datadog_catalog_service_owners,
+        )
+
+        if (
+            apm_engineering_groups_enabled()
+            and engineering_wall_uses_org_catalog(dde)
+            and apm_status_wall_use_dd_team(dde)
+            and dd_api_key
+            and dd_app_key
+        ):
+            owner_by_service = fetch_datadog_catalog_service_owners(
+                dd_api_key, dd_app_key, dd_site
+            )
+            statuses, n_dropped_other = drop_other_unlisted_org_wall_tiles(
+                statuses, dde, owner_by_service
+            )
+    except Exception as e:
+        print(f"⚠️ Other-bucket filter skipped: {e}")
+    try:
+        from tools.apm_engineering_groups import (
+            engineering_wall_uses_org_catalog,
+            normalize_org_wall_legacy_tile_statuses,
+        )
+
+        if engineering_wall_uses_org_catalog(dde):
+            statuses = normalize_org_wall_legacy_tile_statuses(statuses, dde)
+    except Exception as e:
+        print(f"⚠️ Org legacy idle→OK normalization skipped: {e}")
+    if _apm_status_wall_attach_eks(dde):
         eks_wall_cache: dict = {}
         _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache, force_refresh)
 
@@ -4179,12 +4287,12 @@ def _software_catalog_wall_payload_for_single_env(
         )
 
         if apm_engineering_groups_enabled() and engineering_wall_uses_org_catalog(dde):
-            owner_by_service = None
-            if apm_status_wall_use_dd_team(dde) and dd_api_key and dd_app_key:
+            if owner_by_service is None and apm_status_wall_use_dd_team(dde) and dd_api_key and dd_app_key:
                 owner_by_service = fetch_datadog_catalog_service_owners(
                     dd_api_key, dd_app_key, dd_site
                 )
-                wall_group_by_team = bool(owner_by_service)
+            if apm_status_wall_use_dd_team(dde) and owner_by_service:
+                wall_group_by_team = True
             eng_sections = build_engineering_sections(
                 ser,
                 dd_env=dde,
@@ -4205,9 +4313,10 @@ def _software_catalog_wall_payload_for_single_env(
             "tiles_shown": len(statuses),
             "dropped_inactive": n_inactive,
             "dropped_unknown": n_unknown,
+            "dropped_other": n_dropped_other,
             "apm_environment": dde,
             "header_light": _apm_status_wall_header_light(),
-            "eks_hints": _apm_status_wall_attach_eks(),
+            "eks_hints": _apm_status_wall_attach_eks(dde),
             "group_by": "team" if wall_group_by_team else None,
         },
         "groups": [
@@ -4427,7 +4536,7 @@ def status_monitor_software_catalog_wall_data(
     """
     global _software_catalog_wall_cache
     dde = normalize_software_catalog_wall_dd_env(dd_env)
-    cache_version = "sc_wall_v49_adt_column_layout"
+    cache_version = "sc_wall_v50_adt_splunk_light"
     apm_bucket = _apm_status_wall_cache_bucket_secs()
     cache_key = f"{cache_version}_{dde}_{timerange}_{int(time.time() // apm_bucket)}"
     hit = _read_sm_mem_cache(_software_catalog_wall_cache, cache_key, force_refresh)

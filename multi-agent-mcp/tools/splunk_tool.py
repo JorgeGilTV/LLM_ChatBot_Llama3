@@ -62,6 +62,21 @@ def splunk_mgmt_port() -> str:
     return (os.getenv("SPLUNK_MGMT_PORT") or "8089").strip() or "8089"
 
 
+def splunk_rest_auto_cancel_enabled() -> bool:
+    """
+    Splunk REST ``auto_cancel``: when enabled (Splunk default), dispatching a new search
+    cancels a prior job with the same search name. Default off so parallel/chunked jobs
+    are not dropped.
+    """
+    raw = (os.getenv("SPLUNK_AUTO_CANCEL") or "0").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def splunk_rest_dispatch_form_fields() -> dict[str, str]:
+    """Extra POST fields for /services/search/jobs and /export (merged into form body)."""
+    return {"auto_cancel": "1" if splunk_rest_auto_cancel_enabled() else "0"}
+
+
 def splunk_rest_timeouts() -> tuple[int, int]:
     """
     (connect_seconds, read_seconds) for Splunk REST export.
@@ -187,6 +202,7 @@ def execute_splunk_query(
                 "earliest_time": earliest_time,
                 "latest_time": latest_time,
                 "output_mode": "json",
+                **splunk_rest_dispatch_form_fields(),
             }
             if tz:
                 data["timezone"] = tz

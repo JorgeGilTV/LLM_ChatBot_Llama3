@@ -371,11 +371,14 @@ def _export_search_parsed(
     except Exception:
         tz = "America/Los_Angeles"
     url = f"https://{host}:8089/services/search/jobs/export"
+    from tools.splunk_tool import splunk_rest_dispatch_form_fields
+
     data: dict[str, str] = {
         "search": _search_string_for_job_export(search),
         "earliest_time": earliest,
         "latest_time": latest,
         "output_mode": "json",
+        **splunk_rest_dispatch_form_fields(),
     }
     if tz:
         data["timezone"] = tz

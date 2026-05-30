@@ -58,11 +58,14 @@ def query_splunk(search_query: str, timerange_hours: int, public_ip: str = "Unkn
     
     search_url = f"https://{splunk_host}:8089/services/search/jobs/export"
     earliest_time = f"-{timerange_hours}h@h"
+    from tools.splunk_tool import splunk_rest_dispatch_form_fields
+
     data = {
         "search": search_query,
         "earliest_time": earliest_time,
         "latest_time": "now",
-        "output_mode": "json"
+        "output_mode": "json",
+        **splunk_rest_dispatch_form_fields(),
     }
     
     try:

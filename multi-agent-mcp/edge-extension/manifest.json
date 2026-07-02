@@ -2,13 +2,7 @@
   "manifest_version": 3,
   "name": "GocView Chatbot",
   "version": "2.2.0",
-  "description": "GocView Chatbot — ask from any page; answers are summarized and sent to Slack.",
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "gocview-chatbot@arlocloud.com",
-      "strict_min_version": "109.0"
-    }
-  },
+  "description": "GocView Chatbot for Microsoft Edge — ask from any page; answers are summarized and sent to Slack.",
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://gocview.arlocloud.com/*",

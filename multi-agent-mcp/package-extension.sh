@@ -1,26 +1,32 @@
 #!/usr/bin/env bash
-# Package GocView Chatbot browser extensions (Chrome + Firefox).
+# Package GocView Chatbot browser extensions (Chrome, Edge, Firefox, Safari source).
 #
 # Usage:
-#   ./package-extension.sh           # both browsers
-#   ./package-extension.sh chrome    # Chrome only
-#   ./package-extension.sh firefox   # Firefox only
-#   ./package-extension.sh both 2.1.0
+#   ./package-extension.sh              # all zip packages
+#   ./package-extension.sh chrome
+#   ./package-extension.sh edge
+#   ./package-extension.sh firefox
+#   ./package-extension.sh safari
+#   ./package-extension.sh all 2.2.0
 #
-# Output:
-#   dist/gocview-chatbot-chrome-<version>.zip
-#   dist/gocview-chatbot-firefox-<version>.zip
+# Output (in dist/):
+#   gocview-chatbot-chrome-<version>.zip
+#   gocview-chatbot-edge-<version>.zip
+#   gocview-chatbot-firefox-<version>.zip
+#   gocview-chatbot-safari-<version>.zip   (source for Xcode; run build-safari-extension.sh on Mac)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 OUT_DIR="${ROOT}/dist"
 
-TARGET="${1:-both}"
+TARGET="${1:-all}"
 VERSION="${2:-}"
 
-if [[ "$TARGET" == "both" || "$TARGET" == "chrome" || "$TARGET" == "firefox" ]] && [[ "$TARGET" =~ ^[0-9] ]]; then
+BROWSERS=(chrome edge firefox safari)
+
+if [[ "$TARGET" =~ ^[0-9] ]]; then
   VERSION="$TARGET"
-  TARGET="both"
+  TARGET="all"
 fi
 
 package_one() {
@@ -50,24 +56,22 @@ package_one() {
 }
 
 case "$TARGET" in
-  chrome)  package_one chrome ;;
-  firefox) package_one firefox ;;
-  both)
-    package_one chrome
-    package_one firefox
+  chrome|edge|firefox|safari) package_one "$TARGET" ;;
+  all|both)
+    for b in "${BROWSERS[@]}"; do
+      package_one "$b"
+    done
     ;;
   *)
-    echo "Usage: $0 [chrome|firefox|both] [version]" >&2
+    echo "Usage: $0 [chrome|edge|firefox|safari|all] [version]" >&2
     exit 1
     ;;
 esac
 
 echo ""
-echo "Chrome install:"
-echo "  chrome://extensions → Developer mode → Load unpacked → chrome-extension/"
-echo ""
-echo "Firefox install:"
-echo "  about:debugging#/runtime/this-firefox → Load Temporary Add-on → firefox-extension/manifest.json"
-echo "  (or unzip gocview-chatbot-firefox-*.zip and load manifest.json)"
+echo "Chrome:  chrome://extensions → Developer mode → Load unpacked → chrome-extension/"
+echo "Edge:    edge://extensions → Developer mode → Load unpacked → edge-extension/"
+echo "Firefox: about:debugging → Load Temporary Add-on → firefox-extension/manifest.json"
+echo "Safari:  ./build-safari-extension.sh (macOS + Xcode) → Run in Xcode → enable in Safari Settings"
 echo ""
 echo "Server default: https://gocview.arlocloud.com"

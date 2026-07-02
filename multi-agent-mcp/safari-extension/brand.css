@@ -1,0 +1,20 @@
+/* Arlo corporate brand tokens (arlo.com + GocView) */
+:root {
+  --arlo-green: #08a64e;
+  --arlo-green-hover: #079448;
+  --arlo-green-light: #e8f7ef;
+  --arlo-navy: #003087;
+  --arlo-navy-dark: #002266;
+  --arlo-black: #1a1a1a;
+  --arlo-text: #2d3748;
+  --arlo-muted: #6b7280;
+  --arlo-border: #e2e8f0;
+  --arlo-surface: #ffffff;
+  --arlo-bg: #f7f9fc;
+  --arlo-shadow: 0 4px 24px rgba(0, 48, 135, 0.12);
+  --arlo-shadow-lg: 0 12px 40px rgba(0, 48, 135, 0.18);
+  --arlo-radius: 10px;
+  --arlo-font: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --arlo-error: #dc2626;
+  --arlo-success: #08a64e;
+}

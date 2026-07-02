@@ -1,0 +1,194 @@
+@import url('brand.css');
+
+/* Floating GocView Chatbot widget — Arlo corporate */
+#gocview-widget-root {
+  all: initial;
+  font-family: var(--arlo-font);
+}
+
+#gocview-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2147483646;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+  background-color: var(--arlo-navy);
+  background-size: 28px auto;
+  background-repeat: no-repeat;
+  background-position: center;
+  font-size: 0;
+  box-shadow: var(--arlo-shadow-lg);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+#gocview-fab:hover {
+  transform: scale(1.05);
+  background-color: var(--arlo-navy-dark);
+  box-shadow: 0 14px 36px rgba(0, 48, 135, 0.4);
+}
+
+#gocview-panel {
+  position: fixed;
+  bottom: 92px;
+  right: 24px;
+  z-index: 2147483646;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background: var(--arlo-surface);
+  color: var(--arlo-text);
+  border-radius: 12px;
+  box-shadow: var(--arlo-shadow-lg);
+  border: 1px solid var(--arlo-border);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#gocview-panel.gocview-open {
+  display: flex;
+}
+
+#gocview-panel-header {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, var(--arlo-navy) 0%, var(--arlo-navy-dark) 100%);
+  border-bottom: 3px solid var(--arlo-green);
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+#gocview-panel-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+#gocview-panel-logo {
+  height: 22px;
+  width: auto;
+  flex-shrink: 0;
+  filter: brightness(0) invert(1);
+}
+
+#gocview-panel-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+#gocview-panel-close {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+#gocview-panel-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#gocview-panel-body {
+  padding: 14px 14px 16px;
+  background: var(--arlo-surface);
+}
+
+#gocview-query-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--arlo-navy);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+#gocview-query {
+  width: 100%;
+  min-height: 84px;
+  border: 1px solid var(--arlo-border);
+  border-radius: var(--arlo-radius);
+  background: var(--arlo-surface);
+  color: var(--arlo-text);
+  padding: 10px 12px;
+  font-size: 0.875rem;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.45;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#gocview-query:focus {
+  outline: none;
+  border-color: var(--arlo-green);
+  box-shadow: 0 0 0 3px rgba(8, 166, 78, 0.15);
+}
+
+#gocview-query::placeholder {
+  color: #9ca3af;
+}
+
+#gocview-send {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--arlo-radius);
+  background: var(--arlo-green);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(8, 166, 78, 0.35);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+#gocview-send:hover:not(:disabled) {
+  background: var(--arlo-green-hover);
+  transform: translateY(-1px);
+}
+
+#gocview-send:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+#gocview-status {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: var(--arlo-muted);
+  line-height: 1.4;
+}
+
+#gocview-status.gocview-err {
+  color: var(--arlo-error);
+}
+
+#gocview-status.gocview-ok {
+  color: var(--arlo-success);
+  font-weight: 600;
+}
+
+#gocview-powered {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--arlo-border);
+  font-size: 0.65rem;
+  color: var(--arlo-muted);
+  text-align: center;
+}

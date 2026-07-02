@@ -1,48 +1,73 @@
 #!/usr/bin/env bash
-# Package GocView Chatbot Chrome extension for internal distribution.
+# Package GocView Chatbot browser extensions (Chrome + Firefox).
 #
 # Usage:
-#   ./package-extension.sh
-#   ./package-extension.sh 2.1.0
+#   ./package-extension.sh           # both browsers
+#   ./package-extension.sh chrome    # Chrome only
+#   ./package-extension.sh firefox   # Firefox only
+#   ./package-extension.sh both 2.1.0
 #
-# Output: dist/gocview-chatbot-<version>.zip (unpacked load in Chrome)
+# Output:
+#   dist/gocview-chatbot-chrome-<version>.zip
+#   dist/gocview-chatbot-firefox-<version>.zip
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-EXT_DIR="${ROOT}/chrome-extension"
 OUT_DIR="${ROOT}/dist"
 
-VERSION="${1:-}"
-if [[ -z "$VERSION" ]]; then
-  VERSION="$(python3 - <<'PY'
-import json
-from pathlib import Path
-m = json.loads(Path("chrome-extension/manifest.json").read_text())
-print(m.get("version", "0.0.0"))
-PY
-)"
+TARGET="${1:-both}"
+VERSION="${2:-}"
+
+if [[ "$TARGET" == "both" || "$TARGET" == "chrome" || "$TARGET" == "firefox" ]] && [[ "$TARGET" =~ ^[0-9] ]]; then
+  VERSION="$TARGET"
+  TARGET="both"
 fi
 
-ZIP_NAME="gocview-chatbot-${VERSION}.zip"
-mkdir -p "$OUT_DIR"
+package_one() {
+  local browser="$1"
+  local ext_dir="${ROOT}/${browser}-extension"
+  local manifest="${ext_dir}/manifest.json"
 
-if [[ ! -f "${EXT_DIR}/manifest.json" ]]; then
-  echo "Error: ${EXT_DIR}/manifest.json not found" >&2
-  exit 1
-fi
+  if [[ ! -f "$manifest" ]]; then
+    echo "Error: ${manifest} not found" >&2
+    exit 1
+  fi
 
-# Zip contents of chrome-extension/ (not the parent folder name) so unzip → load unpacked works.
-rm -f "${OUT_DIR}/${ZIP_NAME}"
-(
-  cd "$EXT_DIR"
-  zip -r "${OUT_DIR}/${ZIP_NAME}" . \
-    -x "*.DS_Store" -x "__MACOSX/*" -x "*.pem" -x "*.crx"
-)
+  local ver="$VERSION"
+  if [[ -z "$ver" ]]; then
+    ver="$(python3 -c "import json; print(json.load(open('${manifest}'))['version'])")"
+  fi
 
-echo "==> Created: ${OUT_DIR}/${ZIP_NAME}"
+  local zip_name="gocview-chatbot-${browser}-${ver}.zip"
+  mkdir -p "$OUT_DIR"
+  rm -f "${OUT_DIR}/${zip_name}"
+  (
+    cd "$ext_dir"
+    zip -r "${OUT_DIR}/${zip_name}" . \
+      -x "*.DS_Store" -x "__MACOSX/*" -x "*.pem" -x "*.crx" -x "*.xpi"
+  )
+  echo "==> Created: ${OUT_DIR}/${zip_name}"
+}
+
+case "$TARGET" in
+  chrome)  package_one chrome ;;
+  firefox) package_one firefox ;;
+  both)
+    package_one chrome
+    package_one firefox
+    ;;
+  *)
+    echo "Usage: $0 [chrome|firefox|both] [version]" >&2
+    exit 1
+    ;;
+esac
+
 echo ""
-echo "Share with colleagues:"
-echo "  1. Unzip the file"
-echo "  2. chrome://extensions → Developer mode ON"
-echo "  3. Load unpacked → select the unzipped folder"
-echo "  4. Server: https://gocview.arlocloud.com (default)"
+echo "Chrome install:"
+echo "  chrome://extensions → Developer mode → Load unpacked → chrome-extension/"
+echo ""
+echo "Firefox install:"
+echo "  about:debugging#/runtime/this-firefox → Load Temporary Add-on → firefox-extension/manifest.json"
+echo "  (or unzip gocview-chatbot-firefox-*.zip and load manifest.json)"
+echo ""
+echo "Server default: https://gocview.arlocloud.com"

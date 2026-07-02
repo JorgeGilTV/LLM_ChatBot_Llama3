@@ -36,8 +36,9 @@
   bottom: 92px;
   right: 24px;
   z-index: 2147483646;
-  width: 340px;
+  width: 380px;
   max-width: calc(100vw - 32px);
+  max-height: min(70vh, 520px);
   background: var(--arlo-surface);
   color: var(--arlo-text);
   border-radius: 12px;
@@ -105,6 +106,63 @@
 #gocview-panel-body {
   padding: 14px 14px 16px;
   background: var(--arlo-surface);
+  overflow-y: auto;
+}
+
+.gocview-btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.gocview-btn {
+  flex: 1;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--arlo-radius);
+  background: var(--arlo-green);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  box-shadow: 0 4px 14px rgba(8, 166, 78, 0.35);
+}
+
+.gocview-btn--secondary {
+  background: var(--arlo-navy);
+  box-shadow: 0 4px 14px rgba(0, 48, 135, 0.28);
+}
+
+.gocview-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.gocview-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.gocview-answer {
+  display: none;
+  margin-top: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--arlo-border);
+  border-radius: var(--arlo-radius);
+  background: var(--arlo-green-light);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.gocview-answer.gv-answer--visible {
+  display: block;
+}
+
+.gocview-answer a {
+  color: var(--arlo-navy);
+  font-weight: 600;
 }
 
 #gocview-query-label {
@@ -140,32 +198,6 @@
 
 #gocview-query::placeholder {
   color: #9ca3af;
-}
-
-#gocview-send {
-  width: 100%;
-  margin-top: 12px;
-  padding: 10px 14px;
-  border: none;
-  border-radius: var(--arlo-radius);
-  background: var(--arlo-green);
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 0.875rem;
-  letter-spacing: 0.02em;
-  box-shadow: 0 4px 14px rgba(8, 166, 78, 0.35);
-  transition: background 0.15s ease, transform 0.1s ease;
-}
-
-#gocview-send:hover:not(:disabled) {
-  background: var(--arlo-green-hover);
-  transform: translateY(-1px);
-}
-
-#gocview-send:disabled {
-  opacity: 0.65;
-  cursor: wait;
 }
 
 #gocview-status {

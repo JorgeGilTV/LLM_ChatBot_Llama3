@@ -2036,7 +2036,8 @@ def api_slack_summarize_and_send():
 @flask_app.route("/api/extension/chat", methods=["POST"])
 def api_extension_chat():
     """
-    Chrome extension: run GocBedrock (Bedrock_Report) and post Bedrock summary to Slack.
+    Browser extension chat: quick (Wiki + Bedrock) or deep (GocBedrock / Bedrock_Report).
+    Returns answer in JSON and posts summary to Slack.
     """
     webhook = (os.getenv("SLACK_WEBHOOK_URL") or "").strip()
     if not webhook:
@@ -2047,28 +2048,40 @@ def api_extension_chat():
     if not input_text:
         return jsonify({"success": False, "error": "input is required"}), 400
 
+    mode = str(data.get("mode") or "deep").strip().lower()
+    if mode not in ("quick", "deep"):
+        return jsonify({"success": False, "error": "mode must be quick or deep"}), 400
+
     source_url = data.get("source_url")
     source_url = source_url.strip() if isinstance(source_url, str) else ""
-    page_title = f"GocView Chat — {input_text[:120]}"
-
-    start = time.time()
-    try:
-        if not ARLOCHAT_AVAILABLE:
-            return jsonify(
-                {"success": False, "error": "GocBedrock (Bedrock_Report) is not available"},
-            ), 503
-        html_result = ask_arlo(input_text)
-    except Exception as e:
-        logging.exception("Extension chat Bedrock_Report")
-        return jsonify({"success": False, "error": str(e)}), 500
+    page_title = (
+        f"GocView Quick — {input_text[:120]}"
+        if mode == "quick"
+        else f"GocView Deep — {input_text[:120]}"
+    )
 
     from tools.issues_context import html_to_plain_text
     from tools.bedrock_tool import summarize_page_for_slack
 
-    page_text = html_to_plain_text(html_result)
-    if not page_text.strip():
-        page_text = input_text
+    start = time.time()
+    try:
+        if mode == "quick":
+            html_result = _extension_quick_search(input_text)
+        else:
+            if not ARLOCHAT_AVAILABLE:
+                return jsonify(
+                    {"success": False, "error": "GocBedrock (Bedrock_Report) is not available"},
+                ), 503
+            html_result = ask_arlo(input_text)
+    except Exception as e:
+        logging.exception("Extension chat mode=%s", mode)
+        return jsonify({"success": False, "error": str(e)}), 500
 
+    answer_text = html_to_plain_text(html_result)
+    if not answer_text.strip():
+        answer_text = input_text
+
+    page_text = answer_text
     try:
         max_in = int(os.getenv("SLACK_SUMMARY_INPUT_MAX_CHARS", "100000"))
     except (TypeError, ValueError):
@@ -2092,6 +2105,7 @@ def api_extension_chat():
         return jsonify({"success": False, "error": summary[:2000]}), 502
 
     slack_payload = _slack_summary_blocks_payload(summary, page_title, source_url)
+    slack_sent = False
     try:
         r = post_incoming_webhook(webhook, slack_payload, timeout=(15, 90))
         if r.status_code != 200:
@@ -2099,6 +2113,7 @@ def api_extension_chat():
             return jsonify(
                 {"success": False, "error": f"Slack returned HTTP {r.status_code}"},
             ), 502
+        slack_sent = True
     except Exception as e:
         logging.error("Extension Slack webhook: %s", e)
         return jsonify({"success": False, "error": format_slack_connection_error(e)}), 500
@@ -2107,10 +2122,45 @@ def api_extension_chat():
     return jsonify(
         {
             "success": True,
-            "message": "Chat answer summarized and sent to Slack",
+            "mode": mode,
+            "message": "Answer ready; summary sent to Slack",
             "exec_time": exec_time,
+            "slack_sent": slack_sent,
+            "answer_html": html_result,
+            "answer_text": answer_text[:12000],
         }
     )
+
+
+def _extension_quick_search(input_text: str) -> str:
+    """
+    Onboarding-style quick lookup: Confluence Wiki + short Bedrock answer (no MCP / deep triage).
+    """
+    from tools.issues_context import html_to_plain_text
+
+    wiki_html = confluence_search(input_text)
+    wiki_plain = html_to_plain_text(wiki_html)
+    if len(wiki_plain) > 12000:
+        wiki_plain = wiki_plain[:12000] + "\n... (wiki truncated)"
+
+    prompt = f"""You are GocView Quick Assist (onboarding-style documentation helper for Arlo GOC).
+
+User question: "{input_text}"
+
+Confluence / wiki search results (primary source — cite page titles when relevant):
+{wiki_plain or "(no wiki pages matched)"}
+
+TASK:
+- Give a concise, practical answer in HTML only (<div>...</div>).
+- Prefer documentation links and runbook-style guidance from the wiki results.
+- Do NOT invent live metrics, incidents, or ticket IDs not present above.
+- Keep it short: hero line + up to 5 bullet findings or steps.
+- This is NOT a deep incident triage — no recurrence analysis or long tool dumps.
+- No markdown code fences.
+
+Return ONLY the HTML."""
+
+    return ask_bedrock(prompt, selected_tools=None, enable_mcp_access=False)
 
 
 @flask_app.route("/api/slack/screenshot-image/<sid>", methods=["GET"])

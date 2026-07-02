@@ -29,8 +29,12 @@
     '  <div id="gocview-panel-body">' +
     '    <label id="gocview-query-label" for="gocview-query">Your question</label>' +
     '    <textarea id="gocview-query" placeholder="What is going on with…?"></textarea>' +
-    '    <button id="gocview-send" type="button">Send to Slack</button>' +
+    '    <div class="gocview-btn-row">' +
+    '      <button id="gocview-quick" type="button" class="gocview-btn gocview-btn--secondary">Quick</button>' +
+    '      <button id="gocview-deep" type="button" class="gocview-btn">Deep</button>' +
+    '    </div>' +
     '    <p id="gocview-status" role="status"></p>' +
+    '    <div id="gocview-answer" class="gocview-answer"></div>' +
     '    <p id="gocview-powered">Powered by GocBedrock · Arlo GOC</p>' +
     '  </div>' +
     '</div>';
@@ -42,16 +46,13 @@
   const panelLogo = document.getElementById('gocview-panel-logo');
   const closeBtn = document.getElementById('gocview-panel-close');
   const queryEl = document.getElementById('gocview-query');
-  const sendBtn = document.getElementById('gocview-send');
+  const quickBtn = document.getElementById('gocview-quick');
+  const deepBtn = document.getElementById('gocview-deep');
   const statusEl = document.getElementById('gocview-status');
+  const answerEl = document.getElementById('gocview-answer');
 
   panelLogo.src = logoUrl;
-  fab.style.backgroundImage = 'url("' + logoUrl + '")';
-  fab.style.backgroundSize = '26px auto';
-  fab.style.filter = 'none';
-  /* White logo on navy FAB via CSS mask alternative: use inner img */
   fab.innerHTML = '<img src="' + logoUrl + '" alt="" style="width:28px;height:auto;filter:brightness(0) invert(1);pointer-events:none;" />';
-  fab.style.backgroundImage = 'none';
   fab.style.display = 'flex';
   fab.style.alignItems = 'center';
   fab.style.justifyContent = 'center';
@@ -59,6 +60,11 @@
   function setStatus(msg, kind) {
     statusEl.textContent = msg || '';
     statusEl.className = kind === 'err' ? 'gocview-err' : kind === 'ok' ? 'gocview-ok' : '';
+  }
+
+  function setBusy(busy) {
+    quickBtn.disabled = busy;
+    deepBtn.disabled = busy;
   }
 
   fab.addEventListener('click', function () {
@@ -72,24 +78,26 @@
     panel.classList.remove('gocview-open');
   });
 
-  async function runChat() {
+  async function runChat(mode) {
     const query = (queryEl.value || '').trim();
     if (!query) {
       setStatus('Please enter a question.', 'err');
       return;
     }
 
-    sendBtn.disabled = true;
-    setStatus('⏳ Analyzing and sending to Slack (1–3 min)…');
+    api.clearAnswer(answerEl);
+    setBusy(true);
+    const label = mode === 'quick' ? 'Quick Search' : 'Deep Search';
+    setStatus('⏳ ' + label + ' + Slack…');
 
     try {
       const sourceUrl = window.location.href || '';
-      const ref = await api.sendChatToSlack(query, sourceUrl);
+      const ref = await api.sendChat(query, sourceUrl, mode);
       const data = ref.data || {};
       if (ref.ok && data.success) {
+        api.renderAnswer(answerEl, data);
         const secs = data.exec_time != null ? ' (' + data.exec_time + 's)' : '';
-        setStatus('✅ Sent to Slack' + secs, 'ok');
-        queryEl.value = '';
+        setStatus('✅ Answer below · Slack' + secs, 'ok');
       } else {
         setStatus('❌ ' + (data.error || 'Server error'), 'err');
       }
@@ -99,15 +107,20 @@
         : (err && err.message ? err.message : 'Network error');
       setStatus('❌ ' + msg, 'err');
     } finally {
-      sendBtn.disabled = false;
+      setBusy(false);
     }
   }
 
-  sendBtn.addEventListener('click', runChat);
+  quickBtn.addEventListener('click', function () {
+    runChat('quick');
+  });
+  deepBtn.addEventListener('click', function () {
+    runChat('deep');
+  });
   queryEl.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      runChat();
+      runChat('deep');
     }
   });
 })();

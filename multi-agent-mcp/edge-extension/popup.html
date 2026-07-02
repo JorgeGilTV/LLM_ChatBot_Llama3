@@ -13,7 +13,7 @@
       <img src="icons/arlo-logo.png" alt="Arlo" class="gv-header-logo" />
       <div class="gv-header-text">
         <h1>GocView Chatbot</h1>
-        <p class="gv-sub">Intelligent triage · Slack delivery</p>
+        <p class="gv-sub">Quick docs · Deep triage · Slack</p>
       </div>
     </div>
   </header>
@@ -23,10 +23,17 @@
     <input id="baseUrl" type="url" class="gv-input" placeholder="https://gocview.arlocloud.com" />
 
     <label class="gv-label" for="query">Question</label>
-    <textarea id="query" class="gv-textarea" rows="4" placeholder="What is going on with samsung?"></textarea>
+    <textarea id="query" class="gv-textarea" rows="3" placeholder="What is going on with samsung?"></textarea>
 
-    <button id="sendBtn" type="button" class="gv-btn">Send to Slack</button>
+    <div class="gv-btn-row">
+      <button id="quickBtn" type="button" class="gv-btn gv-btn--secondary">Quick Search</button>
+      <button id="deepBtn" type="button" class="gv-btn">Deep Search</button>
+    </div>
+
     <p id="status" class="gv-status" role="status" aria-live="polite"></p>
+
+    <div id="answer" class="gv-answer" aria-live="polite"></div>
+
     <p class="gv-footer-note">Powered by GocBedrock · Arlo GOC</p>
   </main>
 

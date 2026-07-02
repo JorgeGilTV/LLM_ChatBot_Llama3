@@ -1,15 +1,18 @@
 {
   "manifest_version": 3,
   "name": "GocView Chatbot",
-  "version": "2.2.0",
-  "description": "GocView Chatbot — ask from any page; answers are summarized and sent to Slack.",
+  "version": "2.3.0",
+  "description": "GocView Chatbot \u2014 ask from any page; answers are summarized and sent to Slack.",
   "browser_specific_settings": {
     "gecko": {
       "id": "gocview-chatbot@arlocloud.com",
       "strict_min_version": "109.0"
     }
   },
-  "permissions": ["storage", "activeTab"],
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
   "host_permissions": [
     "https://gocview.arlocloud.com/*",
     "http://127.0.0.1:8080/*",
@@ -31,15 +34,27 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/arlo-logo.png"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "icons/arlo-logo.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["shared.js", "content.js"],
-      "css": ["brand.css", "content.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "shared.js",
+        "content.js"
+      ],
+      "css": [
+        "brand.css",
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ]

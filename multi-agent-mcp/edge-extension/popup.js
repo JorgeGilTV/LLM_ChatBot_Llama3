@@ -1,8 +1,10 @@
 document.addEventListener('DOMContentLoaded', async function () {
   const baseUrlEl = document.getElementById('baseUrl');
   const queryEl = document.getElementById('query');
-  const sendBtn = document.getElementById('sendBtn');
+  const quickBtn = document.getElementById('quickBtn');
+  const deepBtn = document.getElementById('deepBtn');
   const statusEl = document.getElementById('status');
+  const answerEl = document.getElementById('answer');
 
   const api = window.GocViewExtension;
   if (!api) {
@@ -21,7 +23,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     statusEl.className = 'gv-status' + (isError ? ' gv-status--error' : ' gv-status--ok');
   }
 
-  async function runChat() {
+  function setBusy(busy) {
+    quickBtn.disabled = busy;
+    deepBtn.disabled = busy;
+  }
+
+  async function runChat(mode) {
     const query = (queryEl.value || '').trim();
     if (!query) {
       setStatus('Please enter a question.', true);
@@ -29,17 +36,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     await api.setBaseUrl(baseUrlEl.value);
-    sendBtn.disabled = true;
-    setStatus('⏳ GocBedrock analyzing and sending to Slack (1–3 min)…');
+    api.clearAnswer(answerEl);
+    setBusy(true);
+    const label = mode === 'quick' ? 'Quick Search (wiki + Bedrock)' : 'Deep Search (GocBedrock)';
+    setStatus('⏳ ' + label + ' — also sending summary to Slack…');
 
     try {
       const sourceUrl = await api.getActiveTabUrl();
-      const ref = await api.sendChatToSlack(query, sourceUrl);
+      const ref = await api.sendChat(query, sourceUrl, mode);
       const data = ref.data || {};
       if (ref.ok && data.success) {
+        api.renderAnswer(answerEl, data);
         const secs = data.exec_time != null ? ' (' + data.exec_time + 's)' : '';
-        setStatus('✅ Sent to Slack' + secs, false);
-        queryEl.value = '';
+        const modeLabel = data.mode === 'quick' ? 'Quick' : 'Deep';
+        setStatus('✅ ' + modeLabel + ' answer below · sent to Slack' + secs, false);
       } else {
         setStatus('❌ ' + (data.error || 'Server error'), true);
       }
@@ -49,15 +59,20 @@ document.addEventListener('DOMContentLoaded', async function () {
         : (err && err.message ? err.message : 'Network error');
       setStatus('❌ ' + msg, true);
     } finally {
-      sendBtn.disabled = false;
+      setBusy(false);
     }
   }
 
-  sendBtn.addEventListener('click', runChat);
+  quickBtn.addEventListener('click', function () {
+    runChat('quick');
+  });
+  deepBtn.addEventListener('click', function () {
+    runChat('deep');
+  });
   queryEl.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      runChat();
+      runChat('deep');
     }
   });
 });

@@ -3,6 +3,75 @@ import requests
 import html
 from datetime import datetime, timedelta
 
+from tools.service_query import extract_service_name_from_query
+
+_PD_FUZZY_PART_BLOCKLIST = frozenset(
+    {
+        "backend", "nginx", "device", "oauth", "partner", "proxy", "logger",
+        "hmsweb", "secret", "mqtt", "broker", "privacy", "registration",
+        "support", "discovery", "directory", "presence", "messaging", "history",
+        "advisor", "geolocation", "mediamigrationscheduler", "automation", "arlo",
+    }
+)
+
+
+def _pd_incident_search_blob(incident: dict) -> str:
+    chunks = []
+    for key in ("title", "description", "summary"):
+        v = incident.get(key)
+        if isinstance(v, str) and v.strip():
+            chunks.append(v.lower())
+    body = incident.get("body")
+    if isinstance(body, dict):
+        det = body.get("details")
+        if isinstance(det, str) and det.strip():
+            chunks.append(det.lower())
+    service_obj = incident.get("service")
+    if isinstance(service_obj, dict):
+        for k in ("summary", "name", "description"):
+            v = service_obj.get(k)
+            if isinstance(v, str) and v.strip():
+                chunks.append(v.lower())
+    return " ".join(chunks)
+
+
+def _incident_matches_service(incident: dict, service_name: str) -> bool:
+    needle = (service_name or "").strip().lower()
+    if not needle:
+        return True
+
+    title = (incident.get("title") or "").lower()
+    service_obj = incident.get("service") or {}
+    svc = (service_obj.get("summary") or service_obj.get("name") or "").lower()
+    blob = _pd_incident_search_blob(incident)
+
+    candidates = {needle}
+    if needle.startswith("backend-"):
+        candidates.add(needle[8:])
+    else:
+        candidates.add(f"backend-{needle}")
+
+    for token in candidates:
+        if token and (token in title or token in svc or token in blob):
+            return True
+
+    for part in needle.split("-"):
+        pl = part.lower()
+        if len(pl) > 4 and pl not in _PD_FUZZY_PART_BLOCKLIST and pl in title:
+            return True
+
+    significant = [
+        p.lower()
+        for p in needle.split("-")
+        if len(p) >= 6 and p.lower() not in _PD_FUZZY_PART_BLOCKLIST
+    ]
+    for part in significant:
+        if part in blob or part in title or part in svc:
+            return True
+
+    return False
+
+
 def get_pagerduty_incidents(query=""):
     """
     Fetches incidents from PagerDuty API
@@ -14,6 +83,9 @@ def get_pagerduty_incidents(query=""):
         HTML formatted string with incident data
     """
     print(f"🚨 Fetching PagerDuty incidents for: {query}")
+    filter_service = extract_service_name_from_query(query)
+    if (query or "").strip() and filter_service != (query or "").strip().lower():
+        print(f"   → Service filter: {filter_service}")
     
     # Get PagerDuty API token from environment
     api_token = os.getenv("PAGERDUTY_API_TOKEN")
@@ -48,11 +120,7 @@ def get_pagerduty_incidents(query=""):
                 "statuses[]": ["triggered", "acknowledged", "resolved"],
                 "since": since
             }
-            
-            # If query is provided, use it to filter
-            if query:
-                params["query"] = query
-            
+
             response = requests.get(url, headers=headers, params=params, timeout=15)
             
             if response.status_code != 200:
@@ -71,10 +139,24 @@ def get_pagerduty_incidents(query=""):
                 print(f"⚠️ Reached safety limit of 10000 incidents")
                 break
         
+        filter_service = extract_service_name_from_query(query)
         incidents = all_incidents
         print(f"✅ Fetched {len(incidents)} total incidents from PagerDuty")
-        
+
+        if filter_service:
+            incidents = [i for i in all_incidents if _incident_matches_service(i, filter_service)]
+            print(
+                f"🔍 Display filter for service '{filter_service}': "
+                f"{len(incidents)} of {len(all_incidents)} incidents"
+            )
+
         if not incidents:
+            if filter_service and all_incidents:
+                return (
+                    f"<p style='color: #fbbf24;'>ℹ️ No incidents matched service "
+                    f"<strong>{html.escape(filter_service)}</strong> "
+                    f"(searched {len(all_incidents)} incidents in the last 7 days).</p>"
+                )
             return f"<p style='color: #fbbf24;'>ℹ️ No incidents found{' for: <strong>' + html.escape(query) + '</strong>' if query else ''}.</p>"
         
         # Group incidents by status
@@ -101,6 +183,13 @@ def get_pagerduty_incidents(query=""):
         html_output = f"<h2 style='color: #10b981;'>🚨 PagerDuty Alerts - Last 7 Days</h2>"
         html_output += f"<div style='background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>"
         html_output += f"<h3 style='margin: 0 0 10px 0;'>📊 Summary</h3>"
+        if filter_service:
+            html_output += (
+                f"<p style='margin: 5px 0; font-size: 12px; color: #64748b;'>"
+                f"Showing <strong>{len(incidents)}</strong> incident(s) for "
+                f"<strong>{html.escape(filter_service)}</strong> "
+                f"(from {len(all_incidents)} fetched in last 7 days)</p>"
+            )
         html_output += f"<p style='margin: 5px 0;'><strong>Total Incidents:</strong> {len(incidents)}</p>"
         html_output += f"<p style='margin: 5px 0; color: #ef4444;'><strong>🔴 Triggered:</strong> {len(triggered)}</p>"
         html_output += f"<p style='margin: 5px 0; color: #f59e0b;'><strong>🟡 Acknowledged:</strong> {len(acknowledged)}</p>"
@@ -115,8 +204,11 @@ def get_pagerduty_incidents(query=""):
         
         html_output += f"</div>"
         
-        if query:
-            html_output += f"<p style='color: #60a5fa;'>🔍 Filter applied: <strong>{html.escape(query)}</strong></p>"
+        if filter_service:
+            html_output += (
+                f"<p style='color: #60a5fa;'>🔍 Service filter: "
+                f"<strong>{html.escape(filter_service)}</strong></p>"
+            )
         
         # Organize incidents by status (Triggered → Acknowledged → Resolved)
         sorted_incidents = triggered + acknowledged + resolved

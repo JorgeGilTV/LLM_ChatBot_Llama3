@@ -110,6 +110,7 @@ from tools.splunk_tool import (
     read_splunk_p0_adt_dashboard,
     read_splunk_p0_us_infra_dashboard,
 )
+from tools.service_query import extract_service_name_from_query
 from tools.pagerduty_tool import get_pagerduty_incidents
 from tools.pagerduty_analytics import get_pagerduty_analytics
 from tools.pagerduty_insights import get_pagerduty_insights
@@ -158,22 +159,10 @@ TOOLS = {
 }
 registered_tools = [(name, tool["description"]) for name, tool in TOOLS.items()]
 
-# Tools that share one Bedrock intent analysis per /api/run request (avoid N duplicate LLM calls)
-_SERVICE_SPECIFIC_TOOLS = frozenset(
-    {
-        "DD_Errors",
-        "DD_Red_Metrics",
-        "DD_Failed_Pods",
-        "DD_403_Errors",
-        "DD_Red_ADT",
-        "DD_Red_Samsung",
-        "DD_Red_Metrics_US",
-        "DD_Search",
-        "DD_Services",
-        "Arlo_Versions",
-        "Owners",
-    }
-)
+# Tools that always receive the full user query (synthesis / chat).
+_TOOLS_KEEP_FULL_QUERY = frozenset({"Ask_Bedrock"})
+# Tools that ignore service filter and show org-wide data.
+_TOOLS_GLOBAL_SCOPE = frozenset({"PagerDuty_Dashboards", "PagerDuty_Insights"})
 _TOOLS_WITH_TIMERANGE = frozenset(
     {
         "DD_Search",
@@ -223,9 +212,22 @@ def _get_bedrock_runtime_client():
 def _monitoring_tool_input_from_analysis(user_query: str, analysis: dict) -> str:
     if analysis.get("is_general_query"):
         return ""
-    if analysis.get("service_name"):
-        return analysis["service_name"]
-    return user_query
+    svc = (analysis.get("service_name") or "").strip()
+    if svc:
+        return svc
+    return extract_service_name_from_query(user_query)
+
+
+def _tool_input_for_request(user_query: str, tool_name: str, analysis: dict | None) -> str:
+    if tool_name in _TOOLS_KEEP_FULL_QUERY:
+        return user_query
+    if tool_name in _TOOLS_GLOBAL_SCOPE:
+        return ""
+    if not (user_query or "").strip():
+        return ""
+    if analysis is not None:
+        return _monitoring_tool_input_from_analysis(user_query, analysis)
+    return extract_service_name_from_query(user_query)
 
 
 # ✅ Flask App
@@ -1280,7 +1282,11 @@ def api_run():
             bedrock_runtime = _get_bedrock_runtime_client()
             if not bedrock_runtime:
                 logging.warning("⚠️ BEDROCK_API_KEY not available for query analysis")
-                return {'is_general_query': False, 'service_name': user_query, 'confidence': 'low'}
+                return {
+                    "is_general_query": False,
+                    "service_name": extract_service_name_from_query(user_query),
+                    "confidence": "low",
+                }
             
             analysis_prompt = f"""Analyze this user query and extract the intent for monitoring tool execution.
 
@@ -1341,30 +1347,27 @@ Examples:
             
         except Exception as e:
             logging.error(f"❌ Error in Bedrock query analysis: {e}")
-            # Fallback to passing full query
-            return {'is_general_query': False, 'service_name': user_query, 'confidence': 'low'}
+            return {
+                "is_general_query": False,
+                "service_name": extract_service_name_from_query(user_query),
+                "confidence": "low",
+            }
     
-    def execute_tool(idx, tool_name, context_from_other_tools=None, monitoring_input_override=None):
-        """Execute a single tool and store result. monitoring_input_override avoids duplicate Bedrock calls."""
+    def execute_tool(idx, tool_name, context_from_other_tools=None, query_analysis=None):
+        """Execute a single tool and store result."""
         func = TOOLS.get(tool_name, {}).get('function')
         if not func:
             return idx, tool_name, f"<pre>No tool found for {tool_name}</pre>", True
         
         try:
-            tool_input = input_text
-            if tool_name in _SERVICE_SPECIFIC_TOOLS:
-                if monitoring_input_override is not None:
-                    tool_input = monitoring_input_override
-                else:
-                    analysis = analyze_query_with_bedrock(input_text)
-                    tool_input = _monitoring_tool_input_from_analysis(input_text, analysis)
+            tool_input = _tool_input_for_request(input_text, tool_name, query_analysis)
+            if tool_input and tool_name not in _TOOLS_KEEP_FULL_QUERY and tool_name not in _TOOLS_GLOBAL_SCOPE:
+                logging.info("   → %s input: %r", tool_name, tool_input)
             
             if tool_name in _TOOLS_WITH_TIMERANGE:
                 res = func(tool_input, timerange)
-            # Pass selected_tools and MCP access to Ask_Bedrock
             elif tool_name == 'Ask_Bedrock':
                 res = func(input_text, selected_tools=selected_tools, enable_mcp_access=True)
-            # Pass context from other tools to Bedrock_Report
             elif tool_name == 'Bedrock_Report':
                 res = func(tool_input, context_from_other_tools=context_from_other_tools)
             else:
@@ -1378,15 +1381,16 @@ Examples:
     data_tool_indices = [(idx, tool) for idx, tool in enumerate(selected_tools) if tool not in synthesis_tools]
     synthesis_tool_indices = [(idx, tool) for idx, tool in enumerate(selected_tools) if tool in synthesis_tools]
     
-    monitoring_input_override = None
-    if data_tool_indices and any(t in _SERVICE_SPECIFIC_TOOLS for _, t in data_tool_indices):
-        _analysis = analyze_query_with_bedrock(input_text)
-        monitoring_input_override = _monitoring_tool_input_from_analysis(input_text, _analysis)
+    query_analysis = None
+    if input_text.strip():
+        query_analysis = analyze_query_with_bedrock(input_text)
+        resolved = _monitoring_tool_input_from_analysis(input_text, query_analysis)
         logging.info(
-            "🤖 Bedrock query analysis (once per request): general=%s service=%r confidence=%s",
-            _analysis.get("is_general_query"),
-            _analysis.get("service_name", ""),
-            _analysis.get("confidence", ""),
+            "🤖 Query analysis: general=%s service=%r resolved=%r confidence=%s",
+            query_analysis.get("is_general_query"),
+            query_analysis.get("service_name", ""),
+            resolved,
+            query_analysis.get("confidence", ""),
         )
     
     # Phase 1: Execute data tools in parallel
@@ -1395,7 +1399,7 @@ Examples:
         logging.info(f"📊 Phase 1: Executing {len(data_tool_indices)} data tool(s) in parallel...")
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_tool = {
-                executor.submit(execute_tool, idx, tool_name, None, monitoring_input_override): (idx, tool_name)
+                executor.submit(execute_tool, idx, tool_name, None, query_analysis): (idx, tool_name)
                 for idx, tool_name in data_tool_indices
             }
             
@@ -1419,7 +1423,7 @@ Examples:
                     idx,
                     tool_name,
                     context_for_synthesis if context_for_synthesis else None,
-                    None,
+                    query_analysis,
                 ): (idx, tool_name)
                 for idx, tool_name in synthesis_tool_indices
             }

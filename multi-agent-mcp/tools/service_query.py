@@ -10,8 +10,9 @@ _SERVICE_TOKEN_RE = re.compile(
 
 _BARE_SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$", re.I)
 
+# "with/for/about" only — avoid bare "on" ("going on with …" would capture "with").
 _AFTER_PREP_RE = re.compile(
-    r"\b(?:with|for|about|regarding|on)\s+['\"]?([a-z0-9][a-z0-9-]+)['\"]?\b",
+    r"\b(?:with|for|about|regarding)\s+['\"]?([a-z0-9][a-z0-9_-]*)['\"]?\b",
     re.I,
 )
 
@@ -21,8 +22,13 @@ _NOISE_TOKENS = frozenset(
         "status", "errors", "error", "incidents", "incident", "metrics", "show",
         "tell", "give", "happening", "wrong", "please", "check", "look", "into",
         "zones", "regions", "region", "zone", "everything", "services", "service",
+        "with", "for", "about", "on", "regarding", "is", "are", "was", "were",
     }
 )
+
+
+def _normalize_token(token: str) -> str:
+    return token.lower().strip("?.,!\"'")
 
 
 def extract_service_name_from_query(text: str) -> str:
@@ -31,6 +37,7 @@ def extract_service_name_from_query(text: str) -> str:
 
     Examples:
         "what is going on with hmsautomation-scheduler?" -> hmsautomation-scheduler
+        "what is going on with samsung?" -> samsung
         "what's happening with hmsguard?" -> hmsguard
         "backend-hmspayment errors" -> backend-hmspayment
         "hmsguard" -> hmsguard
@@ -46,9 +53,14 @@ def extract_service_name_from_query(text: str) -> str:
     if matches:
         return max(matches, key=lambda m: (m.count("-"), len(m))).lower()
 
+    candidates: list[str] = []
     for m in _AFTER_PREP_RE.finditer(raw):
-        token = m.group(1).lower()
-        if token not in _NOISE_TOKENS and len(token) >= 4:
-            return token
+        token = _normalize_token(m.group(1))
+        if token and token not in _NOISE_TOKENS and len(token) >= 3:
+            candidates.append(token)
+
+    if candidates:
+        # Prefer the last match ("… going on with samsung" → samsung).
+        return candidates[-1]
 
     return ""

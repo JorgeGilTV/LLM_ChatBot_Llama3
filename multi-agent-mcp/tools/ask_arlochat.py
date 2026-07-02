@@ -1056,7 +1056,7 @@ async def ask_arlo_async(question: str = "") -> str:
                 
                 # Smart filtering: detect if user mentions specific tool categories
                 filter_keywords = {
-                    'jira': ['jira', 'ticket', 'issue', 'epic', 'story', 'bug'],
+                    'jira': ['jira', 'ticket', 'tickets', 'issue', 'issues', 'epic', 'story', 'bug', 'incidencia'],
                     'confluence': ['confluence', 'wiki', 'document', 'page'],
                     'datadog': ['datadog', 'metric', 'monitor', 'dashboard', 'apm'],
                     'pagerduty': ['pagerduty', 'incident', 'alert', 'oncall'],
@@ -1155,7 +1155,15 @@ async def ask_arlo_async(question: str = "") -> str:
                         
                         # Check if tool matches any detected category
                         for category in detected_categories:
-                            if category in tool_name_lower or category in tool_desc_lower:
+                            name_match = category in tool_name_lower or category in tool_desc_lower
+                            if category == 'jira' and not name_match:
+                                name_match = any(
+                                    x in tool_name_lower
+                                    for x in ('atlassian', 'jql', 'jiraissue', 'jira')
+                                )
+                            if category == 'confluence' and not name_match:
+                                name_match = 'confluence' in tool_name_lower
+                            if name_match:
                                 filtered_tools.append(tool)
                                 break
                     
@@ -1234,7 +1242,11 @@ async def ask_arlo_async(question: str = "") -> str:
                                 props = schema['properties']
                                 
                                 # Special handling for "show me all" with status filter
-                                if jira_search_status and 'jira' in tool_name.lower():
+                                if jira_search_status and (
+                                    'jira' in tool_name.lower()
+                                    or 'jql' in tool_name.lower()
+                                    or 'atlassian' in tool_name.lower()
+                                ):
                                     if 'jql' in props:
                                         # Build JQL for status search
                                         status_jql_map = {
@@ -1259,9 +1271,16 @@ async def ask_arlo_async(question: str = "") -> str:
                                         tool_params['query'] = ' '.join(query_parts)
                                         print(f"   📋 Using query: {tool_params['query']}")
                                 # Special handling for Jira tools with specific ticket IDs
-                                elif jira_tickets and 'jira' in tool_name.lower():
-                                    # For tools that accept issue_key or key parameter
-                                    if 'issue_key' in props or 'key' in props:
+                                elif jira_tickets and (
+                                    'jira' in tool_name.lower() or 'atlassian' in tool_name.lower()
+                                ):
+                                    if 'getjiraissue' in tool_name.lower().replace('_', '').replace('-', ''):
+                                        tool_params['issueIdOrKey'] = jira_tickets[0]
+                                        cloud_id = getattr(session, '_arlo_atlassian_cloud_id', None)
+                                        if cloud_id:
+                                            tool_params['cloudId'] = cloud_id
+                                        print(f"   📋 Using issue key: {jira_tickets[0]}")
+                                    elif 'issue_key' in props or 'key' in props:
                                         tool_params['issue_key' if 'issue_key' in props else 'key'] = jira_tickets[0]
                                         print(f"   📋 Using ticket ID: {jira_tickets[0]}")
                                     elif 'jql' in props:
@@ -2166,6 +2185,23 @@ Return ONLY the HTML (no markdown blocks)."""
                 
                 if not mcp_tools_list:
                     raise Exception("No tools available from MCP server")
+
+                from tools.jira_mcp import is_jira_question, run_jira_mcp_search
+
+                tool_results = []
+                if is_jira_question(question):
+                    print("🎫 Jira query detected — running MintMCP Jira search...")
+                    jira_hit = await run_jira_mcp_search(session, question)
+                    if jira_hit:
+                        print(f"   ✅ Jira MCP ({jira_hit['tool']}) JQL: {jira_hit.get('jql')}")
+                        tool_results.append({
+                            "tool": jira_hit["tool"],
+                            "result": jira_hit["result"],
+                            "description": f"Jira search: {jira_hit.get('jql', '')}",
+                            "reason": f"Auto Jira search — {jira_hit.get('jql', '')}",
+                        })
+                    else:
+                        print("   ⚠️ Jira MCP search returned no results")
                 
                 # Convert to dict format for Bedrock
                 mcp_tools = []
@@ -2204,8 +2240,10 @@ Respond with ONLY a JSON object (no markdown, no explanation):
 }}
 
 Guidelines:
-- For Jira searches: use jql parameter like 'text ~ "keywords"' or 'summary ~ "keywords"'
-- For Confluence searches: use cql parameter
+- Jira (MintMCP): use atlassian-rovo__searchJiraIssuesUsingJql with cloudId + jql (e.g. project = "GOC" AND text ~ "shm")
+- Single Jira issue: atlassian-rovo__getJiraIssue with cloudId + issueIdOrKey
+- cloudId for arlo.atlassian.net: call atlassian-rovo__getAccessibleAtlassianResources if needed
+- For Confluence searches: use cql parameter on atlassian-rovo__searchConfluenceUsingCql
 - For Datadog: use query parameter with metric name
 - If question asks for explanations/information, prioritize Confluence tools
 - If question is conversational, set needs_tools=false
@@ -2214,21 +2252,25 @@ Guidelines:
 
 Return ONLY the JSON object."""
 
-                # Call Bedrock
-                analysis_response = ask_bedrock(analysis_prompt, selected_tools=None)
-                
-                # Extract JSON from response
-                json_match = re.search(r'\{.*\}', analysis_response, re.DOTALL)
-                if json_match:
-                    analysis = json.loads(json_match.group(0))
+                # Skip redundant Bedrock tool-pick if Jira search already succeeded
+                if tool_results and is_jira_question(question):
+                    analysis = {"needs_tools": False, "direct_answer": ""}
+                    print("📊 Skipping Bedrock tool selection — Jira results already fetched")
                 else:
-                    print(f"⚠️  Failed to parse Bedrock response: {analysis_response[:200]}")
-                    analysis = {"needs_tools": False, "direct_answer": analysis_response}
+                    # Call Bedrock
+                    analysis_response = ask_bedrock(analysis_prompt, selected_tools=None)
+                    
+                    # Extract JSON from response
+                    json_match = re.search(r'\{.*\}', analysis_response, re.DOTALL)
+                    if json_match:
+                        analysis = json.loads(json_match.group(0))
+                    else:
+                        print(f"⚠️  Failed to parse Bedrock response: {analysis_response[:200]}")
+                        analysis = {"needs_tools": False, "direct_answer": analysis_response}
                 
                 print(f"📊 Analysis: {json.dumps(analysis, indent=2)}")
                 
                 # Step 2: Execute selected tools using SDK
-                tool_results = []
                 if analysis.get("needs_tools", False):
                     tools_to_call = analysis.get("tools_to_call", [])
                     print(f"\n🔧 Step 2: Executing {len(tools_to_call)} selected MCP tool(s)...")
@@ -2280,415 +2322,33 @@ Return ONLY the JSON object."""
                         except Exception as e:
                             print(f"   ❌ Error calling tool: {e}")
                 
-                # Step 3: Generate conversational response with Bedrock
-                print("\n💬 Step 3: Generating conversational response with Bedrock...")
-                
-                # Helper function to extract key metrics from HTML results
-                def summarize_tool_results(tool_results_dict: dict) -> str:
-                    """
-                    Extract only key information from tool results, removing HTML/CSS/JS.
-                    Dramatically reduces token count while preserving critical data.
-                    """
-                    summary = []
-                    
-                    for tool_name, html_result in tool_results_dict.items():
-                        # Skip if result is empty or error
-                        if not html_result or 'error' in html_result.lower()[:100]:
-                            summary.append(f"**{tool_name}**: No data or error")
-                            continue
-                        
-                        # Extract service metrics using regex
-                        services_found = []
-                        
-                        # Pattern 1: Extract service names from various formats
-                        service_patterns = [
-                            r'<span[^>]*>([a-z0-9-]+)</span>\s*<span[^>]*>#([a-z]+)',  # backend-service #env
-                            r'🔹\s*([a-z0-9-]+)\s*#([a-z]+)',  # 🔹 service-name #production
-                            r'([a-z0-9-]+)\s*#([a-z]+)',  # service-name #production
-                        ]
-                        
-                        for pattern in service_patterns:
-                            matches = re.findall(pattern, html_result, re.IGNORECASE)
-                            for service, env in matches:
-                                if service not in [s['name'] for s in services_found]:
-                                    # Try to extract metrics for this service
-                                    metrics = {}
-                                    
-                                    # Look for Requests
-                                    req_match = re.search(rf'{re.escape(service)}.*?(\d+(?:\.\d+)?)\s*req/s', html_result, re.DOTALL | re.IGNORECASE)
-                                    if req_match:
-                                        metrics['requests'] = req_match.group(1)
-                                    
-                                    # Look for Errors
-                                    err_match = re.search(rf'{re.escape(service)}.*?(\d+)\s*\(([^)]+)\)', html_result, re.DOTALL | re.IGNORECASE)
-                                    if err_match:
-                                        metrics['errors'] = f"{err_match.group(1)} ({err_match.group(2)})"
-                                    
-                                    # Look for Latency
-                                    lat_match = re.search(rf'{re.escape(service)}.*?(\d+(?:\.\d+)?)\s*ms\s+avg', html_result, re.DOTALL | re.IGNORECASE)
-                                    if lat_match:
-                                        metrics['latency'] = f"{lat_match.group(1)}ms"
-                                    
-                                    services_found.append({
-                                        'name': service,
-                                        'env': env,
-                                        'metrics': metrics
-                                    })
-                        
-                        # Build summary for this tool
-                        if services_found:
-                            tool_summary = f"**{tool_name}**: {len(services_found)} services\n"
-                            
-                            # Only include services with potential issues (high errors or high latency)
-                            problematic_services = []
-                            healthy_count = 0
-                            
-                            for svc in services_found:
-                                metrics = svc['metrics']
-                                is_problematic = False
-                                
-                                # Check for high error rate
-                                if 'errors' in metrics:
-                                    err_text = metrics['errors']
-                                    # Extract percentage
-                                    pct_match = re.search(r'(\d+(?:\.\d+)?)\s*%', err_text)
-                                    if pct_match and float(pct_match.group(1)) > 1.0:
-                                        is_problematic = True
-                                
-                                # Check for high latency
-                                if 'latency' in metrics:
-                                    lat_text = metrics['latency']
-                                    lat_match = re.search(r'(\d+)', lat_text)
-                                    if lat_match and float(lat_match.group(1)) > 1000:  # > 1 second
-                                        is_problematic = True
-                                
-                                if is_problematic:
-                                    problematic_services.append(
-                                        f"  - {svc['name']} ({svc['env']}): "
-                                        f"Req: {metrics.get('requests', 'N/A')}, "
-                                        f"Err: {metrics.get('errors', 'N/A')}, "
-                                        f"Lat: {metrics.get('latency', 'N/A')}"
-                                    )
-                                else:
-                                    healthy_count += 1
-                            
-                            if problematic_services:
-                                tool_summary += f"  ⚠️ {len(problematic_services)} services with issues:\n"
-                                tool_summary += "\n".join(problematic_services[:10])  # Limit to top 10
-                                if len(problematic_services) > 10:
-                                    tool_summary += f"\n  ... and {len(problematic_services) - 10} more"
-                            
-                            if healthy_count > 0:
-                                tool_summary += f"\n  ✅ {healthy_count} services healthy"
-                            
-                            summary.append(tool_summary)
-                        else:
-                            # If no services extracted, provide a basic summary
-                            # Count some common patterns
-                            widget_count = html_result.count('<canvas')
-                            if widget_count > 0:
-                                summary.append(f"**{tool_name}**: Dashboard with ~{widget_count} metric widgets")
-                            else:
-                                # Truncate HTML to first 500 chars
-                                truncated = re.sub(r'<[^>]+>', '', html_result)[:500]
-                                summary.append(f"**{tool_name}**: {truncated}...")
-                    
-                    return "\n\n".join(summary)
-                
-                # Build comprehensive context from both MCP and other tools
-                all_context = ""
-                
-                # Add context from other tools (DD_Red_Metrics, DD_Search, etc.) if provided
-                if context_from_other_tools:
-                    print(f"📊 Including context from {len(context_from_other_tools)} other tool(s)")
-                    
-                    # Calculate original size
-                    original_size = sum(len(str(v)) for v in context_from_other_tools.values())
-                    print(f"   Original context size: {original_size:,} characters")
-                    
-                    # Summarize to reduce token count
-                    summarized = summarize_tool_results(context_from_other_tools)
-                    summarized_size = len(summarized)
-                    
-                    print(f"   Summarized context size: {summarized_size:,} characters (reduction: {100 * (1 - summarized_size/original_size):.1f}%)")
-                    
-                    all_context += "Additional data from monitoring tools:\n\n"
-                    all_context += summarized + "\n\n"
-                
-                # Add context from MCP tools
-                if tool_results:
-                    all_context += "MCP Tool execution results:\n\n"
-                    for tr in tool_results:
-                        all_context += f"**{tr['tool']}** (called because: {tr['reason']}):\n{tr['result']}\n\n"
-                
-                if all_context:
-                    # Check if this is a monitoring query (RED metrics, dashboards, etc.)
-                    is_monitoring_query = any(keyword in all_context.lower() for keyword in 
-                                            ['dd_red_metrics', 'dd_red_adt', 'dd_red_samsung', 'dd_red_metrics_us', 
-                                             'services with issues', 'services healthy', 'req/s', 'latency'])
-                    
-                    if is_monitoring_query:
-                        # For monitoring queries, generate a comprehensive dashboard view
-                        response_prompt = f"""Analyze RED metrics monitoring data and create comprehensive HTML dashboard.
+                # Step 3: Issues-only context → compact Bedrock synthesis
+                print("\n💬 Step 3: Generating triage report with Bedrock (issues-only context)...")
 
-Question: "{question}"
+                from tools.issues_context import build_bedrock_report_prompt, build_issues_context
 
-MONITORING DATA:
-{all_context}
+                issues_block, summary_line, recurrence_block = build_issues_context(
+                    context_from_other_tools,
+                    tool_results,
+                )
+                print(
+                    f"   Issues context: {len(issues_block):,} chars | {summary_line} | "
+                    f"recurrence: {len(recurrence_block):,} chars"
+                )
 
-TASK:
-Generate a complete HTML dashboard with:
-1. Hero header with overall summary
-2. Dashboard overview cards (show ALL dashboards found with counts)
-3. COMPLETE table of services with elevated metrics (ALL services with issues)
-4. Summary of healthy services
-
-HTML structure (USE THIS EXACT FORMAT):
-
-<div style="font-family: 'Inter', sans-serif; padding: 20px;">
-
-<!-- Hero Header -->
-<div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%); padding: 32px; border-radius: 16px; margin-bottom: 28px; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);">
-    <div style="font-size: 14px; color: rgba(255,255,255,0.9); margin-bottom: 8px;">🚀 RED METRICS — FULL PLATFORM OVERVIEW</div>
-    <h1 style="color: white; font-size: 32px; margin: 0 0 12px 0; font-weight: 800;">RED Metrics: All Services Analysis</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 15px;">Arlo Platform • Production Environment • [Insert timestamp from data]</p>
-</div>
-
-<!-- Metrics Summary Cards -->
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px;">
-    <div style="background: #dcfce7; padding: 24px; border-radius: 12px; border: 2px solid #22c55e;">
-        <div style="font-size: 13px; color: #166534; font-weight: 700; margin-bottom: 8px;">✅ HEALTHY SERVICES</div>
-        <div style="font-size: 42px; color: #14532d; font-weight: 900; line-height: 1;">[Count]</div>
-        <div style="font-size: 12px; color: #166534; margin-top: 4px;">of [Total] total services</div>
-    </div>
-    <div style="background: #fef3c7; padding: 24px; border-radius: 12px; border: 2px solid #fbbf24;">
-        <div style="font-size: 13px; color: #92400e; font-weight: 700; margin-bottom: 8px;">⚠️ SERVICES WITH ISSUES</div>
-        <div style="font-size: 42px; color: #78350f; font-weight: 900; line-height: 1;">[Count]</div>
-        <div style="font-size: 12px; color: #92400e; margin-top: 4px;">elevated latency / errors</div>
-    </div>
-    <div style="background: #fecaca; padding: 24px; border-radius: 12px; border: 2px solid #ef4444;">
-        <div style="font-size: 13px; color: #991b1b; font-weight: 700; margin-bottom: 8px;">🔴 ACTIVE ALERTS</div>
-        <div style="font-size: 42px; color: #7f1d1d; font-weight: 900; line-height: 1;">[Count]</div>
-        <div style="font-size: 12px; color: #991b1b; margin-top: 4px;">failing in Datadog right now</div>
-    </div>
-    <div style="background: #e0e7ff; padding: 24px; border-radius: 12px; border: 2px solid #6366f1;">
-        <div style="font-size: 13px; color: #3730a3; font-weight: 700; margin-bottom: 8px;">📊 RED DASHBOARDS</div>
-        <div style="font-size: 42px; color: #312e81; font-weight: 900; line-height: 1;">[Count]</div>
-        <div style="font-size: 12px; color: #3730a3; margin-top: 4px;">ADT • US • Samsung • Z1 • more</div>
-    </div>
-</div>
-
-<!-- Dashboard Coverage Section -->
-<div style="background: white; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
-    <h2 style="font-size: 20px; margin: 0 0 16px 0; color: #1e293b;">📊 RED Metric Dashboard Coverage</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-        <!-- List ALL dashboards found in the data -->
-        <div style="padding: 14px; background: #f1f5f9; border-radius: 8px; border-left: 4px solid #8b5cf6;">
-            <div style="font-weight: 600; color: #6d28d9; margin-bottom: 4px;">🟣 RED Metrics - ADT</div>
-            <div style="font-size: 13px; color: #64748b;">PP-Prod • cum-ivw-92c</div>
-        </div>
-        <!-- Add more dashboard cards for US, Samsung, etc. based on data -->
-    </div>
-</div>
-
-<!-- Services with Elevated Metrics (COMPLETE TABLE - ALL 15 SERVICES) -->
-<div style="background: white; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
-    <h2 style="font-size: 20px; margin: 0 0 16px 0; color: #1e293b;">⚠️ Services with Elevated Metrics ([Count] Services)</h2>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-                <th style="padding: 12px; text-align: left; font-size: 13px; color: #475569;">Service</th>
-                <th style="padding: 12px; text-align: right; font-size: 13px; color: #475569;">Req/min</th>
-                <th style="padding: 12px; text-align: right; font-size: 13px; color: #475569;">Error Rate</th>
-                <th style="padding: 12px; text-align: right; font-size: 13px; color: #475569;">Latency (ms)</th>
-                <th style="padding: 12px; text-align: center; font-size: 13px; color: #475569;">Latency Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- CRITICAL: LIST ALL SERVICES FROM THE DATA - NOT JUST A FEW! -->
-            <!-- Example rows showing different severity levels: -->
-            
-            <!-- HIGH LATENCY (> 5000ms) - Use RED for truly critical -->
-            <tr style="border-bottom: 1px solid #f1f5f9;">
-                <td style="padding: 12px; font-weight: 600; color: #1e293b;">backend-hmsdeviceshadow</td>
-                <td style="padding: 12px; text-align: right; color: #0ea5e9;">4,742.7</td>
-                <td style="padding: 12px; text-align: right; color: #10b981;"><span style="background: #dcfce7; padding: 4px 8px; border-radius: 6px; font-weight: 600;">0%</span></td>
-                <td style="padding: 12px; text-align: right; color: #dc2626; font-weight: 700;">6,751.4</td>
-                <td style="padding: 12px; text-align: center;"><span style="background: #fecaca; color: #991b1b; padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 12px;">🔴 CRITICAL</span></td>
-            </tr>
-            
-            <!-- ELEVATED LATENCY (1000-5000ms) - Use YELLOW/ORANGE for anomalies -->
-            <tr style="border-bottom: 1px solid #f1f5f9;">
-                <td style="padding: 12px; font-weight: 600; color: #1e293b;">backend-hmspayment</td>
-                <td style="padding: 12px; text-align: right; color: #0ea5e9;">100.9</td>
-                <td style="padding: 12px; text-align: right; color: #10b981;"><span style="background: #dcfce7; padding: 4px 8px; border-radius: 6px; font-weight: 600;">< 0.1%</span></td>
-                <td style="padding: 12px; text-align: right; color: #d97706; font-weight: 700;">2,521.4</td>
-                <td style="padding: 12px; text-align: center;"><span style="background: #fef3c7; color: #92400e; padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 12px;">⚠️ HIGH LAT</span></td>
-            </tr>
-            
-            <!-- Continue for ALL services in the data -->
-        </tbody>
-    </table>
-</div>
-
-</div>
-
-CRITICAL REQUIREMENTS:
-1. Fill in ALL placeholders with actual data from the monitoring summary
-2. In the "Services with Elevated Metrics" table, include EVERY SINGLE service that has issues
-3. DO NOT truncate the table - show ALL services mentioned in the data
-4. Use the exact HTML structure above
-5. NO Jira table (Python will add it if needed)
-6. NO Tools Executed section
-7. Return ONLY the HTML (start with <div, end with </div>)
-
-LATENCY SEVERITY COLOR GUIDELINES:
-- **🟢 HEALTHY** (< 1000ms): No row needed, count as healthy
-- **🟡 HIGH LAT** (1000-5000ms): Use YELLOW/ORANGE colors
-  - Background: #fef3c7 (light yellow)
-  - Text: #92400e (dark orange)
-  - Badge: "⚠️ HIGH LAT"
-- **🔴 CRITICAL** (> 5000ms): Use RED colors only for truly critical
-  - Background: #fecaca (light red)
-  - Text: #991b1b (dark red)
-  - Badge: "🔴 CRITICAL"
-
-For Error Rate:
-- < 0.1%: Green badge
-- 0.1% - 1%: Yellow badge  
-- > 1%: Orange badge
-- > 5%: Red badge (critical)
-
-PAGERDUTY ANALYSIS REQUIREMENTS:
-- If NO active incidents (triggered/acknowledged), check "Recently Resolved (Last 24 hours)"
-- Analyze patterns: If multiple incidents resolved in last 24 hours, flag as potential instability
-- Recurring issues: If same service had 3+ incidents in 7 days, highlight as recurring pattern
-- Include in Key Findings: Mention recently resolved incidents and any patterns detected
-- Example: "No active PagerDuty alerts, but 5 incidents were resolved in the last 24 hours for hmspayment - potential recurring issue"
-
-EXCLUSIONS - DO NOT REPORT AS PROBLEMS:
-- Different versions across environments: It is NORMAL for services to have different versions in dev/qa/production
-- DO NOT flag version differences as an issue, anomaly, or finding
-- Only mention versions if specifically asked or if there is a deployment-related incident"""
-                    else:
-                        # For non-monitoring queries (Jira-focused), use the summary format
-                        response_prompt = f"""Analyze service health data and create visual HTML report summary.
-
-Question: "{question}"
-
-DATA FROM TOOLS:
-{all_context}
-
-TASK:
-Generate HTML report with:
-1. Hero header (service name, gradient background)
-2. Status metrics cards (count of tickets by status)
-3. Key findings (3 most important insights)
-
-IMPORTANT:
-- DO NOT generate Jira tickets table (will be added separately)
-- DO NOT generate Recommendations section (will be added separately)
-- NO "Tools Executed" section
-- Return ONLY HTML for the summary/analysis
-- Focus on insights, NOT listing all tickets
-
-PAGERDUTY ANALYSIS:
-- Always check for recently resolved incidents (last 24 hours) even if no active alerts
-- Flag recurring patterns: If 3+ incidents for same service in 7 days, mention as potential instability
-- Include in Key Findings: Mention recently resolved incidents and any patterns detected
-
-EXCLUSIONS - DO NOT REPORT AS PROBLEMS:
-- Different versions across environments: It is NORMAL for services to have different versions in dev/qa/production
-- DO NOT flag version differences as an issue or finding
-- Only mention versions if specifically asked or if there is a deployment-related incident
-
-HTML structure for summary:
-
-<div style="font-family: 'Inter', sans-serif; padding: 20px;">
-
-<!-- Hero Header -->
-<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); padding: 32px; border-radius: 16px; margin-bottom: 28px;">
-    <h1 style="color: white; font-size: 28px; margin: 0;">🚀 Service Health: backend-hmsguard</h1>
-</div>
-
-<!-- Status Metrics Grid -->
-<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px;">
-    <div style="background: #fef3c7; padding: 20px; border-radius: 12px; border: 2px solid #fbbf24;">
-        <div style="font-size: 12px; color: #92400e; font-weight: 700;">⚠️ OPEN</div>
-        <div style="font-size: 36px; color: #78350f; font-weight: 900;">15</div>
-    </div>
-    <div style="background: #dbeafe; padding: 20px; border-radius: 12px; border: 2px solid #3b82f6;">
-        <div style="font-size: 12px; color: #1e40af; font-weight: 700;">🔧 IN PROGRESS</div>
-        <div style="font-size: 36px; color: #1e3a8a; font-weight: 900;">8</div>
-    </div>
-    <div style="background: #dcfce7; padding: 20px; border-radius: 12px; border: 2px solid #22c55e;">
-        <div style="font-size: 12px; color: #166534; font-weight: 700;">✅ RESOLVED</div>
-        <div style="font-size: 36px; color: #14532d; font-weight: 900;">2</div>
-    </div>
-</div>
-
-<!-- Key Findings -->
-<div style="background: white; padding: 28px; border-radius: 16px; border: 1px solid #e5e7eb;">
-    <h2 style="font-size: 22px; margin: 0 0 20px 0;">🔍 Key Findings</h2>
-    <div style="padding: 18px; background: #fef2f2; border-radius: 10px; border-left: 5px solid #ef4444; margin-bottom: 12px;">
-        <div style="font-weight: 700; color: #991b1b; margin-bottom: 6px;">⚠️ Critical Issue</div>
-        <div style="color: #64748b;">Describe most critical issue from data</div>
-    </div>
-    <div style="padding: 18px; background: #fffbeb; border-radius: 10px; border-left: 5px solid #f59e0b; margin-bottom: 12px;">
-        <div style="font-weight: 700; color: #92400e; margin-bottom: 6px;">📊 Active Work</div>
-        <div style="color: #64748b;">Summarize ongoing work/tickets</div>
-    </div>
-    <div style="padding: 18px; background: #f0fdf4; border-radius: 10px; border-left: 5px solid #22c55e;">
-        <div style="font-weight: 700; color: #166534; margin-bottom: 6px;">✅ Positive Signals</div>
-        <div style="color: #64748b;">Any good news or healthy metrics</div>
-    </div>
-</div>
-
-</div>
-
-CRITICAL RULES:
-- Return ONLY the HTML above (hero + metrics + findings)
-- NO Jira table (Python will generate it)
-- NO Recommendations (Python will add them)
-- NO "Tools Executed" section
-- Start with <div and end with </div>"""
-                
+                if issues_block.strip() or context_from_other_tools or tool_results:
+                    response_prompt = build_bedrock_report_prompt(
+                        question, issues_block, summary_line, recurrence_block
+                    )
                 else:
-                    # No tools needed - direct answer (simplified format)
-                    response_prompt = f"""You are GocBedrock, an AI assistant for Arlo infrastructure.
+                    response_prompt = f"""You are GocBedrock, an SRE assistant for Arlo infrastructure.
 
 User question: "{question}"
 
-This is an informational question. Use this EXACT HTML structure - BE VISUAL:
+No monitoring tool data was provided. Answer briefly in HTML (<div>...</div>).
+Focus on what the user should check; do not invent live metrics.
+Return ONLY HTML, no markdown fences."""
 
-<div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-width: 100%;">
-    
-    <!-- Hero Header -->
-    <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%); padding: 28px 24px; border-radius: 12px; margin-bottom: 28px; box-shadow: 0 12px 48px rgba(139, 92, 246, 0.3);">
-        <div style="display: flex; align-items: center; gap: 14px;">
-            <span style="font-size: 36px;">💬</span>
-            <h1 style="margin: 0; color: white; font-size: 26px; font-weight: 800; letter-spacing: -0.8px;">Information & Guidance</h1>
-        </div>
-    </div>
-    
-    <!-- Main Content Card - VISUAL -->
-    <div style="background: white; padding: 26px; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 6px 20px rgba(0,0,0,0.1);">
-        <div style="color: #334155; font-size: 15px; line-height: 1.9; letter-spacing: 0.01em;">
-            [Explanation with icons, visual elements, short paragraphs. Use <div> cards with emojis for key points]
-        </div>
-    </div>
-    
-</div>
-
-RULES:
-- Use emojis and icons generously
-- Break into short visual cards with emoji icons
-- Use <strong> for key terms
-- Include examples in visual boxes
-- Be concise - max 2-3 sentences per point
-
-Return ONLY the HTML (no markdown blocks)."""
-                
                 response_html = ask_bedrock(response_prompt, selected_tools=None)
                 
                 # Clean up any remaining markdown code blocks
@@ -2711,73 +2371,97 @@ Return ONLY the HTML (no markdown blocks)."""
                 
                 # PYTHON-SIDE: Extract ALL Jira tickets from MCP tool results
                 jira_tickets = []
+                seen_jira_ids: set[str] = set()
+
+                def _append_jira_ticket(ticket_id: str, summary: str, status: str, assignee: str) -> None:
+                    tid = (ticket_id or "").strip()
+                    if not tid or tid in seen_jira_ids:
+                        return
+                    seen_jira_ids.add(tid)
+                    jira_tickets.append({
+                        'id': tid,
+                        'summary': (summary or 'No summary').strip(),
+                        'status': (status or 'Unknown').strip(),
+                        'assignee': (assignee or 'Unassigned').strip(),
+                    })
+
                 for tr in tool_results:
-                    if tr['tool'] == 'jira_search':
-                        result_text = tr['result']
-                        print(f"🎫 Extracting Jira tickets from jira_search result ({len(result_text)} chars)")
-                        print(f"📄 First 500 chars: {result_text[:500]}")
-                        
-                        # MARKDOWN TABLE FORMAT (most common from MCP)
-                        # | GOC-10809 | Alert Modification for MAR 2026 | In Progress | Amisha Kabra |
-                        markdown_pattern = r'\|\s*([A-Z]+-\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|'
-                        markdown_matches = list(re.finditer(markdown_pattern, result_text, re.MULTILINE))
-                        
-                        print(f"🔍 Found {len(markdown_matches)} markdown table rows")
-                        
-                        if markdown_matches:
-                            # Skip header row (usually first match)
-                            for match in markdown_matches[1:]:  # Skip first row (headers)
-                                ticket_id = match.group(1).strip()
-                                summary = match.group(2).strip()
-                                status = match.group(3).strip()
-                                assignee = match.group(4).strip()
-                                
-                                # Skip separator rows (---)
-                                if '---' in ticket_id or 'Key' in ticket_id:
+                    tool_name = str(tr.get('tool') or '')
+                    tool_l = tool_name.lower()
+                    if tool_l != 'jira_search' and not (
+                        'atlassian' in tool_l and 'jira' in tool_l
+                    ):
+                        continue
+
+                    result_text = str(tr.get('result') or '')
+                    print(f"🎫 Extracting Jira tickets from {tool_name} ({len(result_text)} chars)")
+
+                    if result_text.strip().startswith('{'):
+                        try:
+                            data = json.loads(result_text)
+                            for row in (data.get('issues') or [])[:50]:
+                                if not isinstance(row, dict):
                                     continue
-                                
-                                jira_tickets.append({
-                                    'id': ticket_id,
-                                    'summary': summary,
-                                    'status': status if status else 'Unknown',
-                                    'assignee': assignee if assignee else 'Unassigned'
-                                })
-                                print(f"  ✓ {ticket_id}: {summary[:60]}... [{status}]")
-                        
-                        else:
-                            # FALLBACK: Try other formats
-                            # Pattern 1: Standard format "Key: XXX-123"
-                            pattern1 = r'(?:Key|ID|Ticket):\s*([A-Z]+-\d+)[\s\S]{0,500}?Summary:\s*([^\n]+)'
-                            # Pattern 2: Just ticket ID at start of line
-                            pattern2 = r'^([A-Z]+-\d+)\s*[-:]\s*([^\n]+)'
-                            
-                            all_matches = []
-                            all_matches.extend(list(re.finditer(pattern1, result_text, re.IGNORECASE | re.MULTILINE)))
-                            all_matches.extend(list(re.finditer(pattern2, result_text, re.MULTILINE)))
-                            
-                            print(f"🔍 Fallback: Found {len(all_matches)} non-markdown matches")
-                            
-                            seen_ids = set()
-                            for match in all_matches:
-                                ticket_id = match.group(1).strip()
-                                if ticket_id in seen_ids:
-                                    continue
-                                seen_ids.add(ticket_id)
-                                
-                                summary = match.group(2).strip() if len(match.groups()) >= 2 else 'No summary'
-                                
-                                # Extract status and assignee from context
-                                ticket_context = result_text[match.start():match.start()+400]
-                                status_match = re.search(r'Status:\s*([^\n]+)', ticket_context, re.IGNORECASE)
-                                assignee_match = re.search(r'Assignee:\s*([^\n]+)', ticket_context, re.IGNORECASE)
-                                
-                                jira_tickets.append({
-                                    'id': ticket_id,
-                                    'summary': summary,
-                                    'status': status_match.group(1).strip() if status_match else 'Unknown',
-                                    'assignee': assignee_match.group(1).strip() if assignee_match else 'Unassigned'
-                                })
-                                print(f"  ✓ {ticket_id}: {summary[:60]}...")
+                                key = str(row.get('key') or '')
+                                fields = row.get('fields') or {}
+                                summary = str(fields.get('summary') or '')
+                                status_obj = fields.get('status')
+                                status = (
+                                    status_obj.get('name')
+                                    if isinstance(status_obj, dict)
+                                    else str(status_obj or '')
+                                )
+                                assignee_obj = fields.get('assignee')
+                                assignee = 'Unassigned'
+                                if isinstance(assignee_obj, dict):
+                                    assignee = (
+                                        assignee_obj.get('displayName')
+                                        or assignee_obj.get('name')
+                                        or 'Unassigned'
+                                    )
+                                _append_jira_ticket(key, summary, status, assignee)
+                                print(f"  ✓ {key}: {summary[:60]}... [{status}]")
+                            continue
+                        except (json.JSONDecodeError, TypeError, AttributeError):
+                            pass
+
+                    print(f"📄 First 500 chars: {result_text[:500]}")
+
+                    # MARKDOWN TABLE FORMAT (most common from MCP)
+                    markdown_pattern = r'\|\s*([A-Z]+-\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|'
+                    markdown_matches = list(re.finditer(markdown_pattern, result_text, re.MULTILINE))
+                    print(f"🔍 Found {len(markdown_matches)} markdown table rows")
+
+                    if markdown_matches:
+                        for match in markdown_matches[1:]:
+                            ticket_id = match.group(1).strip()
+                            summary = match.group(2).strip()
+                            status = match.group(3).strip()
+                            assignee = match.group(4).strip()
+                            if '---' in ticket_id or 'Key' in ticket_id:
+                                continue
+                            _append_jira_ticket(ticket_id, summary, status, assignee)
+                            print(f"  ✓ {ticket_id}: {summary[:60]}... [{status}]")
+                    else:
+                        pattern1 = r'(?:Key|ID|Ticket):\s*([A-Z]+-\d+)[\s\S]{0,500}?Summary:\s*([^\n]+)'
+                        pattern2 = r'^([A-Z]+-\d+)\s*[-:]\s*([^\n]+)'
+                        all_matches = []
+                        all_matches.extend(list(re.finditer(pattern1, result_text, re.IGNORECASE | re.MULTILINE)))
+                        all_matches.extend(list(re.finditer(pattern2, result_text, re.MULTILINE)))
+                        print(f"🔍 Fallback: Found {len(all_matches)} non-markdown matches")
+                        for match in all_matches:
+                            ticket_id = match.group(1).strip()
+                            summary = match.group(2).strip() if len(match.groups()) >= 2 else 'No summary'
+                            ticket_context = result_text[match.start():match.start()+400]
+                            status_match = re.search(r'Status:\s*([^\n]+)', ticket_context, re.IGNORECASE)
+                            assignee_match = re.search(r'Assignee:\s*([^\n]+)', ticket_context, re.IGNORECASE)
+                            _append_jira_ticket(
+                                ticket_id,
+                                summary,
+                                status_match.group(1).strip() if status_match else 'Unknown',
+                                assignee_match.group(1).strip() if assignee_match else 'Unassigned',
+                            )
+                            print(f"  ✓ {ticket_id}: {summary[:60]}...")
                 
                 print(f"✅ Extracted {len(jira_tickets)} unique Jira tickets from MCP results")
                 
@@ -2816,7 +2500,7 @@ Return ONLY the HTML (no markdown blocks)."""
                         jira_table_html += f"""
             <tr style='border-bottom: 1px solid #f1f5f9;'>
                 <td style='padding: 14px; text-align: center; color: #94a3b8; font-weight: 600;'>{idx}</td>
-                <td style='padding: 14px;'><a href='https://verisure.atlassian.net/browse/{ticket['id']}' target='_blank' style='color: #6366f1; font-weight: 700; text-decoration: none;'>{ticket['id']}</a></td>
+                <td style='padding: 14px;'><a href='https://arlo.atlassian.net/browse/{ticket['id']}' target='_blank' style='color: #6366f1; font-weight: 700; text-decoration: none;'>{ticket['id']}</a></td>
                 <td style='padding: 14px; color: #334155; font-size: 14px;'>{html.escape(ticket['summary'])}</td>
                 <td style='padding: 14px; text-align: center;'><span style='padding: 5px 12px; background: {badge_bg}; color: {badge_color}; border-radius: 12px; font-size: 11px; font-weight: 700;'>{html.escape(ticket['status'].upper())}</span></td>
                 <td style='padding: 14px; color: #64748b;'>{html.escape(ticket['assignee'])}</td>
@@ -3034,7 +2718,7 @@ Guidelines:
             # Build context with tool results
             context = "Tool execution results:\n\n"
             for tr in tool_results:
-                context += f"**{tr['tool']}** (called because: {tr['reason']}):\n{tr['result']}\n\n"
+                context += f"**{tr['tool']}** (called because: {tr.get('reason', tr.get('description', 'MCP'))}):\n{tr['result']}\n\n"
             
             response_prompt = f"""You are GocBedrock, a helpful AI assistant for Arlo infrastructure.
 

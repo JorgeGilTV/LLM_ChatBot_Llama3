@@ -159,8 +159,8 @@ TOOLS = {
 }
 registered_tools = [(name, tool["description"]) for name, tool in TOOLS.items()]
 
-# Tools that always receive the full user query (synthesis / chat).
-_TOOLS_KEEP_FULL_QUERY = frozenset({"Ask_Bedrock"})
+# Tools that always receive the full user query (MCP / synthesis needs full intent).
+_TOOLS_KEEP_FULL_QUERY = frozenset({"Ask_Bedrock", "Bedrock_Report"})
 # Tools that ignore service filter and show org-wide data.
 _TOOLS_GLOBAL_SCOPE = frozenset({"PagerDuty_Dashboards", "PagerDuty_Insights"})
 _TOOLS_WITH_TIMERANGE = frozenset(

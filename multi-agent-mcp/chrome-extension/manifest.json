@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "OneView GocView Chat",
+  "version": "2.0.0",
+  "description": "Ask GocBedrock from any page — answers are summarized and sent to Slack.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://gocview.arlocloud.com/*",
+    "http://127.0.0.1:8080/*",
+    "http://localhost:8080/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OneView GocView Chat",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["shared.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

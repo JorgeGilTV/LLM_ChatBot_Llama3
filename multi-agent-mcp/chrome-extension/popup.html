@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OneView GocView Chat</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="gv-header">
+    <h1>🧠 OneView GocView</h1>
+    <p class="gv-sub">Chat → Bedrock → Slack</p>
+  </header>
+
+  <main class="gv-main">
+    <label class="gv-label" for="baseUrl">Servidor</label>
+    <input id="baseUrl" type="url" class="gv-input" placeholder="https://gocview.arlocloud.com" />
+
+    <label class="gv-label" for="query">Pregunta</label>
+    <textarea id="query" class="gv-textarea" rows="4" placeholder="¿Qué está pasando con samsung?"></textarea>
+
+    <button id="sendBtn" type="button" class="gv-btn">Enviar a Slack</button>
+    <p id="status" class="gv-status" role="status" aria-live="polite"></p>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

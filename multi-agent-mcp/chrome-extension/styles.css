@@ -1,0 +1,121 @@
+:root {
+  --gv-teal: #20d6ca;
+  --gv-purple: #667eea;
+  --gv-bg: #0f172a;
+  --gv-card: #1e293b;
+  --gv-text: #f1f5f9;
+  --gv-muted: #94a3b8;
+  --gv-error: #f87171;
+  --gv-ok: #4ade80;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--gv-bg);
+  color: var(--gv-text);
+  margin: 0;
+  padding: 0;
+  width: 340px;
+  min-height: 280px;
+}
+
+.gv-header {
+  background: linear-gradient(135deg, var(--gv-purple) 0%, #764ba2 100%);
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.gv-header h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.gv-sub {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.gv-main {
+  padding: 14px 16px 16px;
+}
+
+.gv-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gv-muted);
+  margin: 10px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gv-label:first-child {
+  margin-top: 0;
+}
+
+.gv-input,
+.gv-textarea {
+  width: 100%;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: var(--gv-card);
+  color: var(--gv-text);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.gv-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.gv-input:focus,
+.gv-textarea:focus {
+  outline: 2px solid var(--gv-teal);
+  border-color: transparent;
+}
+
+.gv-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--gv-teal), #14b8a6);
+  color: #042f2e;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.gv-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.gv-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.gv-status {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--gv-muted);
+  min-height: 1.2em;
+}
+
+.gv-status--error {
+  color: var(--gv-error);
+}
+
+.gv-status--ok {
+  color: var(--gv-ok);
+}

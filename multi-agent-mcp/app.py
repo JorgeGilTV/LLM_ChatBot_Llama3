@@ -2033,6 +2033,86 @@ def api_slack_summarize_and_send():
         return jsonify({"success": False, "error": format_slack_connection_error(e)}), 500
 
 
+@flask_app.route("/api/extension/chat", methods=["POST"])
+def api_extension_chat():
+    """
+    Chrome extension: run GocBedrock (Bedrock_Report) and post Bedrock summary to Slack.
+    """
+    webhook = (os.getenv("SLACK_WEBHOOK_URL") or "").strip()
+    if not webhook:
+        return jsonify({"success": False, "error": _SLACK_WEBHOOK_MISSING_MSG}), 503
+
+    data = request.get_json(silent=True) or {}
+    input_text = (data.get("input") or "").strip()
+    if not input_text:
+        return jsonify({"success": False, "error": "input is required"}), 400
+
+    source_url = data.get("source_url")
+    source_url = source_url.strip() if isinstance(source_url, str) else ""
+    page_title = f"GocView Chat — {input_text[:120]}"
+
+    start = time.time()
+    try:
+        if not ARLOCHAT_AVAILABLE:
+            return jsonify(
+                {"success": False, "error": "GocBedrock (Bedrock_Report) is not available"},
+            ), 503
+        html_result = ask_arlo(input_text)
+    except Exception as e:
+        logging.exception("Extension chat Bedrock_Report")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+    from tools.issues_context import html_to_plain_text
+    from tools.bedrock_tool import summarize_page_for_slack
+
+    page_text = html_to_plain_text(html_result)
+    if not page_text.strip():
+        page_text = input_text
+
+    try:
+        max_in = int(os.getenv("SLACK_SUMMARY_INPUT_MAX_CHARS", "100000"))
+    except (TypeError, ValueError):
+        max_in = 100000
+    max_in = max(5000, min(max_in, 200000))
+    if len(page_text) > max_in:
+        page_text = page_text[:max_in] + "\n\n[... content truncated for summary ...]"
+
+    try:
+        summary = summarize_page_for_slack(page_text, page_title, source_url)
+    except Exception as e:
+        logging.exception("Extension chat Slack summarize")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+    err_markers = (
+        summary.startswith("Error:"),
+        summary.startswith("AWS Bedrock Error"),
+        "Bedrock is not working" in summary,
+    )
+    if any(err_markers):
+        return jsonify({"success": False, "error": summary[:2000]}), 502
+
+    slack_payload = _slack_summary_blocks_payload(summary, page_title, source_url)
+    try:
+        r = post_incoming_webhook(webhook, slack_payload, timeout=(15, 90))
+        if r.status_code != 200:
+            logging.warning("Extension Slack HTTP %s: %s", r.status_code, (r.text or "")[:300])
+            return jsonify(
+                {"success": False, "error": f"Slack returned HTTP {r.status_code}"},
+            ), 502
+    except Exception as e:
+        logging.error("Extension Slack webhook: %s", e)
+        return jsonify({"success": False, "error": format_slack_connection_error(e)}), 500
+
+    exec_time = round(time.time() - start, 2)
+    return jsonify(
+        {
+            "success": True,
+            "message": "Chat answer summarized and sent to Slack",
+            "exec_time": exec_time,
+        }
+    )
+
+
 @flask_app.route("/api/slack/screenshot-image/<sid>", methods=["GET"])
 def api_slack_screenshot_image(sid):
     """Temporary PNG URL for Slack (Incoming Webhook) to fetch image_url."""

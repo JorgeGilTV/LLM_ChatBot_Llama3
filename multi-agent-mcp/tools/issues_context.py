@@ -48,6 +48,11 @@ def _is_tool_error_payload(content: str) -> bool:
     )
 
 
+def html_to_plain_text(text: str) -> str:
+    """Public helper: HTML → plain text for Slack / extension payloads."""
+    return _strip_html(text)
+
+
 def _strip_html(text: str) -> str:
     t = re.sub(r"<script[^>]*>.*?</script>", " ", text or "", flags=re.I | re.S)
     t = re.sub(r"<style[^>]*>.*?</style>", " ", t, flags=re.I | re.S)

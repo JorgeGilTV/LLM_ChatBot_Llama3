@@ -1,26 +1,33 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OneView GocView Chat</title>
+  <title>GocView Chatbot</title>
+  <link rel="stylesheet" href="brand.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="gv-header">
-    <h1>🧠 OneView GocView</h1>
-    <p class="gv-sub">Chat → Bedrock → Slack</p>
+    <div class="gv-header-brand">
+      <img src="icons/arlo-logo.png" alt="Arlo" class="gv-header-logo" />
+      <div class="gv-header-text">
+        <h1>GocView Chatbot</h1>
+        <p class="gv-sub">Intelligent triage · Slack delivery</p>
+      </div>
+    </div>
   </header>
 
   <main class="gv-main">
-    <label class="gv-label" for="baseUrl">Servidor</label>
+    <label class="gv-label" for="baseUrl">Server</label>
     <input id="baseUrl" type="url" class="gv-input" placeholder="https://gocview.arlocloud.com" />
 
-    <label class="gv-label" for="query">Pregunta</label>
-    <textarea id="query" class="gv-textarea" rows="4" placeholder="¿Qué está pasando con samsung?"></textarea>
+    <label class="gv-label" for="query">Question</label>
+    <textarea id="query" class="gv-textarea" rows="4" placeholder="What is going on with samsung?"></textarea>
 
-    <button id="sendBtn" type="button" class="gv-btn">Enviar a Slack</button>
+    <button id="sendBtn" type="button" class="gv-btn">Send to Slack</button>
     <p id="status" class="gv-status" role="status" aria-live="polite"></p>
+    <p class="gv-footer-note">Powered by GocBedrock · Arlo GOC</p>
   </main>
 
   <script src="shared.js"></script>

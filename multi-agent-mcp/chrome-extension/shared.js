@@ -74,8 +74,8 @@
         data = {
           success: false,
           error:
-            'Endpoint /api/extension/chat no existe en este servidor. ' +
-            'Actualiza GocView (deploy ECS) o usa http://127.0.0.1:8080 en local.',
+            'Endpoint /api/extension/chat is not available on this server. ' +
+            'Deploy the latest GocView build or use http://127.0.0.1:8080 for local dev.',
         };
       } else {
         data = { success: false, error: (text || 'Invalid server response').slice(0, 280) };

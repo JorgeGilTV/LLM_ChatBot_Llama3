@@ -1,121 +1,162 @@
-:root {
-  --gv-teal: #20d6ca;
-  --gv-purple: #667eea;
-  --gv-bg: #0f172a;
-  --gv-card: #1e293b;
-  --gv-text: #f1f5f9;
-  --gv-muted: #94a3b8;
-  --gv-error: #f87171;
-  --gv-ok: #4ade80;
-}
+@import url('brand.css');
 
 * {
   box-sizing: border-box;
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  background: var(--gv-bg);
-  color: var(--gv-text);
+  font-family: var(--arlo-font);
+  background: var(--arlo-bg);
+  color: var(--arlo-text);
   margin: 0;
   padding: 0;
-  width: 340px;
-  min-height: 280px;
+  width: 360px;
+  min-height: 320px;
 }
 
 .gv-header {
-  background: linear-gradient(135deg, var(--gv-purple) 0%, #764ba2 100%);
-  padding: 14px 16px;
-  text-align: center;
+  background: linear-gradient(135deg, var(--arlo-navy) 0%, var(--arlo-navy-dark) 100%);
+  padding: 16px 18px 14px;
+  border-bottom: 3px solid var(--arlo-green);
+  box-shadow: var(--arlo-shadow);
 }
 
-.gv-header h1 {
+.gv-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gv-header-logo {
+  height: 28px;
+  width: auto;
+  flex-shrink: 0;
+  filter: brightness(0) invert(1);
+}
+
+.gv-header-text h1 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .gv-sub {
   margin: 4px 0 0;
-  font-size: 0.75rem;
-  opacity: 0.9;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .gv-main {
-  padding: 14px 16px 16px;
+  padding: 16px 18px 18px;
+  background: var(--arlo-surface);
 }
 
 .gv-label {
   display: block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--gv-muted);
-  margin: 10px 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--arlo-navy);
+  margin: 12px 0 5px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
-.gv-label:first-child {
+.gv-label:first-of-type {
   margin-top: 0;
 }
 
 .gv-input,
 .gv-textarea {
   width: 100%;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  background: var(--gv-card);
-  color: var(--gv-text);
-  padding: 8px 10px;
-  font-size: 0.85rem;
+  border: 1px solid var(--arlo-border);
+  border-radius: var(--arlo-radius);
+  background: var(--arlo-surface);
+  color: var(--arlo-text);
+  padding: 10px 12px;
+  font-size: 0.875rem;
   font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .gv-textarea {
   resize: vertical;
-  min-height: 72px;
+  min-height: 76px;
+  line-height: 1.45;
 }
 
 .gv-input:focus,
 .gv-textarea:focus {
-  outline: 2px solid var(--gv-teal);
-  border-color: transparent;
+  outline: none;
+  border-color: var(--arlo-green);
+  box-shadow: 0 0 0 3px rgba(8, 166, 78, 0.15);
+}
+
+.gv-input::placeholder,
+.gv-textarea::placeholder {
+  color: #9ca3af;
 }
 
 .gv-btn {
   width: 100%;
-  margin-top: 12px;
-  padding: 10px 14px;
+  margin-top: 14px;
+  padding: 11px 16px;
   border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--gv-teal), #14b8a6);
-  color: #042f2e;
+  border-radius: var(--arlo-radius);
+  background: var(--arlo-green);
+  color: #fff;
   font-weight: 700;
   font-size: 0.9rem;
+  letter-spacing: 0.02em;
   cursor: pointer;
+  box-shadow: 0 4px 14px rgba(8, 166, 78, 0.35);
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 
 .gv-btn:hover:not(:disabled) {
-  filter: brightness(1.05);
+  background: var(--arlo-green-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(8, 166, 78, 0.4);
+}
+
+.gv-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .gv-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: wait;
+  transform: none;
+}
+
+.gv-footer-note {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--arlo-border);
+  font-size: 0.68rem;
+  color: var(--arlo-muted);
+  text-align: center;
+  line-height: 1.35;
 }
 
 .gv-status {
   margin: 10px 0 0;
   font-size: 0.8rem;
-  line-height: 1.4;
-  color: var(--gv-muted);
+  line-height: 1.45;
+  color: var(--arlo-muted);
   min-height: 1.2em;
 }
 
 .gv-status--error {
-  color: var(--gv-error);
+  color: var(--arlo-error);
 }
 
 .gv-status--ok {
-  color: var(--gv-ok);
+  color: var(--arlo-success);
+  font-weight: 600;
 }

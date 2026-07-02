@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
   const api = window.GocViewExtension;
   if (!api) {
-    statusEl.textContent = 'Error: shared.js no cargó';
+    statusEl.textContent = 'Error: shared.js failed to load';
     return;
   }
 
@@ -24,13 +24,13 @@ document.addEventListener('DOMContentLoaded', async function () {
   async function runChat() {
     const query = (queryEl.value || '').trim();
     if (!query) {
-      setStatus('Escribe una pregunta.', true);
+      setStatus('Please enter a question.', true);
       return;
     }
 
     await api.setBaseUrl(baseUrlEl.value);
     sendBtn.disabled = true;
-    setStatus('⏳ GocBedrock analizando y enviando a Slack (1–3 min)…');
+    setStatus('⏳ GocBedrock analyzing and sending to Slack (1–3 min)…');
 
     try {
       const sourceUrl = await api.getActiveTabUrl();
@@ -38,15 +38,15 @@ document.addEventListener('DOMContentLoaded', async function () {
       const data = ref.data || {};
       if (ref.ok && data.success) {
         const secs = data.exec_time != null ? ' (' + data.exec_time + 's)' : '';
-        setStatus('✅ Enviado a Slack' + secs, false);
+        setStatus('✅ Sent to Slack' + secs, false);
         queryEl.value = '';
       } else {
-        setStatus('❌ ' + (data.error || 'Error del servidor'), true);
+        setStatus('❌ ' + (data.error || 'Server error'), true);
       }
     } catch (err) {
       const msg = err && err.name === 'AbortError'
-        ? 'Tiempo de espera agotado'
-        : (err && err.message ? err.message : 'Error de red');
+        ? 'Request timed out'
+        : (err && err.message ? err.message : 'Network error');
       setStatus('❌ ' + msg, true);
     } finally {
       sendBtn.disabled = false;

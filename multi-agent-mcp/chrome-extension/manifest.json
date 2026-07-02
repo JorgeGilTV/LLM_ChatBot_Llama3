@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "OneView GocView Chat",
-  "version": "2.0.0",
-  "description": "Ask GocBedrock from any page — answers are summarized and sent to Slack.",
+  "name": "GocView Chatbot",
+  "version": "2.1.0",
+  "description": "GocView Chatbot — ask from any page; answers are summarized and sent to Slack.",
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://gocview.arlocloud.com/*",
@@ -11,7 +11,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "OneView GocView Chat",
+    "default_title": "GocView Chatbot",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -23,11 +23,17 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/arlo-logo.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["shared.js", "content.js"],
-      "css": ["content.css"],
+      "css": ["brand.css", "content.css"],
       "run_at": "document_idle"
     }
   ]

@@ -8,7 +8,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from statistics import mean, pstdev
+from statistics import mean, median, pstdev
 
 import requests
 from dotenv import load_dotenv
@@ -369,10 +369,11 @@ def _splunk_row_epoch_seconds(tr, naive_wall_timezone: str | None = None) -> flo
         pass
     try:
         s2 = s.replace("Z", "+00:00")
-        if s2.endswith(" GMT"):
-            s2 = s2[:-4].strip()
-        elif s2.endswith(" UTC"):
-            s2 = s2[:-4].strip()
+        if s.endswith(" GMT") or s.endswith(" UTC"):
+            s2 = s[:-4].strip()
+            dt = datetime.fromisoformat(s2)
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+            return dt.timestamp()
         dt = datetime.fromisoformat(s2)
         if dt.tzinfo is None:
             wall = naive_wall_timezone or "America/Los_Angeles"
@@ -384,6 +385,97 @@ def _splunk_row_epoch_seconds(tr, naive_wall_timezone: str | None = None) -> flo
         return dt.timestamp()
     except (TypeError, ValueError, OSError):
         return None
+
+
+def _splunk_pacific_15m_bucket_key(ts: float, tz_id: str | None = None) -> float:
+    """Floor UTC epoch to 15-minute bucket start in Splunk job TZ (default US Pacific)."""
+    try:
+        zi = ZoneInfo(_splunk_resolve_p0_timezone_id(tz_id or splunk_p0_job_timezone()))
+    except Exception:
+        zi = ZoneInfo("America/Los_Angeles")
+    dt = datetime.fromtimestamp(float(ts), tz=ZoneInfo("UTC")).astimezone(zi)
+    floored_min = (dt.minute // 15) * 15
+    bucket = dt.replace(minute=floored_min, second=0, microsecond=0)
+    return bucket.timestamp()
+
+
+def _splunk_zone_rows_on_common_buckets(
+    by_zone_rows: dict[str, list],
+    display_tz: str,
+    *,
+    fill_missing: bool = False,
+) -> dict[str, list]:
+    """
+    Align z1–z4 onto the same California/Pacific 15m grid for chart x-axis labels.
+    Missing buckets are ``None`` (not 0) so outlier math is not inflated on sparse zones.
+    """
+    bucket_maps: dict[str, dict[float, dict]] = {z: {} for z in ("z1", "z2", "z3", "z4")}
+    all_keys: set[float] = set()
+    for zn, zrows in (by_zone_rows or {}).items():
+        if zn not in bucket_maps:
+            continue
+        for row in zrows or []:
+            ts = _splunk_row_epoch_seconds(row.get("_time"), naive_wall_timezone=display_tz)
+            if ts is None:
+                continue
+            bk = _splunk_pacific_15m_bucket_key(ts, display_tz)
+            uc = _splunk_float(row.get("upload_count"))
+            prev = bucket_maps[zn].get(bk)
+            merged = dict(row)
+            merged["_time"] = bk
+            if uc is not None:
+                merged["upload_count"] = uc if prev is None else max(
+                    float(prev.get("upload_count") or 0), uc
+                )
+            bucket_maps[zn][bk] = merged
+            all_keys.add(bk)
+    ordered = sorted(all_keys)
+    aligned: dict[str, list] = {}
+    for zn in ("z1", "z2", "z3", "z4"):
+        rows_out: list = []
+        for bk in ordered:
+            hit = bucket_maps[zn].get(bk)
+            if hit is not None:
+                rows_out.append(hit)
+            elif fill_missing:
+                rows_out.append({"_time": bk, "upload_count": None})
+        aligned[zn] = rows_out
+    return aligned
+
+
+def _splunk_dedupe_zone_rows_pacific(by_zone_rows: dict[str, list], display_tz: str) -> dict[str, list]:
+    """Per-zone 15m Pacific buckets, no cross-zone fill (for outlier counts matching Splunk UI)."""
+    out: dict[str, list] = {}
+    for zn in ("z1", "z2", "z3", "z4"):
+        zrows = (by_zone_rows or {}).get(zn) or []
+        keyed: dict[float, dict] = {}
+        for row in zrows:
+            ts = _splunk_row_epoch_seconds(row.get("_time"), naive_wall_timezone=display_tz)
+            if ts is None:
+                continue
+            bk = _splunk_pacific_15m_bucket_key(ts, display_tz)
+            uc = _splunk_float(row.get("upload_count"))
+            prev = keyed.get(bk)
+            if prev is None:
+                merged = dict(row)
+                merged["_time"] = bk
+                if uc is not None:
+                    merged["upload_count"] = uc
+                keyed[bk] = merged
+            elif uc is not None:
+                prev["upload_count"] = max(float(prev.get("upload_count") or 0), uc)
+        out[zn] = [keyed[k] for k in sorted(keyed)]
+    return out
+
+
+def _splunk_p0_use_predict() -> bool:
+    """Try Splunk MLTK ``predict`` (LLP) when REST allows — matches Splunk dashboard outlier pills."""
+    return (os.getenv("SPLUNK_P0_USE_PREDICT") or "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
 
 
 def splunk_p0_streaming_index() -> str:
@@ -402,10 +494,10 @@ def splunk_p0_default_timerange_hours() -> int:
     Override with env SPLUNK_P0_DEFAULT_TIMERANGE_HOURS (hours, min 4).
     """
     try:
-        v = int((os.getenv("SPLUNK_P0_DEFAULT_TIMERANGE_HOURS") or "24").strip())
+        v = int((os.getenv("SPLUNK_P0_DEFAULT_TIMERANGE_HOURS") or "4").strip())
         return max(4, min(v, 8760))
     except ValueError:
-        return 24
+        return 4
 
 
 def splunk_p0_coerce_timerange_hours(timerange) -> int:
@@ -537,11 +629,413 @@ def _splunk_build_p0_predict_spl(
     )
 
 
+def splunk_cvr_summary_latest() -> str:
+    """
+    ``earliest`` for the live ``streaming_prod`` branch in the P0 CVR dashboard
+    (Splunk token ``tok_summary_latest``). Fills gaps after pre-aggregated summary data.
+    """
+    return (os.getenv("SPLUNK_CVR_SUMMARY_LATEST") or "-4h").strip() or "-4h"
+
+
+def splunk_cvr_min_timerange_hours() -> int:
+    """Minimum lookback for CVR outlier scoring (Splunk full dashboards; monitor uses default 4h)."""
+    try:
+        return max(4, min(int((os.getenv("SPLUNK_CVR_MIN_TIMERANGE_HOURS") or "4").strip()), 8760))
+    except ValueError:
+        return 4
+
+
+def _splunk_truthy_outlier(v) -> bool:
+    if v is None:
+        return False
+    if v is True or v == 1:
+        return True
+    s = str(v).strip().lower()
+    return s in ("1", "true", "yes", "outlier")
+
+
+# Splunk OutliersViz dashboards: streaming_summary pre-agg + optional live streaming_prod tail.
+SPLUNK_P0_SUMMARY_DASHBOARD_SPECS: dict[str, dict] = {
+    "p0_cvr": {
+        "summary_source": "cvr_stream_metrics_by_zone_15min",
+        "count_field": "event_count",
+        "raw_rex": None,
+        "result_prefix": "event_count",
+        "ml_model_fmt": "ml_cvr_stream_metrics_by_zone_15min_{zone}",
+        "live_branch": (
+            '(index=streaming_prod host=cvrstreaming*{zone}* sourcetype=hms:streaming '
+            '("SaveCVRPlaylistThread" "processMediaRecording" cvrDurationInSeconds '
+            'NOT "cvrDurationInSeconds=0.0") earliest={summary_latest} latest=now)'
+        ),
+        "min_timerange_h": 4,
+    },
+    "p0_streaming": {
+        "summary_source": "upload_count_summary_15m_by_zone",
+        "count_field": "upload_count",
+        "raw_rex": r"upload_count=(?<upload_count>\d+)",
+        "result_prefix": "upload_count",
+        "ml_model_fmt": "ml_upload_count_summary_15m_by_zone_{zone}",
+        "live_branch": (
+            "(index=streaming_prod host=hmsstreaming*{zone}* sourcetype=hms:streaming "
+            "earliest={summary_latest} latest=now)"
+        ),
+        "min_timerange_h": 4,
+    },
+    "p0_adt": {
+        "summary_source": "pp_upload_count_summary_15m_by_zone",
+        "count_field": "upload_count",
+        "raw_rex": r"upload_count=(?<upload_count>\d+)",
+        "result_prefix": "upload_count",
+        "ml_model_fmt": "ml_pp_upload_count_summary_15m_by_zone_{zone}",
+        "live_branch": None,
+        "min_timerange_h": 4,
+    },
+    "p0_streaming_us_infra": {
+        "summary_source": "us_infra_upload_count_summary_15m_by_zone",
+        "count_field": "upload_count",
+        "raw_rex": r"upload_count=(?<upload_count>\d+)",
+        "result_prefix": "upload_count",
+        "ml_model_fmt": "ml_us_infra_upload_count_summary_15m_by_zone_{zone}",
+        "live_branch": None,
+        "min_timerange_h": 4,
+    },
+}
+
+
+def splunk_p0_summary_min_timerange_hours(spec_id: str) -> int:
+    """Minimum lookback for summary-based P0 dashboards (Splunk UI defaults ~3d)."""
+    spec = SPLUNK_P0_SUMMARY_DASHBOARD_SPECS.get(spec_id) or {}
+    try:
+        env_key = {
+            "p0_cvr": "SPLUNK_CVR_MIN_TIMERANGE_HOURS",
+            "p0_streaming": "SPLUNK_P0_STREAMING_MIN_TIMERANGE_HOURS",
+            "p0_adt": "SPLUNK_P0_ADT_MIN_TIMERANGE_HOURS",
+            "p0_streaming_us_infra": "SPLUNK_P0_US_INFRA_MIN_TIMERANGE_HOURS",
+        }.get(spec_id)
+        if env_key and (os.getenv(env_key) or "").strip():
+            return max(4, min(int(os.getenv(env_key).strip()), 8760))
+    except ValueError:
+        pass
+    return int(spec.get("min_timerange_h") or splunk_cvr_min_timerange_hours())
+
+
+def _splunk_build_p0_summary_zone_spl(
+    spec_id: str,
+    zone: str,
+    earliest_time: str,
+    latest_time: str,
+    summary_latest: str | None = None,
+    *,
+    use_ml: bool = True,
+) -> str:
+    """One-zone SPL aligned with Splunk P0 OutliersViz panels (summary + optional live OR)."""
+    spec = SPLUNK_P0_SUMMARY_DASHBOARD_SPECS.get(spec_id)
+    if not spec:
+        raise ValueError(f"unknown P0 summary dashboard: {spec_id!r}")
+    zn = str(zone or "").strip().lower()
+    if zn not in ("z1", "z2", "z3", "z4"):
+        raise ValueError(f"invalid zone: {zone!r}")
+    cf = spec["count_field"]
+    result_field = f"{spec['result_prefix']}_{zn}"
+    ml_model = spec["ml_model_fmt"].format(zone=zn)
+    sl = (summary_latest or splunk_cvr_summary_latest()).strip() or "-4h"
+    et = (earliest_time or "-24h@h").strip()
+    lt = (latest_time or "now").strip()
+    head = (
+        f"search (index=streaming_summary source={spec['summary_source']} zone={zn} "
+        f"earliest={et} latest={lt})"
+    )
+    live = spec.get("live_branch")
+    if live:
+        head += " OR\n" + live.format(zone=zn, summary_latest=sl)
+    pipe = ""
+    if spec.get("raw_rex"):
+        pipe += f'| rex field=_raw "{spec["raw_rex"]}"\n'
+    pipe += (
+        f'| rex field=host "(?<zone>z[1-9]+)"\n'
+        f"| eval {cf}=coalesce({cf},1)\n"
+        "| bin _time span=15m\n"
+        f"| stats sum({cf}) AS {result_field} by _time zone\n"
+        "| eventstats max(_time) as ignore by zone\n"
+        "| where _time!=ignore"
+    )
+    base = head + "\n" + pipe
+    if use_ml:
+        base += (
+            '\n| eval DayOfWeek=strftime(_time,"%w"), HourOfDay=strftime(_time,"%H"), '
+            'MinuteOfHour=strftime(_time,"%M")\n'
+            f"| apply {ml_model} AS isOutlier\n"
+            '| rex field=BoundaryRanges "-Infinity:(?<low_count>[-\\.\\d]*):"\n'
+            '| rex field=BoundaryRanges "(?<high_count>[-\\.\\d]*):Infinity:"\n'
+            f"| table _time {result_field} low_count high_count isOutlier zone"
+        )
+    else:
+        base += f"\n| table _time {result_field} zone"
+    return base
+
+
+def _splunk_build_p0_cvr_zone_spl(
+    zone: str,
+    earliest_time: str,
+    latest_time: str,
+    summary_latest: str | None = None,
+    *,
+    use_ml: bool = True,
+) -> str:
+    return _splunk_build_p0_summary_zone_spl(
+        "p0_cvr", zone, earliest_time, latest_time, summary_latest, use_ml=use_ml
+    )
+
+
+def _splunk_summary_normalize_zone_rows(
+    rows: list, zone: str, result_prefix: str
+) -> list:
+    """Map summary-dashboard fields to generic chart row shape."""
+    ec_key = f"{result_prefix}_{zone}"
+    out = []
+    for row in rows or []:
+        entry = {"_time": row.get("_time"), "zone": zone}
+        uc = _splunk_float(row.get(ec_key))
+        if uc is None:
+            uc = _splunk_float(row.get(result_prefix))
+        if uc is None:
+            uc = _splunk_float(row.get("event_count"))
+        if uc is None:
+            uc = _splunk_float(row.get("upload_count"))
+        entry["upload_count"] = uc
+        lo = _splunk_float(row.get("low_count"))
+        hi = _splunk_float(row.get("high_count"))
+        if lo is not None:
+            entry["lower95"] = lo
+        if hi is not None:
+            entry["upper95"] = hi
+        if row.get("isOutlier") is not None:
+            entry["isOutlier"] = row.get("isOutlier")
+        out.append(entry)
+    return out
+
+
+def _splunk_cvr_normalize_zone_rows(rows: list, zone: str) -> list:
+    return _splunk_summary_normalize_zone_rows(rows, zone, "event_count")
+
+
+def _splunk_summary_seasonal_outlier_series(
+    rows: list,
+    zone: str,
+    display_tz: str,
+    result_prefix: str,
+    *,
+    rel_dev: float = 0.30,
+) -> dict:
+    """
+    REST fallback when Splunk ``apply ml_*`` is unavailable on the REST identity.
+    Same calendar slot logic as dashboard SPL before ``apply``.
+    """
+    ec_key = f"{result_prefix}_{zone}"
+    try:
+        zi = ZoneInfo(_splunk_resolve_p0_timezone_id(display_tz))
+    except Exception:
+        zi = ZoneInfo("America/Los_Angeles")
+
+    parsed: list[tuple[float, float, tuple[str, str, str]]] = []
+    for row in rows or []:
+        ts = _splunk_row_epoch_seconds(row.get("_time"), naive_wall_timezone=display_tz)
+        if ts is None:
+            continue
+        uc = _splunk_float(row.get(ec_key)) or _splunk_float(row.get(result_prefix))
+        if uc is None:
+            continue
+        dt = datetime.fromtimestamp(ts, tz=ZoneInfo("UTC")).astimezone(zi)
+        slot = (dt.strftime("%w"), dt.strftime("%H"), str((dt.minute // 15) * 15))
+        parsed.append((ts, uc, slot))
+    parsed.sort(key=lambda x: x[0])
+
+    labels: list[str] = []
+    ucs: list[float] = []
+    los: list[float | None] = []
+    his: list[float | None] = []
+    outliers = 0
+    for ts, uc, slot in parsed:
+        dt = datetime.fromtimestamp(ts, tz=ZoneInfo("UTC")).astimezone(zi)
+        labels.append(dt.strftime("%a, %b %d, %H:%M %Z"))
+        ucs.append(uc)
+        peers = [v for t, v, s in parsed if s == slot and t < ts]
+        if not peers:
+            los.append(None)
+            his.append(None)
+            continue
+        ref = median(peers)
+        if ref <= 0:
+            los.append(None)
+            his.append(None)
+            continue
+        lo = ref * (1.0 - rel_dev)
+        hi = ref * (1.0 + rel_dev)
+        los.append(lo)
+        his.append(hi)
+        if uc < lo or uc > hi:
+            outliers += 1
+
+    return {
+        "labels": labels,
+        "upload_count": ucs,
+        "lower": los,
+        "upper": his,
+        "outliers": outliers,
+        "total_upload_count": int(sum(ucs)),
+        "band": "seasonal",
+    }
+
+
+def _splunk_cvr_seasonal_outlier_series(
+    rows: list, zone: str, display_tz: str, *, rel_dev: float = 0.30
+) -> dict:
+    return _splunk_summary_seasonal_outlier_series(
+        rows, zone, display_tz, "event_count", rel_dev=rel_dev
+    )
+
+
+def _splunk_cvr_rows_to_chart_series(results: list, zone: str, display_tz: str) -> dict:
+    norm = _splunk_cvr_normalize_zone_rows(results, zone)
+    s = _splunk_rows_to_chart_series(norm, display_tz)
+    if any(r.get("isOutlier") is not None for r in (results or [])):
+        s["outliers"] = sum(1 for r in results or [] if _splunk_truthy_outlier(r.get("isOutlier")))
+        s["band"] = "ml_apply"
+    return s
+
+
+def _splunk_fetch_p0_summary_dashboard_zones(
+    spec_id: str,
+    splunk_host: str,
+    splunk_token: str,
+    timerange_hours: int,
+    earliest_time: str,
+    latest_time: str,
+    max_workers: int = 4,
+    host_match: str = "",
+    *,
+    align_buckets: bool = True,
+) -> dict:
+    """Fetch z1–z4 for a summary-based P0 dashboard (same pattern as p0_cvr_dashboard)."""
+    spec = SPLUNK_P0_SUMMARY_DASHBOARD_SPECS.get(spec_id)
+    if not spec:
+        raise ValueError(f"unknown P0 summary dashboard: {spec_id!r}")
+    _ = int(timerange_hours)
+    _ = (host_match or "").strip()
+    tz_job = splunk_p0_job_timezone()
+    summary_latest = splunk_cvr_summary_latest()
+    result_prefix = spec["result_prefix"]
+    qprefix = spec_id.replace("p0_streaming_us_infra", "p0_us").replace("p0_streaming", "p0_str")
+
+    def _run_queries(use_ml: bool) -> tuple[dict[str, list], dict[str, str]]:
+        queries = {
+            f"{qprefix}_{zn}": _splunk_build_p0_summary_zone_spl(
+                spec_id, zn, earliest_time, latest_time, summary_latest, use_ml=use_ml
+            )
+            for zn in ("z1", "z2", "z3", "z4")
+        }
+        errors: dict[str, str] = {}
+        raw = execute_splunk_queries_parallel(
+            queries,
+            splunk_host,
+            splunk_token,
+            earliest_time,
+            latest_time,
+            max_workers=max_workers,
+            timezone=tz_job,
+            errors_out=errors,
+        )
+        by_zone: dict[str, list] = {}
+        for zn in ("z1", "z2", "z3", "z4"):
+            by_zone[zn] = raw.get(f"{qprefix}_{zn}") or []
+        return by_zone, errors
+
+    by_zone, errors = _run_queries(use_ml=True)
+    ml_failed = any(errors.get(f"{qprefix}_{zn}") for zn in ("z1", "z2", "z3", "z4"))
+    if ml_failed:
+        by_zone, errors = _run_queries(use_ml=False)
+
+    if align_buckets:
+        norm_by_zone = {
+            zn: _splunk_summary_normalize_zone_rows(by_zone.get(zn) or [], zn, result_prefix)
+            for zn in ("z1", "z2", "z3", "z4")
+        }
+        norm_by_zone = _splunk_zone_rows_on_common_buckets(
+            norm_by_zone, tz_job, fill_missing=True
+        )
+    else:
+        norm_by_zone = {
+            zn: _splunk_summary_normalize_zone_rows(by_zone.get(zn) or [], zn, result_prefix)
+            for zn in ("z1", "z2", "z3", "z4")
+        }
+        norm_by_zone = _splunk_dedupe_zone_rows_pacific(norm_by_zone, tz_job)
+
+    out = {}
+    used_ml = False
+    for zn in ("z1", "z2", "z3", "z4"):
+        raw_rows = by_zone.get(zn) or []
+        zrows = norm_by_zone.get(zn) or []
+        if any(r.get("isOutlier") is not None for r in raw_rows):
+            s = _splunk_rows_to_chart_series(zrows, tz_job)
+            s["outliers"] = sum(
+                1 for r in raw_rows if _splunk_truthy_outlier(r.get("isOutlier"))
+            )
+            s["band"] = "ml_apply"
+            used_ml = True
+        else:
+            seasonal = _splunk_summary_seasonal_outlier_series(
+                raw_rows, zn, tz_job, result_prefix
+            )
+            if align_buckets:
+                s = _splunk_rows_to_chart_series(zrows, tz_job)
+                s["outliers"] = seasonal["outliers"]
+                s["band"] = seasonal["band"]
+            else:
+                s = seasonal
+        err = errors.get(f"{qprefix}_{zn}")
+        s["error"] = "query_failed" if err else None
+        if err:
+            s["error_detail"] = err
+        s["raw_row_count"] = len(raw_rows)
+        out[zn] = s
+    if not used_ml and ml_failed:
+        for zn in out:
+            if out[zn].get("band") == "seasonal":
+                out[zn]["band"] = "seasonal_no_ml"
+    return out
+
+
+def _splunk_fetch_p0_cvr_zones(
+    splunk_host: str,
+    splunk_token: str,
+    timerange_hours: int,
+    earliest_time: str,
+    latest_time: str,
+    max_workers: int = 4,
+    host_match: str = "",
+    *,
+    align_buckets: bool = True,
+) -> dict:
+    return _splunk_fetch_p0_summary_dashboard_zones(
+        "p0_cvr",
+        splunk_host,
+        splunk_token,
+        timerange_hours,
+        earliest_time,
+        latest_time,
+        max_workers=max_workers,
+        host_match=host_match,
+        align_buckets=align_buckets,
+    )
+
+
 def _splunk_build_p0_all_zones_spl(
     timerange_hours: int,
     index_literal: str = "streaming_prod",
     search_literals: str = "",
     host_match: str = "",
+    *,
+    use_predict: bool = False,
 ) -> str:
     """
     Single SPL for z1–z4 (one REST job). Splunk Cloud REST users (e.g. hybrid_rest_user) often hit
@@ -557,7 +1051,7 @@ def _splunk_build_p0_all_zones_spl(
         wh_parts.append(f'match(host, "(?i){re.escape(hm)}")')
     where_clause = " AND ".join(wh_parts)
     _ = int(timerange_hours)
-    return (
+    base = (
         f"{head}\n"
         f'| rex field=host "-(?<zone>z[1-4])-"\n'
         f"| where {where_clause}\n"
@@ -565,6 +1059,11 @@ def _splunk_build_p0_all_zones_spl(
         "| stats count as upload_count by _time zone\n"
         "| sort 0 zone _time\n"
     )
+    if use_predict:
+        base += (
+            "| predict upload_count as lower95=lower95, upper95=upper95 holdback=0 by zone\n"
+        )
+    return base
 
 
 def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
@@ -600,12 +1099,27 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
     for ts, row in rows:
         dt = datetime.fromtimestamp(ts, tz=ZoneInfo("UTC")).astimezone(tzinfo)
         labels.append(dt.strftime("%a, %b %d, %H:%M %Z"))
-        uc = _splunk_float(row.get("upload_count"), 0.0)
+        uc = _splunk_float(row.get("upload_count"))
         if uc is None:
-            uc = 0.0
+            for ek in (
+                "event_count",
+                "event_count_z1",
+                "event_count_z2",
+                "event_count_z3",
+                "event_count_z4",
+                "upload_count_z1",
+                "upload_count_z2",
+                "upload_count_z3",
+                "upload_count_z4",
+            ):
+                uc = _splunk_float(row.get(ek))
+                if uc is not None:
+                    break
         ucs.append(uc)
         lo = hi = None
         for lk, hk in (
+            ("lower95", "upper95"),
+            ("low_count", "high_count"),
             ("lower", "upper"),
             ("lower95(prediction)", "upper95(prediction)"),
             ("lower95(upload_count)", "upper95(upload_count)"),
@@ -616,12 +1130,14 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
                 break
         los.append(lo)
         his.append(hi)
+        if uc is None:
+            continue
         if lo is not None and hi is not None:
             any_band = True
             if uc < lo or uc > hi:
                 outliers_predict += 1
 
-    if not ucs:
+    if not any(uc is not None for uc in ucs):
         return {
             "labels": [],
             "upload_count": [],
@@ -633,17 +1149,19 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
         }
 
     if not any_band:
-        # Rolling ±2σ on past buckets only (same thresholds drawn on the chart). Outlier count must
-        # match what you see: count whenever upload_count is outside [lo, hi] for that bucket — do not
-        # skip the first `win` indices (that caused “spike on chart but 0 outliers”).
-        win = min(96, max(8, len(ucs) // 4))
+        # Rolling ±2σ on past buckets only (fallback when MLTK predict unavailable).
+        win = min(96, max(8, len([u for u in ucs if u is not None]) // 4 or 8))
         rl, ru, ob = [], [], 0
         for i, uc in enumerate(ucs):
+            if uc is None:
+                rl.append(None)
+                ru.append(None)
+                continue
             start = max(0, i - win)
-            seg = ucs[start:i]
+            seg = [x for x in ucs[start:i] if x is not None]
             if len(seg) < 3:
-                seg = ucs[: max(1, i)]
-            m = mean(seg)
+                seg = [x for x in ucs[: max(1, i)] if x is not None]
+            m = mean(seg) if seg else uc
             s = pstdev(seg) if len(seg) > 1 else 0.0
             lo = max(0.0, m - 2 * s)
             hi = m + 2 * s
@@ -662,7 +1180,7 @@ def _splunk_rows_to_chart_series(results: list, display_tz: str) -> dict:
         "lower": los,
         "upper": his,
         "outliers": outliers_predict,
-        "total_upload_count": int(sum(ucs)),
+        "total_upload_count": int(sum(u for u in ucs if u is not None)),
         "band": band,
     }
 
@@ -677,9 +1195,14 @@ def _splunk_fetch_p0_zones_predict(
     index_literal: str | None = None,
     max_workers: int = 4,
     host_match: str = "",
+    *,
+    align_buckets: bool = True,
 ) -> dict:
     """
-    Run P0 zone SPL (upload_count per 15m per zone). Band/outliers from Python.
+    Run P0 zone SPL (upload_count per 15m per zone).
+
+    Outlier counts match Splunk UI best when ``align_buckets=False`` (per-zone buckets only,
+    no cross-zone fill). Charts use ``align_buckets=True`` with null gaps on the shared x-axis.
 
     Uses **one** REST search for all zones (z1–z4) to avoid Splunk Cloud HTTP 503
     "role-based concurrency limit" when the REST identity runs several historical
@@ -687,13 +1210,15 @@ def _splunk_fetch_p0_zones_predict(
     """
     _ = max_workers  # was used for parallel per-zone jobs; single search replaces that
     idx = (index_literal or "").strip() or splunk_p0_streaming_index()
+    tz_job = splunk_p0_job_timezone()
+    use_predict = _splunk_p0_use_predict()
     spl = _splunk_build_p0_all_zones_spl(
         timerange_hours,
         index_literal=idx,
         search_literals=search_literals,
         host_match=host_match,
+        use_predict=use_predict,
     )
-    tz_job = splunk_p0_job_timezone()
     _key, rows, err = execute_splunk_query(
         "p0_zones_all",
         spl,
@@ -703,6 +1228,28 @@ def _splunk_fetch_p0_zones_predict(
         latest_time,
         timezone=tz_job,
     )
+    if err and use_predict:
+        err_low = str(err).lower()
+        if "400" in str(err) and (
+            "predict" in err_low or "unknown search command" in err_low
+        ):
+            use_predict = False
+            spl = _splunk_build_p0_all_zones_spl(
+                timerange_hours,
+                index_literal=idx,
+                search_literals=search_literals,
+                host_match=host_match,
+                use_predict=False,
+            )
+            _key, rows, err = execute_splunk_query(
+                "p0_zones_all",
+                spl,
+                splunk_host,
+                splunk_token,
+                earliest_time,
+                latest_time,
+                timezone=tz_job,
+            )
     display_tz = tz_job
     empty_series = {
         "labels": [],
@@ -732,9 +1279,18 @@ def _splunk_fetch_p0_zones_predict(
         zn = str(zn).strip()
         if zn not in by_zone:
             continue
-        by_zone[zn].append(
-            {"_time": row.get("_time"), "upload_count": row.get("upload_count")}
+        entry = {"_time": row.get("_time"), "upload_count": row.get("upload_count")}
+        for fk in ("lower95", "upper95", "lower", "upper"):
+            if row.get(fk) is not None:
+                entry[fk] = row.get(fk)
+        by_zone[zn].append(entry)
+
+    if align_buckets:
+        by_zone = _splunk_zone_rows_on_common_buckets(
+            by_zone, display_tz, fill_missing=True
         )
+    else:
+        by_zone = _splunk_dedupe_zone_rows_pacific(by_zone, display_tz)
 
     out = {}
     for zn in ("z1", "z2", "z3", "z4"):
@@ -860,6 +1416,7 @@ def _splunk_chartjs_p0_script_json(chart_data: dict, canvas_prefix: str) -> str:
                     borderWidth: 2,
                     pointRadius: 0,
                     fill: false,
+                    spanGaps: true,
                     tension: 0.2,
                 }});
                 new Chart(canvas, {{
@@ -915,8 +1472,10 @@ def _splunk_chartjs_p0_script_json(chart_data: dict, canvas_prefix: str) -> str:
 
 def splunk_outliers_monitor_payload(timerange_hours=None) -> dict:
     """
-    Compact JSON for home sidebar: outlier counts per zone for each Splunk P0 tool
-    (same P0 zone SPL as the chat dashboards; rolling band in Python).
+    Compact JSON for home sidebar: outlier counts per zone for each Splunk P0 tool.
+
+    Uses ``streaming_summary`` SPL (same family as Splunk OutliersViz dashboards) with
+    per-zone buckets only. ML ``apply`` when REST allows; else seasonal fallback in Python.
     """
     token = os.getenv("SPLUNK_TOKEN")
     if not token:
@@ -937,7 +1496,7 @@ def splunk_outliers_monitor_payload(timerange_hours=None) -> dict:
         (
             "p0_cvr",
             "P0 CVR Streaming",
-            '"CVR"',
+            "",
             "https://arlo.splunkcloud.com/en-US/app/arlo_sre/p0_cvr_dashboard",
         ),
         (
@@ -955,8 +1514,13 @@ def splunk_outliers_monitor_payload(timerange_hours=None) -> dict:
     ]
 
     tools_out = []
-    for tid, label, lit, url in tools_cfg:
-        zdata = _splunk_fetch_p0_zones_predict(host, token, tr, earliest, latest, search_literals=lit)
+    for tid, label, _lit, url in tools_cfg:
+        # Sidebar / status monitor: use requested window only (default 4h) for faster Splunk REST.
+        eff_tr = tr
+        eff_earliest = f"-{eff_tr}h@h"
+        zdata = _splunk_fetch_p0_summary_dashboard_zones(
+            tid, host, token, eff_tr, eff_earliest, latest, align_buckets=False
+        )
         zones = []
         tot = 0
         for zn in ("z1", "z2", "z3", "z4"):
@@ -1151,24 +1715,26 @@ def read_splunk_p0_dashboard(query: str = "", timerange=None, *, us_infra: bool 
 
         output += f"""
         <div style='margin: 8px 0; padding: 8px 10px; background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 6px; font-size: 11px; color: #1e3a8a; line-height: 1.45;'>
-            <strong>Splunk REST (this view):</strong> timezone <code>{html.escape(splunk_p0_job_timezone())}</code> (US Pacific PST/PDT — buckets + chart aligned with Splunk UI);
-            <strong>15m</strong> buckets; <code>upload_count</code> = event count per bucket.
-            <strong>Band / outliers:</strong> computed here with a rolling ±2σ window on <code>upload_count</code> (REST cannot rely on Splunk’s <code>predict</code>/MLTK on many tenants — avoid HTTP 400).
-            The interactive Splunk dashboard may still use <code>predict</code> LLP when ML Toolkit is available there.
-            <br><br>
-            <strong>Time range:</strong> OneView defaults to <strong>{int(splunk_p0_default_timerange_hours())}h</strong> for P0 tools; the <a href="{html.escape(dashboard_url)}" target="_blank" rel="noopener noreferrer" style="color: #1d4ed8;">Splunk dashboard</a> link uses the <strong>same</strong> lookback as this page (<code>earliest=-{int(timerange_hours)}h</code>). Widen in either UI if needed.
+            Same SPL family as Splunk <strong>{html.escape(dash_slug)}</strong>:
+            <code>streaming_summary</code> / <code>{html.escape(SPLUNK_P0_SUMMARY_DASHBOARD_SPECS["p0_streaming_us_infra" if us_infra else "p0_streaming"]["summary_source"])}</code>
+            + optional live tail; ML model per zone; TZ <code>{html.escape(splunk_p0_job_timezone())}</code>;
+            latest incomplete 15m bucket dropped.
         </div>
         """
 
         host_match = (query or "").strip()
-        zmap = _splunk_fetch_p0_zones_predict(
+        p0_spec = "p0_streaming_us_infra" if us_infra else "p0_streaming"
+        eff_tr = max(timerange_hours, splunk_p0_summary_min_timerange_hours(p0_spec))
+        eff_earliest = f"-{eff_tr}h@h"
+        zmap = _splunk_fetch_p0_summary_dashboard_zones(
+            p0_spec,
             splunk_host,
             splunk_token,
-            timerange_hours,
-            earliest_time,
+            eff_tr,
+            eff_earliest,
             latest_time,
-            search_literals="",
             host_match=host_match,
+            align_buckets=True,
         )
 
         nonempty = any(
@@ -1518,19 +2084,24 @@ def read_splunk_p0_cvr_dashboard(query: str = "", timerange=None) -> str:
         }
         output += f"""
         <div style='margin: 8px 0; padding: 8px 10px; background: #f3e8ff; border-left: 4px solid #7c3aed; border-radius: 6px; font-size: 11px; color: #4c1d95; line-height: 1.45;'>
-            Same logic as P0 Streaming: 15m buckets, <code>upload_count</code>, rolling band / outliers in OneView, TZ <code>{html.escape(splunk_p0_job_timezone())}</code>.
-            Search scoped with term <code>CVR</code> in the index.
+            Same SPL as Splunk <strong>p0_cvr_dashboard</strong>: <code>streaming_summary</code> (15m pre-agg)
+            + live <code>cvrstreaming</code> on <code>streaming_prod</code>; ML model
+            <code>ml_cvr_stream_metrics_by_zone_15min_z*</code> for outliers; TZ
+            <code>{html.escape(splunk_p0_job_timezone())}</code>; latest incomplete bucket dropped.
         </div>
         """
         host_match = (query or "").strip()
-        zmap = _splunk_fetch_p0_zones_predict(
+        eff_tr = max(timerange_hours, splunk_p0_summary_min_timerange_hours("p0_cvr"))
+        eff_earliest = f"-{eff_tr}h@h"
+        zmap = _splunk_fetch_p0_summary_dashboard_zones(
+            "p0_cvr",
             splunk_host,
             splunk_token,
-            timerange_hours,
-            earliest_time,
+            eff_tr,
+            eff_earliest,
             latest_time,
-            search_literals='"CVR"',
             host_match=host_match,
+            align_buckets=True,
         )
         nonempty = any(
             len((zmap.get(zn) or {}).get("labels") or []) > 0 for zn in ("z1", "z2", "z3", "z4")
@@ -1861,18 +2432,23 @@ def read_splunk_p0_adt_dashboard(query: str = "", timerange=None) -> str:
         }
         output += f"""
         <div style='margin: 8px 0; padding: 8px 10px; background: #fff7ed; border-left: 4px solid #ea580c; border-radius: 6px; font-size: 11px; color: #7c2d12; line-height: 1.45;'>
-            Same band / outlier logic as P0 Streaming (no CVR term). TZ <code>{html.escape(splunk_p0_job_timezone())}</code>.
+            Same SPL as Splunk <strong>p0_streaming_dashboard_pp</strong>:
+            <code>streaming_summary</code> / <code>{html.escape(SPLUNK_P0_SUMMARY_DASHBOARD_SPECS["p0_adt"]["summary_source"])}</code>;
+            ML per zone; TZ <code>{html.escape(splunk_p0_job_timezone())}</code>.
         </div>
         """
         host_match = (query or "").strip()
-        zmap = _splunk_fetch_p0_zones_predict(
+        eff_tr = max(timerange_hours, splunk_p0_summary_min_timerange_hours("p0_adt"))
+        eff_earliest = f"-{eff_tr}h@h"
+        zmap = _splunk_fetch_p0_summary_dashboard_zones(
+            "p0_adt",
             splunk_host,
             splunk_token,
-            timerange_hours,
-            earliest_time,
+            eff_tr,
+            eff_earliest,
             latest_time,
-            search_literals="",
             host_match=host_match,
+            align_buckets=True,
         )
         nonempty = any(
             len((zmap.get(zn) or {}).get("labels") or []) > 0 for zn in ("z1", "z2", "z3", "z4")

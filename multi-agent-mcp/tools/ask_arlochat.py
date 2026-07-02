@@ -45,23 +45,81 @@ except ImportError:
     MCP_SDK_AVAILABLE = False
     print("⚠️  MCP SDK not available - using HTTP fallback mode")
 
-# MCP Server Configuration  
-MCP_SERVER_URL = "http://internal-arlochat-mcp-alb-880426873.us-east-1.elb.amazonaws.com:8080"
-MCP_SSE_ENDPOINT = f"{MCP_SERVER_URL}/sse"
+# MCP Server Configuration (see tools/mcp_connect.py)
+from tools.mcp_connect import (
+    get_mcp_auth_headers,
+    get_mcp_server_url,
+    get_mcp_sse_endpoint,
+    is_mintmcp_url,
+    mcp_transport_label,
+    open_mcp_session,
+)
+
+
+def _mcp_uses_local_server() -> bool:
+    u = get_mcp_server_url().lower()
+    return "127.0.0.1" in u or "localhost" in u
+
+
+def _mcp_connect_hint_html() -> str:
+    if _mcp_uses_local_server():
+        return (
+            "• El MCP corre dentro de este mismo servicio (no requiere VPN)<br>"
+            "• Revisa logs ECS o reinicia el task si persiste<br>"
+        )
+    if is_mintmcp_url(get_mcp_server_url()):
+        return (
+            "• MintMCP requiere MINTMCP_API_KEY válido<br>"
+            "• Revisa permisos del gateway arlo en app.mintmcp.com<br>"
+        )
+    return (
+        "• Conéctate a Arlo VPN (GlobalProtect) para alcanzar el MCP interno<br>"
+        "• Comprueba DNS y red corporativa<br>"
+    )
+
+
+# Backward-compatible module constants
+MCP_SERVER_URL = get_mcp_server_url()
+MCP_SSE_ENDPOINT = get_mcp_sse_endpoint()
 
 
 class SimpleMCPClient:
-    """Simple MCP client using HTTP requests for SSE-based MCP server."""
+    """MCP client: legacy SSE (ALB) or MintMCP streamable HTTP."""
     
     def __init__(self, server_url: str):
-        self.server_url = server_url
+        self.server_url = server_url.rstrip("/")
+        self._mint = is_mintmcp_url(self.server_url)
         self.session = requests.Session()
+        for k, v in get_mcp_auth_headers().items():
+            self.session.headers[k] = v
         self.session_id = None
         self.message_endpoint = None
         self.sse_connection = None
-        self.sse_responses = {}  # Store responses by request_id
+        self.sse_responses = {}
         self.sse_thread = None
         self.sse_running = False
+
+    def _mint_list_tools(self) -> List[Dict[str, Any]]:
+        async def _run():
+            async with open_mcp_session() as session:
+                r = await session.list_tools()
+                return [{"name": t.name, "description": t.description or ""} for t in r.tools]
+
+        return asyncio.run(_run())
+
+    def _mint_call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
+        async def _run():
+            async with open_mcp_session() as session:
+                r = await session.call_tool(tool_name, arguments)
+                parts = []
+                for item in r.content or []:
+                    if hasattr(item, "text"):
+                        parts.append(str(item.text))
+                    elif isinstance(item, dict) and item.get("type") == "text":
+                        parts.append(str(item.get("text", "")))
+                return "\n".join(parts) if parts else None
+
+        return asyncio.run(_run())
         
     def _sse_reader_thread(self):
         """Background thread to read SSE events continuously."""
@@ -96,7 +154,15 @@ class SimpleMCPClient:
             self.sse_running = False
     
     def initialize(self) -> bool:
-        """Initialize MCP session via SSE."""
+        """Initialize MCP session via SSE or MintMCP."""
+        if self._mint:
+            try:
+                tools = self._mint_list_tools()
+                print(f"✅ MintMCP connected — {len(tools)} tools via {self.server_url}")
+                return True
+            except Exception as e:
+                print(f"❌ MintMCP initialization error: {e}")
+                return False
         try:
             import threading
             
@@ -199,6 +265,12 @@ class SimpleMCPClient:
     
     def list_tools(self) -> List[Dict[str, Any]]:
         """List available tools from MCP server."""
+        if self._mint:
+            try:
+                return self._mint_list_tools()
+            except Exception as e:
+                print(f"❌ Error listing MintMCP tools: {e}")
+                return []
         try:
             if not self.message_endpoint:
                 print("⚠️  No message endpoint - not initialized")
@@ -245,6 +317,12 @@ class SimpleMCPClient:
     
     def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
         """Call a specific MCP tool."""
+        if self._mint:
+            try:
+                return self._mint_call_tool(tool_name, arguments)
+            except Exception as e:
+                print(f"❌ Error calling MintMCP tool {tool_name}: {e}")
+                return None
         try:
             if not self.message_endpoint:
                 print("⚠️  No message endpoint - not initialized")
@@ -945,7 +1023,7 @@ async def ask_arlo_async(question: str = "") -> str:
     print("=" * 80)
     print("🤖 GocBedrock MCP - Direct Mode (Async/SDK)")
     print(f"📝 Question: '{question}'")
-    print(f"🌐 MCP Server: {MCP_SSE_ENDPOINT}")
+    print(f"🌐 MCP Server: {mcp_transport_label()}")
     
     if not question or not question.strip():
         return """
@@ -958,12 +1036,8 @@ async def ask_arlo_async(question: str = "") -> str:
         """
     
     try:
-        print("🔗 Connecting to MCP server via SSE...")
-        async with sse_client(MCP_SSE_ENDPOINT) as (read, write):
-            async with ClientSession(read, write) as session:
-                print("🔄 Initializing MCP session...")
-                await session.initialize()
-                
+        print("🔗 Connecting to MCP server...")
+        async with open_mcp_session() as session:
                 print("📋 Fetching available tools from MCP...")
                 mcp_tools_response = await session.list_tools()
                 mcp_tools = mcp_tools_response.tools
@@ -1846,19 +1920,14 @@ async def ask_arlo_async(question: str = "") -> str:
         
         # Check for specific error types
         if "DNS resolution failed" in error_msg or "Could not contact DNS servers" in error_msg:
-            return """
+            hint = _mcp_connect_hint_html()
+            return f"""
             <div style='background-color: #fee; padding: 12px; border-left: 4px solid #f56565; border-radius: 4px; margin: 8px 0;'>
                 <p style='margin: 0; color: #c53030;'>
                     ❌ <strong>MCP Server Connection Error</strong><br><br>
-                    <strong>Problem:</strong> Cannot resolve DNS for MCP server<br><br>
-                    <strong>Possible causes:</strong><br>
-                    • No internet connection<br>
-                    • Not connected to Arlo VPN<br>
-                    • DNS server issues<br><br>
-                    <strong>Solutions:</strong><br>
-                    1. Check your internet connection<br>
-                    2. Connect to Arlo VPN<br>
-                    3. Try again<br>
+                    <strong>Problem:</strong> Cannot resolve DNS for MCP server ({html.escape(get_mcp_server_url())})<br><br>
+                    <strong>Recommendations:</strong><br>
+                    {hint}
                 </p>
             </div>
             """
@@ -1881,7 +1950,7 @@ async def ask_arlo_async(question: str = "") -> str:
                     <strong>Details:</strong> {html.escape(error_msg[:300])}<br><br>
                     <strong>Recommendations:</strong><br>
                     • Check your internet connection<br>
-                    • Verify that you are connected to Arlo VPN (for MCP)<br>
+                    {_mcp_connect_hint_html()}
                     • Try again<br>
                     • If the problem persists, check server logs
                 </p>
@@ -1895,7 +1964,7 @@ async def ask_arlo_async(question: str = "") -> str:
                     {html.escape(error_msg[:500])}<br><br>
                     <strong>Recommendations:</strong><br>
                     • Check your internet connection<br>
-                    • Verify that you are connected to Arlo VPN (for MCP)<br>
+                    {_mcp_connect_hint_html()}
                     • Review logs for more details
                 </p>
             </div>
@@ -1917,7 +1986,7 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
     print("=" * 80)
     print("🤖 GocBedrock MCP - Bedrock Intelligence Mode (SDK)")
     print(f"📝 Question: '{question}'")
-    print(f"🌐 MCP Server: {MCP_SSE_ENDPOINT}")
+    print(f"🌐 MCP Server: {mcp_transport_label()}")
     
     if not question or not question.strip():
         return """
@@ -2086,11 +2155,8 @@ Return ONLY the HTML (no markdown blocks)."""
             
             return final_html
         
-        print("🔗 Connecting to MCP server via SSE (SDK)...")
-        async with sse_client(MCP_SSE_ENDPOINT) as (read, write):
-            async with ClientSession(read, write) as session:
-                print("🔄 Initializing MCP session...")
-                await session.initialize()
+        print("🔗 Connecting to MCP server...")
+        async with open_mcp_session() as session:
                 
                 print("📋 Fetching available tools from MCP...")
                 mcp_tools_response = await session.list_tools()
@@ -2822,7 +2888,7 @@ def ask_arlo_sync_legacy(question: str = "") -> str:
     print("=" * 80)
     print("🤖 GocBedrock MCP - Direct Mode (HTTP Fallback - Gemini)")
     print(f"📝 Question: '{question}'")
-    print(f"🌐 MCP Server: {MCP_SERVER_URL}")
+    print(f"🌐 MCP Server: {get_mcp_server_url()}")
     
     if not question or not question.strip():
         return """
@@ -2845,7 +2911,7 @@ def ask_arlo_sync_legacy(question: str = "") -> str:
         model = genai.GenerativeModel("gemini-2.0-flash-exp")
         
         print("🔗 Connecting to MCP server via HTTP...")
-        mcp_client = SimpleMCPClient(MCP_SERVER_URL)
+        mcp_client = SimpleMCPClient(get_mcp_server_url())
         
         # Initialize MCP session
         if not mcp_client.initialize():

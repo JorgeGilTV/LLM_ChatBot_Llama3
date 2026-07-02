@@ -101,6 +101,58 @@ resource "aws_iam_role_policy_attachment" "task_execution_policy" {
 }
 
 # -----------------------------------------------------------------------------
+# IAM — ECS task role (secrets UI → register task def + redeploy)
+# -----------------------------------------------------------------------------
+resource "aws_iam_role" "task_role" {
+  name = "${var.name_prefix}-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+
+  tags = {
+    Name      = "${var.name_prefix}-task-role"
+    ManagedBy = "Terraform"
+  }
+}
+
+resource "aws_iam_role_policy" "task_role_ecs_secrets_sync" {
+  name = "${var.name_prefix}-ecs-secrets-sync"
+  role = aws_iam_role.task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EcsSecretsSync"
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition",
+          "ecs:RegisterTaskDefinition",
+          "ecs:UpdateService",
+          "ecs:DescribeServices",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid      = "PassRoles"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = [
+          aws_iam_role.task_execution_role.arn,
+          aws_iam_role.task_role.arn,
+        ]
+      },
+    ]
+  })
+}
+
+# -----------------------------------------------------------------------------
 # Security groups — ALB accepts 443; tasks accept traffic only from ALB
 # -----------------------------------------------------------------------------
 resource "aws_security_group" "load_balancer_sg" {
@@ -232,6 +284,7 @@ resource "aws_ecs_task_definition" "task_definition" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.task_execution_role.arn
+  task_role_arn            = aws_iam_role.task_role.arn
 
   runtime_platform {
     cpu_architecture        = "ARM64"

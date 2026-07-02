@@ -30,11 +30,12 @@ def ask_bedrock(prompt: str, selected_tools: list = None, enable_mcp_access: boo
                 # Import MCP client
                 import sys
                 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-                from ask_arlochat import SimpleMCPClient, MCP_SERVER_URL
+                from tools.mcp_connect import get_mcp_server_url
+                from tools.ask_arlochat import SimpleMCPClient
                 
                 # Connect to MCP and get available tools
                 print("🔗 Bedrock: Connecting to MCP server for tool access...")
-                mcp_client = SimpleMCPClient(MCP_SERVER_URL)
+                mcp_client = SimpleMCPClient(get_mcp_server_url())
                 
                 if mcp_client.initialize():
                     mcp_tools = mcp_client.list_tools()

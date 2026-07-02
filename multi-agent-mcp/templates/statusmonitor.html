@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if environment %}Status Monitor — {{ environment }}{% else %}Status Monitor — Environments{% endif %} - OneView GOC AI</title>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/css/sm-engineering-mosaic.css?v=20260604b">
+    <script src="/static/js/sm-org-wall-pack.js?v=20260604b"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     <script>
@@ -621,6 +623,12 @@
         }
         .sm-hover-tip-hub-grid .sm-hover-tip-k { grid-column: 1; }
         .sm-hover-tip-hub-grid .sm-hover-tip-v { grid-column: 2; text-align: right; }
+        @keyframes sm-inc-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+        .sm-inc-pulse { animation: sm-inc-pulse 1.4s ease-in-out infinite; }
+        #sm-inc-status { font-size: 11px; color: #64748b; margin: 0 0 10px 0; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -666,7 +674,7 @@
         <div id="slack-share-root">
         <div id="loading">
             <h3>⏳ Loading status monitor…</h3>
-            <p>Querying Datadog (parallel) and PagerDuty. First load after deploy can take 20–60s depending on service count.</p>
+            <p>Loading layout first — Datadog, PagerDuty and Splunk fill in as each part is ready.</p>
         </div>
         
         <div id="dashboard"></div>
@@ -1163,9 +1171,16 @@
             tip.style.maxHeight = '';
             tip.style.overflowY = '';
         }
+        function smReturnHoverTipToHome(tip) {
+            const home = tip._smHomeWrap;
+            if (home && tip.parentNode !== home) {
+                home.appendChild(tip);
+            }
+        }
         function hideAllSmHoverTips() {
             document.querySelectorAll('.sm-hover-tip').forEach(function(t) {
                 resetSmHoverTipStyles(t);
+                smReturnHoverTipToHome(t);
             });
         }
         function bindSmHoverGlobalHandlersOnce() {
@@ -1182,7 +1197,7 @@
             }
         }
         function positionSmHoverTip(wrap, tip) {
-            const tile = wrap.querySelector('.sm-op-tile, a.sm-hub-card, .sm-hub-card');
+            const tile = wrap.querySelector('.sm-op-tile, .sw-tile, a.sm-hub-card, .sm-hub-card');
             if (!tile) return;
             const r = tile.getBoundingClientRect();
             const margin = 8;
@@ -1196,6 +1211,7 @@
             tip.style.maxHeight = '';
             tip.style.overflowY = '';
             tip.style.visibility = 'hidden';
+            tip.style.zIndex = '100000';
             const tw = tip.offsetWidth;
             const th = tip.offsetHeight;
             let left = r.left + r.width / 2 - tw / 2;
@@ -1219,13 +1235,18 @@
         function attachSmHoverBehavior(wrap) {
             const tip = wrap.querySelector('.sm-hover-tip');
             if (!tip) return;
+            tip._smHomeWrap = wrap;
             if (wrap._smHoverAbort) {
                 wrap._smHoverAbort.abort();
             }
             wrap._smHoverAbort = new AbortController();
             const sig = wrap._smHoverAbort.signal;
+            const useBodyPortal = !!wrap.querySelector('.sw-tile');
             function show() {
                 hideAllSmHoverTips();
+                if (useBodyPortal && tip.parentNode !== document.body) {
+                    document.body.appendChild(tip);
+                }
                 tip.classList.add('sm-hover-tip--visible');
                 requestAnimationFrame(function() {
                     positionSmHoverTip(wrap, tip);
@@ -1233,6 +1254,9 @@
             }
             function hide() {
                 resetSmHoverTipStyles(tip);
+                if (useBodyPortal) {
+                    smReturnHoverTipToHome(tip);
+                }
             }
             wrap.addEventListener('mouseenter', show, { signal: sig });
             wrap.addEventListener('mouseleave', hide, { signal: sig });
@@ -1257,6 +1281,15 @@
                 }
             });
             bindSmHoverGlobalHandlersOnce();
+        }
+
+        /** Hover tips + org-wall tile packing (same row heights as APM Status Wall). */
+        function smEngMosaicAfterRender(root) {
+            var scope = root || document.getElementById('dashboard') || document;
+            initSmHoverTips(scope);
+            if (typeof smOrgWallSchedulePack === 'function') {
+                smOrgWallSchedulePack(scope);
+            }
         }
 
         function loadSmHubSplunk() {
@@ -1541,7 +1574,7 @@
                 if (IS_HUB) {
                     loadHubSummary({ forceRefresh: true });
                 } else {
-                    loadDashboard({ forceRefresh: true });
+                    loadDashboardIncremental({ forceRefresh: true });
                 }
             })
             .catch(error => {
@@ -1554,7 +1587,7 @@
                 if (IS_HUB) {
                     loadHubSummary({ forceRefresh: true });
                 } else {
-                    loadDashboard({ forceRefresh: true });
+                    loadDashboardIncremental({ forceRefresh: true });
                 }
             });
         }
@@ -1573,7 +1606,7 @@
                 if (window.chartData) {
                     initializePieChart(window.chartData);
                 }
-                initSmHoverTips(dashboard);
+                smEngMosaicAfterRender(dashboard);
                 if (typeof loadSamsungStatusWidget === 'function') {
                     loadSamsungStatusWidget(false);
                 }
@@ -1585,9 +1618,150 @@
             if (newTimerangeElement && !newTimerangeElement.hasAttribute('data-listener')) {
                 newTimerangeElement.setAttribute('data-listener', 'true');
                 newTimerangeElement.addEventListener('change', function() {
-                    loadDashboard();
+                    loadDashboardIncremental();
                 });
             }
+        }
+
+        var smIncSessionId = null;
+        var smIncLoadGen = 0;
+
+        function smPostPartial(body) {
+            return fetch('/api/statusmonitor/partial', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            }).then(async function(res) {
+                var text = await res.text();
+                var data = {};
+                try { data = text ? JSON.parse(text) : {}; } catch (e) {
+                    throw new Error('Invalid JSON from partial API');
+                }
+                if (!res.ok || data.success === false) {
+                    throw new Error((data && data.error) ? String(data.error) : ('HTTP ' + res.status));
+                }
+                return data;
+            });
+        }
+
+        function smReplaceSlot(selector, html) {
+            var el = document.querySelector(selector);
+            if (!el || html == null) return;
+            el.outerHTML = html;
+        }
+
+        function smApplyFinalizeHtml(html) {
+            if (!html) return;
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            tmp.querySelectorAll('script').forEach(function(sc) {
+                var ns = document.createElement('script');
+                ns.textContent = sc.textContent;
+                document.body.appendChild(ns);
+                sc.remove();
+            });
+            var cc = tmp.querySelector('.cc-strip');
+            var ccEl = document.getElementById('sm-inc-command-center');
+            if (ccEl && cc) ccEl.replaceWith(cc);
+            var sumEl = document.getElementById('sm-inc-summary');
+            var first = tmp.firstElementChild;
+            if (sumEl && first && !first.classList.contains('cc-strip')) {
+                sumEl.replaceWith(first);
+            }
+        }
+
+        function loadDashboardIncremental(options) {
+            var silentRefresh = options && options.silentRefresh === true;
+            var forceRefresh = options && options.forceRefresh === true;
+            var loading = document.getElementById('loading');
+            var timerangeEl = document.getElementById('timerange');
+            var timerange = timerangeEl ? parseInt(timerangeEl.value, 10) : 1;
+            smIncLoadGen++;
+            var myGen = smIncLoadGen;
+
+            if (!silentRefresh && loading) loading.classList.add('show');
+
+            smPostPartial({
+                part: 'meta',
+                timerange: timerange,
+                environment: ENVIRONMENT,
+                force_refresh: forceRefresh
+            }).then(function(meta) {
+                if (myGen !== smIncLoadGen) return;
+                smIncSessionId = meta.session_id;
+                var ddEnvs = meta.dd_environments || [];
+                return smPostPartial({
+                    part: 'bootstrap',
+                    timerange: timerange,
+                    environment: ENVIRONMENT,
+                    force_refresh: forceRefresh,
+                    session_id: smIncSessionId
+                }).then(function(boot) {
+                    if (myGen !== smIncLoadGen) return;
+                    applyDashboardHtml(boot.html);
+                    if (loading) loading.classList.remove('show');
+                    var statusEl = document.getElementById('sm-inc-status');
+                    function setStatus(msg) {
+                        if (statusEl) statusEl.textContent = msg;
+                    }
+                    setStatus('Loading PagerDuty & Splunk…');
+                    var base = {
+                        timerange: timerange,
+                        environment: ENVIRONMENT,
+                        force_refresh: forceRefresh,
+                        session_id: smIncSessionId
+                    };
+
+                    smPostPartial(Object.assign({ part: 'sidebar_fast' }, base)).then(function(r) {
+                        if (myGen !== smIncLoadGen) return;
+                        smReplaceSlot('#sm-inc-sidebar-fast', r.html);
+                    }).catch(function(e) { console.warn('sidebar_fast', e); });
+
+                    smPostPartial(Object.assign({ part: 'sidebar_splunk' }, base)).then(function(r) {
+                        if (myGen !== smIncLoadGen) return;
+                        smReplaceSlot('#sm-inc-sidebar-splunk', r.html);
+                    }).catch(function(e) { console.warn('sidebar_splunk', e); });
+
+                    var apmDone = 0;
+                    var apmTotal = ddEnvs.length || 1;
+                    if (!ddEnvs.length) {
+                        smPostPartial(Object.assign({ part: 'finalize' }, base)).then(function(fin) {
+                            smApplyFinalizeHtml(fin.html);
+                            smEngMosaicAfterRender(document.getElementById('dashboard'));
+                            if (window.chartData && window.initializePieChart) window.initializePieChart(window.chartData);
+                            setStatus('Ready');
+                        });
+                        return;
+                    }
+                    ddEnvs.forEach(function(env) {
+                        setStatus('Loading APM · ' + env + '…');
+                        smPostPartial(Object.assign({ part: 'apm', dd_env: env }, base)).then(function(r) {
+                            if (myGen !== smIncLoadGen) return;
+                            var slot = document.querySelector('[data-sm-dd-env="' + env + '"]');
+                            if (slot) slot.outerHTML = r.html;
+                            apmDone++;
+                            setStatus('Services loaded ' + apmDone + '/' + apmTotal);
+                            smEngMosaicAfterRender(document.getElementById('dashboard'));
+                            if (apmDone >= apmTotal) {
+                                smPostPartial(Object.assign({ part: 'finalize' }, base)).then(function(fin) {
+                                    if (myGen !== smIncLoadGen) return;
+                                    smApplyFinalizeHtml(fin.html);
+                                    smEngMosaicAfterRender(document.getElementById('dashboard'));
+                                    if (window.chartData && window.initializePieChart) window.initializePieChart(window.chartData);
+                                    setStatus('Ready · incremental load');
+                                }).catch(function(e) { console.error('finalize', e); });
+                            }
+                        }).catch(function(e) {
+                            console.error('apm', env, e);
+                            apmDone++;
+                        });
+                    });
+                });
+            }).catch(function(err) {
+                if (loading) loading.classList.remove('show');
+                console.error('Incremental load failed, falling back:', err);
+                loadDashboard(options);
+            });
         }
 
         function loadDashboard(options) {
@@ -1689,7 +1863,7 @@
             // Auto-refresh every 6 minutes
             autoRefreshInterval = setInterval(() => {
                 console.log('🔄 Auto-refreshing dashboard...');
-                loadDashboard({ silentRefresh: true });
+                loadDashboardIncremental({ silentRefresh: true });
             }, 360000);
         }
         
@@ -1719,7 +1893,10 @@
                     loadHubSummary({ silentRefresh: true });
                 }, 360000);
             } else {
-                loadDashboard();
+                if (typeof smOrgWallInitPackResize === 'function') {
+                    smOrgWallInitPackResize();
+                }
+                loadDashboardIncremental();
                 setupAutoRefresh();
             }
             startLiveClock();

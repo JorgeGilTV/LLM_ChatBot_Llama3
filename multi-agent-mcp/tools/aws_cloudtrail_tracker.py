@@ -35,6 +35,7 @@ CLOUDTRAIL_RESOURCE_TYPE_OPTIONS: tuple[tuple[str, str], ...] = (
     ("AWS::SQS::Queue", "SQS queue"),
     ("AWS::Logs::LogGroup", "CloudWatch Logs group"),
     ("AWS::ElasticLoadBalancingV2::LoadBalancer", "ELB v2 (ALB/NLB)"),
+    ("AWS::Connect::Instance", "Amazon Connect instance"),
     ("OTHER", "Other / filter after fetch"),
 )
 

@@ -63,7 +63,7 @@ ENGINEERING_COLUMN_SLUGS: tuple[tuple[str, ...], ...] = (
         "client-engineering",
         "firmware",
     ),
-    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "npnoc"),
+    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc"),
 )
 
 # ADT org wall: Platform under Partner; Core Services under Other.
@@ -85,7 +85,7 @@ ENGINEERING_COLUMN_SLUGS_ADT: tuple[tuple[str, ...], ...] = (
         "client-engineering",
         "firmware",
     ),
-    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "npnoc", "core-services"),
+    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "core-services"),
 )
 
 
@@ -97,8 +97,18 @@ def engineering_column_layout(dd_env: str = "") -> list[list[str]]:
     return [list(col) for col in ENGINEERING_COLUMN_SLUGS]
 
 
-# DD envs that use the org Status Wall service catalog (image), not only ADT.
-ENGINEERING_WALL_DD_ENVS: tuple[str, ...] = ("adt_prod", "production")
+# DD envs that use the org Status Wall engineering mosaic (team blocks + column layout).
+ENGINEERING_WALL_DD_ENVS: tuple[str, ...] = (
+    "adt_prod",
+    "production",
+    "goldendev",
+    "goldenqa",
+)
+GOLDEN_WALL_DD_ENVS: tuple[str, ...] = ("goldendev", "goldenqa")
+
+
+def _is_golden_wall_env(dd_env: str) -> bool:
+    return (dd_env or "").strip() in GOLDEN_WALL_DD_ENVS
 
 
 def engineering_wall_uses_org_catalog(dd_env: str) -> bool:
@@ -593,8 +603,9 @@ def merge_engineering_wall_statuses(
     scope_service_names: list[str] | None = None,
 ) -> list[dict]:
     """
-    For org-wall envs (production, adt_prod): layout order from scope_service_names
-    (Datadog APM list) or the static org catalog. Only tiles with APM traffic by default.
+    For org-wall envs (production, adt_prod, goldendev, goldenqa): layout order from
+    scope_service_names (Datadog APM / bundled list) or the static org catalog.
+    Only tiles with APM traffic by default (golden: active only, no idle legacy fill).
     Resolves DD alias names (e.g. backend-hmsgoogleapi -> backend-hmsgoogleapis).
     """
     active = ("healthy", "warning", "critical")
@@ -627,6 +638,7 @@ def merge_engineering_wall_statuses(
         legacy_org = (
             active_only
             and engineering_wall_uses_org_catalog(dd_env)
+            and not _is_golden_wall_env(dd_env)
             and is_org_wall_legacy_service(name, dd_env)
         )
         if row is not None:
@@ -1074,7 +1086,11 @@ def build_engineering_sections(
     out: list[dict] = []
     for label in section_order:
         if label == "Other":
-            if apm_status_wall_use_dd_team(dd_env) and engineering_wall_uses_org_catalog(dd_env):
+            if (
+                apm_status_wall_use_dd_team(dd_env)
+                and engineering_wall_uses_org_catalog(dd_env)
+                and not _is_golden_wall_env(dd_env)
+            ):
                 continue
             if not (buckets.get("Other") or []):
                 continue

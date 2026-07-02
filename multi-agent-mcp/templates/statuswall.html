@@ -1611,7 +1611,6 @@
         </div>
         <nav class="sw-nav-group" aria-label="OneView views">
             <a href="/statusmonitor" class="sw-nav-hub">Status monitor hub</a>
-            <a href="/apm-services?dd_env=adt_prod" class="sw-nav-hub{% if (wall_nav|default('wall')) == 'apm_wall' %} sw-nav-hub--active{% endif %}"{% if (wall_nav|default('wall')) == 'apm_wall' %} aria-current="page"{% endif %}>Status Wall</a>
         </nav>
         {% if datadog_software_href is defined and datadog_software_href %}
         <a href="{{ datadog_software_href }}" id="sw-datadog-software-link" class="sw-nav-hub" target="_blank" rel="noopener noreferrer" title="Open APM / Software list in Datadog (optional)">Datadog UI ↗</a>
@@ -3009,10 +3008,13 @@
             'smart-vision': true,
             'sre': true,
             'oci': true,
+            'noc': true,
+            'npnoc': true,
         };
         const WALL_ENG_HALF_WIDTH_PAIR_LEAD = {
             'samsung-partner': ['samsung-partner', 'sre'],
             'smart-vision': ['smart-vision', 'oci'],
+            'noc': ['noc', 'npnoc'],
             'windows': ['windows', 'onecloud-engineering'],
             'ecommerce': ['ecommerce', 'infrared-services'],
             'client-engineering': ['client-engineering', 'firmware'],
@@ -3020,6 +3022,7 @@
         const WALL_ENG_HALF_WIDTH_PAIR_SKIP = {
             'sre': true,
             'oci': true,
+            'npnoc': true,
             'onecloud-engineering': true,
             'infrared-services': true,
             'firmware': true,
@@ -3043,7 +3046,7 @@
                 'client-engineering',
                 'firmware',
             ],
-            ['cicd', 'smart-vision-streaming', 'smart-vision', 'oci', 'noc', 'npnoc'],
+            ['cicd', 'smart-vision-streaming', 'smart-vision', 'oci', 'noc'],
         ];
         const WALL_ENG_COLUMN_SLUGS_ADT = [
             ['xcloud-engineering'],
@@ -3063,7 +3066,7 @@
                 'client-engineering',
                 'firmware',
             ],
-            ['cicd', 'smart-vision-streaming', 'smart-vision', 'oci', 'noc', 'npnoc', 'core-services'],
+            ['cicd', 'smart-vision-streaming', 'smart-vision', 'oci', 'noc', 'core-services'],
         ];
 
         function wallEngColumnLayoutDefault(columnLayout) {
@@ -3355,36 +3358,56 @@
         const WALL_APM_ENV_LABELS = {{ wall_apm_env_labels|default({})|tojson }};
 
         async function swPostWallBody(postBody) {
-            const res = await fetch(WALL_DATA_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(postBody),
-            });
-            const text = await res.text();
-            if (res.status === 504) {
-                throw new Error('HTTP 504 — Gateway Time-out');
+            const maxAttempts = 3;
+            const retryDelayMs = 5000;
+            let lastErr = null;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    const res = await fetch(WALL_DATA_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(postBody),
+                    });
+                    const text = await res.text();
+                    if (res.status === 504) {
+                        throw new Error('HTTP 504 — Gateway Time-out');
+                    }
+                    let data = null;
+                    try {
+                        data = text ? JSON.parse(text) : {};
+                    } catch (pe) {
+                        const hint = (text || '').slice(0, 200);
+                        throw new Error(
+                            (res.ok ? 'Invalid JSON from server' : 'HTTP ' + res.status) + (hint ? ' — ' + hint : '')
+                        );
+                    }
+                    if (!res.ok) {
+                        throw new Error(
+                            (data && data.error) ? String(data.error) : 'HTTP ' + res.status + (text ? ' — ' + text.slice(0, 200) : '')
+                        );
+                    }
+                    if (data == null) {
+                        throw new Error('Empty response');
+                    }
+                    if (data.success === false) {
+                        throw new Error((data && data.error) ? String(data.error) : 'Request failed');
+                    }
+                    return data;
+                } catch (e) {
+                    lastErr = e;
+                    const msg = (e && e.message) ? String(e.message) : String(e);
+                    const retryable =
+                        msg.indexOf('504') >= 0 ||
+                        /Gateway Time-?out/i.test(msg) ||
+                        /Failed to fetch/i.test(msg);
+                    if (retryable && attempt < maxAttempts) {
+                        await new Promise(function(r) { setTimeout(r, retryDelayMs * attempt); });
+                        continue;
+                    }
+                    throw e;
+                }
             }
-            let data = null;
-            try {
-                data = text ? JSON.parse(text) : {};
-            } catch (pe) {
-                const hint = (text || '').slice(0, 200);
-                throw new Error(
-                    (res.ok ? 'Invalid JSON from server' : 'HTTP ' + res.status) + (hint ? ' — ' + hint : '')
-                );
-            }
-            if (!res.ok) {
-                throw new Error(
-                    (data && data.error) ? String(data.error) : 'HTTP ' + res.status + (text ? ' — ' + text.slice(0, 200) : '')
-                );
-            }
-            if (data == null) {
-                throw new Error('Empty response');
-            }
-            if (data.success === false) {
-                throw new Error((data && data.error) ? String(data.error) : 'Request failed');
-            }
-            return data;
+            throw lastErr || new Error('Request failed');
         }
 
         function buildApmPendingPlaceholder(env) {
@@ -3672,9 +3695,9 @@
                 var msg = (e && e.message) ? String(e.message) : String(e);
                 if (msg.indexOf('504') >= 0 || /Gateway Time-?out/i.test(msg)) {
                     statusEl.textContent =
-                        'Error: HTTP 504 (gateway timeout). The wall API can take 2–4 minutes. ' +
-                        'Increase your load balancer / reverse proxy idle & read timeout to ≥600s, ' +
-                        'and set GUNICORN_TIMEOUT=600 (or higher) for Gunicorn. ' +
+                        'Error: HTTP 504 (gateway timeout). The wall API can take 2–5 minutes. ' +
+                        'Increase your load balancer / reverse proxy idle & read timeout to ≥900s, ' +
+                        'and set GUNICORN_TIMEOUT=900 (or higher) for Gunicorn. ' +
                         'Optional: APM_STATUS_WALL_ATTACH_EKS=0 skips EKS lookups on /apm-services (faster). ' +
                         'Details: DOCKER_DEPLOYMENT.md (section 504 / APM Status Wall).';
                 } else {

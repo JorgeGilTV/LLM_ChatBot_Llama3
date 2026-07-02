@@ -37,7 +37,9 @@ if str(_BUNDLED) not in sys.path:
 
 from tools.splunk_tool import (  # noqa: E402
     splunk_display_timezone,
+    splunk_p0_job_timezone,
     splunk_search_timezone,
+    _splunk_row_epoch_seconds,
 )
 
 _SPL_DIR = _BASE / "spl"
@@ -367,7 +369,7 @@ def _export_search_parsed(
         return name, None, "missing token or search"
     headers = _auth_headers()
     try:
-        tz = splunk_search_timezone()
+        tz = splunk_p0_job_timezone()
     except Exception:
         tz = "America/Los_Angeles"
     url = f"https://{host}:8089/services/search/jobs/export"
@@ -492,11 +494,10 @@ def _normalize_splunk_epoch_to_seconds(raw: float) -> float:
     return t
 
 
-def _splunk_time_to_epoch(tv: Any) -> float | None:
+def _splunk_time_to_epoch(tv: Any, naive_wall_timezone: str | None = None) -> float | None:
     """
     Parse Splunk job export _time / time: epoch (number or string), or ISO-8601 strings.
-    Numeric epoch values are normalized to seconds (see _normalize_splunk_epoch_to_seconds);
-    ISO timestamps are not re-scaled.
+    Naive ISO wall-clock values use Splunk job TZ (US Pacific by default), not UTC.
     """
     if tv is None:
         return None
@@ -505,6 +506,10 @@ def _splunk_time_to_epoch(tv: Any) -> float | None:
     tv = _coerce_raw_time_value(tv)
     if tv is None:
         return None
+    wall = naive_wall_timezone or splunk_p0_job_timezone()
+    parsed = _splunk_row_epoch_seconds(tv, naive_wall_timezone=wall)
+    if parsed is not None:
+        return parsed
     if isinstance(tv, bool):
         return None
     if isinstance(tv, (int, float)):
@@ -515,26 +520,12 @@ def _splunk_time_to_epoch(tv: Any) -> float | None:
     s = str(tv).strip()
     if not s:
         return None
-    # Splunk text export: "2026-04-13 00:00:00.000 GMT" (fromisoformat rejects trailing GMT/UTC)
-    s = re.sub(r"\s+(GMT|UTC)\s*$", "", s, flags=re.I).strip()
-    s_iso = s.replace("Z", "+00:00")
-    if " " in s_iso and "T" not in s_iso and re.search(r"^\d{4}-\d{2}-\d{2}\s", s_iso):
-        s_iso = s_iso.replace(" ", "T", 1)
-    if "T" in s_iso or re.match(r"^\d{4}-\d{2}-\d{2}", s_iso) is not None:
-        try:
-            dt = datetime.fromisoformat(s_iso)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return float(dt.timestamp())
-        except (ValueError, OSError, OverflowError):
-            pass
     try:
         x = float(s)
     except (TypeError, ValueError):
         return None
     if not math.isfinite(x):
         return None
-    # float("2024") -> 2024.0 (wrong); exclude bare 4-digit year tokens only
     if re.fullmatch(r"(19|20|21)[0-9][0-9]", s) is not None:
         return None
     return _normalize_splunk_epoch_to_seconds(x)
@@ -727,7 +718,7 @@ def _rows_to_labels_series(
             "If the field is custom, set SPLUNK_CHART_TIME_FIELD in .env.",
         )
 
-    dtz = splunk_display_timezone() or "America/Los_Angeles"
+    dtz = splunk_p0_job_timezone() or splunk_display_timezone() or "America/Los_Angeles"
     try:
         tz = ZoneInfo(dtz)
     except Exception:
@@ -738,7 +729,7 @@ def _rows_to_labels_series(
     parsed: list[tuple[float, dict[str, Any]]] = []
     for r in rows:
         tv = _coerce_raw_time_value(r.get(time_key))
-        ts = _splunk_time_to_epoch(tv)
+        ts = _splunk_time_to_epoch(tv, naive_wall_timezone=dtz)
         if ts is None or not math.isfinite(ts):
             continue
         parsed.append((ts, r))

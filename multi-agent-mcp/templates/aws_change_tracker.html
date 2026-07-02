@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AWS Change Tracker — Who Changed What</title>
+    <title>AWS Operations — CloudTrail &amp; Connect</title>
     <style>
         :root {
             --bg: #0b1120;
@@ -16,6 +16,8 @@
             --accent: #14b8a6;
             --accent2: #0d9488;
             --danger: #f87171;
+            --warn: #fbbf24;
+            --ok: #4ade80;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -27,7 +29,7 @@
         }
         a { color: var(--link); }
         a:hover { text-decoration: underline; }
-        .wrap { max-width: 920px; margin: 0 auto; padding: 28px 20px 48px; }
+        .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 48px; }
         .page-title {
             display: flex;
             align-items: center;
@@ -43,16 +45,44 @@
             background: linear-gradient(135deg, #1e3a5f, #0f172a);
             border: 1px solid var(--border);
         }
-        .subnav { font-size: 13px; margin-bottom: 22px; }
+        .subnav { font-size: 13px; margin-bottom: 16px; color: var(--muted); }
         .subnav a { margin-right: 16px; font-weight: 600; }
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0;
+        }
+        .tab-btn {
+            padding: 10px 18px;
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -1px;
+        }
+        .tab-btn.active {
+            color: var(--text);
+            background: rgba(20, 184, 166, 0.08);
+            border-bottom-color: var(--accent);
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
         .card {
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 14px;
             padding: 22px 24px 26px;
             box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+            margin-bottom: 18px;
         }
-        .card h2 { font-size: 1.2rem; margin-bottom: 4px; }
+        .card h2 { font-size: 1.15rem; margin-bottom: 4px; }
+        .card h3 { font-size: 1rem; margin: 18px 0 8px; color: #e2e8f0; }
         .card .what { font-size: 13px; color: var(--link); margin-bottom: 16px; font-weight: 600; }
         .steps {
             display: flex;
@@ -102,8 +132,9 @@
             box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.25);
         }
         .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        @media (max-width: 640px) { .row2 { grid-template-columns: 1fr; } }
-        .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        @media (max-width: 768px) { .row2, .row3 { grid-template-columns: 1fr; } }
+        .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
         button {
             padding: 10px 18px;
             border-radius: 8px;
@@ -117,15 +148,42 @@
         .btn-secondary { background: #334155; color: var(--text); }
         .btn-secondary:hover { background: #475569; }
         .back { display: inline-block; margin-bottom: 18px; font-size: 13px; font-weight: 600; }
-        #status { margin-top: 14px; font-size: 13px; color: var(--muted); }
-        #status.err { color: #fecaca; }
-        .results { margin-top: 22px; overflow-x: auto; }
+        .status { margin-top: 12px; font-size: 13px; color: var(--muted); }
+        .status.err { color: #fecaca; }
+        .results { margin-top: 16px; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
         th { background: var(--panel); color: #cbd5e1; font-weight: 700; }
         tr:nth-child(even) td { background: rgba(15, 23, 42, 0.35); }
-        #about { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+        .alert-grid { display: grid; gap: 10px; }
+        .alert-card {
+            border-radius: 10px;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            background: var(--panel);
+        }
+        .alert-card.sev-critical { border-color: #7f1d1d; background: rgba(127, 29, 29, 0.25); }
+        .alert-card.sev-warning { border-color: #b45309; background: rgba(180, 83, 9, 0.2); }
+        .alert-card.sev-ok { border-color: #166534; background: rgba(22, 101, 52, 0.2); }
+        .alert-card.sev-unknown { border-color: #475569; }
+        .alert-card .atitle { font-weight: 800; font-size: 13px; margin-bottom: 4px; }
+        .alert-card .amsg { font-size: 12px; color: var(--muted); }
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .kpi {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+        }
+        .kpi .val { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+        .kpi .lbl { font-size: 10px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+        #about { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
         #about h3 { color: var(--text); font-size: 14px; margin-bottom: 8px; }
+        .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; }
+        .pill-crit { background: #7f1d1d; color: #fecaca; }
+        .pill-warn { background: #78350f; color: #fde68a; }
+        .pill-ok { background: #14532d; color: #bbf7d0; }
     </style>
 </head>
 <body>
@@ -134,148 +192,237 @@
 
         <div class="page-title">
             <span class="ico" aria-hidden="true"></span>
-            <span>AWS Change Tracker</span>
+            <span>AWS Operations</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:10px;">Who Changed What</p>
-        <div class="subnav">
-            <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-delegated-administrator.html" target="_blank" rel="noopener">CloudTrail S3 import → EventBridge + SNS alerts →</a>
-            <a href="#about">About this tool</a>
-        </div>
+        <p class="subnav">
+            CloudTrail change audit &amp; Amazon Connect agent monitoring
+            · <a href="https://docs.aws.amazon.com/connect/latest/adminguide/amazon-connect-service-api.html" target="_blank" rel="noopener">Connect API</a>
+            · <a href="#about">About</a>
+        </p>
 
-        <div class="card">
-            <h2>Find Changes</h2>
-            <div class="what">What this form does</div>
-            <div class="steps">
-                <div class="step"><strong>1</strong>Resource</div>
-                <div class="step"><strong>2</strong>Region &amp; Time</div>
-                <div class="step"><strong>3</strong>Search</div>
+        <nav class="tabs" role="tablist">
+            <button type="button" class="tab-btn active" data-tab="cloudtrail" role="tab">CloudTrail — Who changed what</button>
+            <button type="button" class="tab-btn" data-tab="connect" role="tab">Connect — Agents &amp; alerts</button>
+        </nav>
+
+        <!-- CloudTrail tab -->
+        <div id="tab-cloudtrail" class="tab-panel active" role="tabpanel">
+            <div class="card">
+                <h2>Find Changes</h2>
+                <div class="what">CloudTrail LookupEvents</div>
+                <div class="steps">
+                    <div class="step"><strong>1</strong>Resource</div>
+                    <div class="step"><strong>2</strong>Region &amp; Time</div>
+                    <div class="step"><strong>3</strong>Search</div>
+                </div>
+                <details class="tips">
+                    <summary>Tips for better results</summary>
+                    <ul style="margin:10px 0 0 18px;line-height:1.55;">
+                        <li>Use the <strong>exact</strong> resource name as shown in the console.</li>
+                        <li>Requires IAM <code>cloudtrail:LookupEvents</code> in the trail region.</li>
+                        <li>For Connect user deletions, use the <strong>Connect</strong> tab (EventSource filter).</li>
+                    </ul>
+                </details>
+                <form id="ct-form" autocomplete="off">
+                    <div class="field">
+                        <label>Resource name or ID <span class="req">*</span></label>
+                        <input name="resource_name" id="resource_name" type="text" placeholder="e.g. my-bucket, i-0abc123" required>
+                    </div>
+                    <div class="field">
+                        <label>Resource type <span class="req">*</span></label>
+                        <select name="resource_type" id="resource_type" required>
+                            <option value="" disabled selected>Choose resource type</option>
+                            {% for val, label in resource_type_options %}
+                            <option value="{{ val|e }}">{{ label|e }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row2">
+                        <div class="field">
+                            <label>AWS Region <span class="req">*</span></label>
+                            <input name="region" id="region" type="text" placeholder="e.g. us-east-1" value="{{ connect_config.region|e }}" required>
+                        </div>
+                        <div class="field">
+                            <label>AWS account ID <span class="req">*</span></label>
+                            <input name="account_id" id="account_id" type="text" placeholder="123456789012" pattern="\d{12}" maxlength="12" required>
+                        </div>
+                    </div>
+                    <div class="row2">
+                        <div class="field">
+                            <label>Look back (days)</label>
+                            <input name="lookback_days" id="lookback_days" type="number" min="1" max="90" value="7">
+                        </div>
+                        <div class="field">
+                            <label>Max events</label>
+                            <input name="max_events" id="max_events" type="number" min="0" max="10000" value="50">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Import CSV (optional)</label>
+                        <input type="file" id="csv_file" accept=".csv,.txt,text/csv">
+                    </div>
+                    <div class="actions">
+                        <button type="submit" class="btn-primary">Search</button>
+                        <button type="button" class="btn-secondary" id="btn-clear">Clear</button>
+                        <button type="button" class="btn-primary" id="btn-upload">Analyze upload</button>
+                    </div>
+                </form>
+                <div class="status" id="ct-status"></div>
+                <div class="results" id="ct-results"></div>
             </div>
+        </div>
 
-            <details class="tips">
-                <summary>Tips for better results</summary>
-                <ul style="margin:10px 0 0 18px;line-height:1.55;">
-                    <li>Use the <strong>exact</strong> resource name as shown in the console (S3 bucket names are case-sensitive).</li>
-                    <li>CloudTrail <code>lookup_events</code> allows <strong>one</strong> lookup attribute; this tool uses <code>ResourceName</code>, then filters by account and resource type.</li>
-                    <li>Run the app with IAM credentials that have <code>cloudtrail:LookupEvents</code> in the trail region.</li>
-                    <li>If you see zero rows, try a shorter lookback or confirm the resource had API activity in that region.</li>
-                </ul>
-            </details>
-
-            <form id="ct-form" autocomplete="off">
-                <div class="field">
-                    <label>Resource name or ID <span class="req">*</span></label>
-                    <input name="resource_name" id="resource_name" type="text" placeholder="e.g. my-bucket, i-0abc123, my-lambda" required>
-                    <div class="hint">Exact console name or ID (case-sensitive).</div>
-                </div>
-                <div class="field">
-                    <label>Resource type <span class="req">*</span></label>
-                    <select name="resource_type" id="resource_type" required>
-                        <option value="" disabled selected>Choose resource type</option>
-                        {% for val, label in resource_type_options %}
-                        <option value="{{ val|e }}">{{ label|e }}</option>
-                        {% endfor %}
-                    </select>
-                    <div class="hint">Must match the kind of resource in the name field (for example S3 bucket + S3 Bucket).</div>
-                </div>
+        <!-- Connect tab -->
+        <div id="tab-connect" class="tab-panel" role="tabpanel">
+            <div class="card">
+                <h2>Amazon Connect monitoring</h2>
+                <div class="what">Critical alerts · proactive checks · operational dashboard</div>
+                <p class="hint" style="margin-bottom:12px;">
+                    Instance: <code id="connect-inst-label">{{ connect_config.instance_id|e if connect_config.instance_configured else '(set AWS_CONNECT_INSTANCE_ID in .env)' }}</code>
+                    · Region: <code>{{ connect_config.region|e }}</code>
+                </p>
                 <div class="row2">
                     <div class="field">
-                        <label>AWS Region <span class="req">*</span></label>
-                        <input name="region" id="region" type="text" placeholder="e.g. us-east-1" required>
-                        <div class="hint">Resource and trail region.</div>
+                        <label>Connect instance ID (override)</label>
+                        <input type="text" id="connect_instance_id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="{{ connect_config.instance_id|e }}">
                     </div>
                     <div class="field">
-                        <label>AWS account ID <span class="req">*</span></label>
-                        <input name="account_id" id="account_id" type="text" placeholder="123456789012" pattern="\d{12}" maxlength="12" required>
-                        <div class="hint">12-digit account where the API call was recorded.</div>
+                        <label>Region</label>
+                        <input type="text" id="connect_region" value="{{ connect_config.region|e }}">
                     </div>
-                </div>
-                <div class="row2">
-                    <div class="field">
-                        <label>Look back (days)</label>
-                        <input name="lookback_days" id="lookback_days" type="number" min="1" max="90" value="7">
-                        <div class="hint">1–90 days.</div>
-                    </div>
-                    <div class="field">
-                        <label>Max events</label>
-                        <input name="max_events" id="max_events" type="number" min="0" max="10000" value="50">
-                        <div class="hint">0 = up to 10,000 in range (paginated).</div>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Import CSV or Excel (optional)</label>
-                    <input type="file" id="csv_file" accept=".csv,.txt,text/csv">
-                    <div class="hint">Console export; upload ignores resource/region fields and only parses rows in the browser.</div>
                 </div>
                 <div class="actions">
-                    <button type="submit" class="btn-primary">Search</button>
-                    <button type="button" class="btn-secondary" id="btn-clear">Clear form</button>
-                    <button type="button" class="btn-primary" id="btn-upload">Analyze upload</button>
+                    <button type="button" class="btn-primary" id="btn-connect-refresh">Refresh Connect snapshot</button>
+                    <button type="button" class="btn-secondary" id="btn-connect-force">Force refresh</button>
                 </div>
-            </form>
-            <div id="status"></div>
-            <div class="results" id="results"></div>
+                <div class="status" id="connect-status"></div>
+            </div>
+
+            <div class="card" id="connect-critical-card" style="display:none;">
+                <h2>🚨 Critical alerts (immediate)</h2>
+                <div class="alert-grid" id="connect-critical"></div>
+            </div>
+
+            <div class="card" id="connect-proactive-card" style="display:none;">
+                <h2>⚠️ Proactive monitoring</h2>
+                <div class="alert-grid" id="connect-proactive"></div>
+            </div>
+
+            <div class="card" id="connect-genesis-card" style="display:none;">
+                <h2>🏗️ Genesis platform (Connect + AzureADSync + SSO)</h2>
+                <p class="hint" style="margin-bottom:10px;" id="genesis-desc"></p>
+                <p class="hint" style="margin-bottom:12px;" id="genesis-auth-flow"></p>
+                <h3>Architecture components</h3>
+                <div class="results" id="genesis-components"></div>
+                <h3 style="margin-top:16px;">RCA investigation (June 3 pattern)</h3>
+                <div class="alert-grid" id="genesis-investigation"></div>
+                <div class="row2" style="margin-top:16px;">
+                    <div>
+                        <h3>AzureADSync Lambda</h3>
+                        <div class="kpi-row" id="genesis-lambda-kpis"></div>
+                        <div class="results" id="genesis-lambda-invokes"></div>
+                        <h4 style="margin-top:12px;font-size:12px;color:#cbd5e1;">Config/code changes (7d)</h4>
+                        <div class="results" id="genesis-lambda-changes"></div>
+                    </div>
+                    <div>
+                        <h3>Azure AD SSO path</h3>
+                        <div class="results" id="genesis-sso-info"></div>
+                        <h4 style="margin-top:12px;font-size:12px;color:#cbd5e1;">SAML/STS failures (24h)</h4>
+                        <div class="results" id="genesis-sso-failures"></div>
+                        <h4 style="margin-top:12px;font-size:12px;color:#cbd5e1;">DeleteUser ↔ AzureADSync correlation</h4>
+                        <div class="results" id="genesis-correlation"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="connect-dash-card" style="display:none;">
+                <h2>📊 Operational dashboard</h2>
+                <div class="kpi-row" id="connect-kpis"></div>
+                <h3>Queue metrics (live)</h3>
+                <div class="results" id="connect-queues"></div>
+            </div>
+
+            <div class="card" id="connect-audit-card" style="display:none;">
+                <h2>📋 Audit trail — Connect admin API (24h CloudTrail)</h2>
+                <p class="hint" style="margin-bottom:10px;">DeleteUser / UpdateUser / CreateUser and related admin calls on <code>connect.amazonaws.com</code>.</p>
+                <div class="results" id="connect-audit"></div>
+                <h3 style="margin-top:16px;">Login / auth failures (24h)</h3>
+                <div class="results" id="connect-login-failures"></div>
+            </div>
+
+            <div class="card" id="connect-roster-card" style="display:none;">
+                <h2>👥 Agent roster reconciliation</h2>
+                <div id="connect-roster"></div>
+            </div>
         </div>
 
         <section id="about">
             <h3>About this tool</h3>
-            <p>This page is independent from the main OneView chat. It calls AWS CloudTrail <code>LookupEvents</code> in the region you specify, using the default credential chain (environment role, profile, etc.).</p>
-            <p style="margin-top:8px;">No data is stored on the server beyond normal request logs; CSV analysis is done in memory and returned as JSON.</p>
+            <p><strong>CloudTrail tab</strong> — <code>LookupEvents</code> by resource name. IAM: <code>cloudtrail:LookupEvents</code>.</p>
+            <p style="margin-top:8px;"><strong>Connect tab</strong> — live metrics via Connect API + CloudTrail admin/login events. Configure in <code>.env</code>:</p>
+            <ul style="margin:8px 0 0 18px;line-height:1.6;">
+                <li><code>AWS_CONNECT_INSTANCE_ID</code> — required</li>
+                <li><code>AWS_CONNECT_REGION</code> — defaults to <code>AWS_REGION</code></li>
+                <li><code>AWS_CONNECT_AGENT_BASELINE_COUNT</code> — expected registered users</li>
+                <li><code>AWS_CONNECT_AGENT_DROP_PCT</code> — alert if count drops by this % (default 7.5)</li>
+                <li><code>AWS_CONNECT_LOGIN_FAIL_THRESHOLD</code> / <code>AWS_CONNECT_LOGIN_FAIL_WINDOW_MIN</code></li>
+                <li><code>AWS_CONNECT_EXPECTED_USERS</code> — comma-separated usernames for roster compare</li>
+                <li><code>AWS_CONNECT_QUEUE_IDS</code> — optional queue ARNs (else auto-lists queues)</li>
+                <li><strong>Genesis</strong> — <code>GENESIS_AZUREAD_SYNC_LAMBDA=AzureADSync</code>, <code>GENESIS_SSO_IDP_NAME=Azure_Genesis_SSO</code>, <code>GENESIS_SSO_ROLE_NAME=Azure_Genesis_SSO_Role</code>, <code>GENESIS_CONNECT_INSTANCE_ALIAS=genesis-connect</code></li>
+            </ul>
+            <p style="margin-top:8px;">IAM: Connect APIs above + <code>cloudwatch:GetMetricStatistics</code>, <code>cloudtrail:LookupEvents</code> (lambda/sts/iam/connect).</p>
         </section>
     </div>
     <script>
         (function() {
-            const form = document.getElementById('ct-form');
-            const statusEl = document.getElementById('status');
-            const resultsEl = document.getElementById('results');
-
-            function setStatus(msg, isErr) {
-                statusEl.textContent = msg || '';
-                statusEl.classList.toggle('err', !!isErr);
-            }
-
             function esc(s) {
                 if (s == null) return '';
                 return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
             }
 
+            /* Tabs */
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const panels = document.querySelectorAll('.tab-panel');
+            let connectLoaded = false;
+            tabBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const id = btn.getAttribute('data-tab');
+                    tabBtns.forEach(function(b) { b.classList.toggle('active', b === btn); });
+                    panels.forEach(function(p) {
+                        p.classList.toggle('active', p.id === 'tab-' + id);
+                    });
+                    if (id === 'connect' && !connectLoaded) {
+                        connectLoaded = true;
+                        loadConnectSnapshot(false);
+                    }
+                });
+            });
+
+            /* CloudTrail */
+            const ctForm = document.getElementById('ct-form');
+            const ctStatus = document.getElementById('ct-status');
+            const ctResults = document.getElementById('ct-results');
+            function setCtStatus(msg, err) {
+                ctStatus.textContent = msg || '';
+                ctStatus.classList.toggle('err', !!err);
+            }
             function renderEvents(events) {
                 if (!events || !events.length) {
-                    resultsEl.innerHTML = '<p style="color:var(--muted);margin-top:12px;">No matching events in this window.</p>';
+                    ctResults.innerHTML = '<p style="color:var(--muted);">No matching events.</p>';
                     return;
                 }
-                let h = '<table><thead><tr><th>Time</th><th>Event</th><th>User</th><th>Read-only</th><th>Account</th><th>Event ID</th></tr></thead><tbody>';
+                let h = '<table><thead><tr><th>Time</th><th>Event</th><th>User</th><th>Read-only</th><th>Account</th></tr></thead><tbody>';
                 for (const e of events) {
                     h += '<tr><td>' + esc(e.EventTime) + '</td><td>' + esc(e.EventName) + '</td><td>' + esc(e.Username)
-                        + '</td><td>' + esc(e.ReadOnly) + '</td><td>' + esc(e.recipientAccountId) + '</td><td style="font-family:monospace;font-size:11px;">' + esc(e.EventId) + '</td></tr>';
+                        + '</td><td>' + esc(e.ReadOnly) + '</td><td>' + esc(e.recipientAccountId) + '</td></tr>';
                 }
                 h += '</tbody></table>';
-                resultsEl.innerHTML = h;
+                ctResults.innerHTML = h;
             }
-
-            function renderCsv(data) {
-                const cols = data.columns || [];
-                const rows = data.rows || [];
-                if (!cols.length) {
-                    resultsEl.innerHTML = '<p style="color:var(--muted);">No columns detected.</p>';
-                    return;
-                }
-                let h = '<table><thead><tr>';
-                for (const c of cols) h += '<th>' + esc(c) + '</th>';
-                h += '</tr></thead><tbody>';
-                for (const r of rows) {
-                    h += '<tr>';
-                    for (const c of cols) h += '<td>' + esc(r[c]) + '</td>';
-                    h += '</tr>';
-                }
-                h += '</tbody></table>';
-                if (data.truncated) h += '<p style="margin-top:10px;color:var(--muted);font-size:12px;">Showing first 500 rows only.</p>';
-                resultsEl.innerHTML = h;
-            }
-
-            form.addEventListener('submit', async function(ev) {
+            ctForm.addEventListener('submit', async function(ev) {
                 ev.preventDefault();
-                setStatus('Searching CloudTrail…', false);
-                resultsEl.innerHTML = '';
+                setCtStatus('Searching CloudTrail…', false);
+                ctResults.innerHTML = '';
                 const payload = {
                     resource_name: document.getElementById('resource_name').value.trim(),
                     resource_type: document.getElementById('resource_type').value,
@@ -284,7 +431,6 @@
                     lookback_days: parseInt(document.getElementById('lookback_days').value, 10) || 7,
                     max_events: parseInt(document.getElementById('max_events').value, 10)
                 };
-                if (Number.isNaN(payload.max_events)) payload.max_events = 50;
                 try {
                     const res = await fetch('/api/aws/cloudtrail/search', {
                         method: 'POST',
@@ -292,48 +438,234 @@
                         body: JSON.stringify(payload)
                     });
                     const data = await res.json().catch(function() { return {}; });
-                    if (!res.ok) {
-                        setStatus(data.error || ('HTTP ' + res.status), true);
-                        return;
-                    }
-                    setStatus('Found ' + (data.count || 0) + ' event(s).', false);
+                    if (!res.ok) { setCtStatus(data.error || ('HTTP ' + res.status), true); return; }
+                    setCtStatus('Found ' + (data.count || 0) + ' event(s).', false);
                     renderEvents(data.events || []);
-                } catch (e) {
-                    setStatus(String(e.message || e), true);
-                }
+                } catch (e) { setCtStatus(String(e.message || e), true); }
             });
-
             document.getElementById('btn-clear').addEventListener('click', function() {
-                form.reset();
+                ctForm.reset();
                 document.getElementById('lookback_days').value = '7';
                 document.getElementById('max_events').value = '50';
-                resultsEl.innerHTML = '';
-                setStatus('', false);
+                ctResults.innerHTML = '';
+                setCtStatus('', false);
             });
-
             document.getElementById('btn-upload').addEventListener('click', async function() {
                 const inp = document.getElementById('csv_file');
-                if (!inp.files || !inp.files[0]) {
-                    setStatus('Choose a CSV file first.', true);
-                    return;
-                }
-                setStatus('Parsing file…', false);
-                resultsEl.innerHTML = '';
+                if (!inp.files || !inp.files[0]) { setCtStatus('Choose a CSV file first.', true); return; }
+                setCtStatus('Parsing…', false);
                 const fd = new FormData();
                 fd.append('file', inp.files[0]);
                 try {
                     const res = await fetch('/api/aws/cloudtrail/analyze-upload', { method: 'POST', body: fd });
                     const data = await res.json().catch(function() { return {}; });
-                    if (!res.ok) {
-                        setStatus(data.error || ('HTTP ' + res.status), true);
-                        return;
-                    }
-                    setStatus('Parsed ' + (data.row_count || 0) + ' row(s), ' + (data.columns || []).length + ' column(s).', false);
-                    renderCsv(data);
-                } catch (e) {
-                    setStatus(String(e.message || e), true);
-                }
+                    if (!res.ok) { setCtStatus(data.error || ('HTTP ' + res.status), true); return; }
+                    setCtStatus('Parsed ' + (data.row_count || 0) + ' row(s).', false);
+                    /* simplified csv render */
+                    const cols = data.columns || [];
+                    let h = '<table><thead><tr>';
+                    cols.forEach(function(c) { h += '<th>' + esc(c) + '</th>'; });
+                    h += '</tr></thead><tbody>';
+                    (data.rows || []).forEach(function(r) {
+                        h += '<tr>';
+                        cols.forEach(function(c) { h += '<td>' + esc(r[c]) + '</td>'; });
+                        h += '</tr>';
+                    });
+                    h += '</tbody></table>';
+                    ctResults.innerHTML = h;
+                } catch (e) { setCtStatus(String(e.message || e), true); }
             });
+
+            /* Connect monitor */
+            const connectStatus = document.getElementById('connect-status');
+            function setConnectStatus(msg, err) {
+                connectStatus.textContent = msg || '';
+                connectStatus.classList.toggle('err', !!err);
+            }
+            function sevClass(sev) {
+                if (sev === 'critical') return 'sev-critical';
+                if (sev === 'warning') return 'sev-warning';
+                if (sev === 'ok') return 'sev-ok';
+                return 'sev-unknown';
+            }
+            function pill(sev) {
+                if (sev === 'critical') return '<span class="pill pill-crit">CRIT</span>';
+                if (sev === 'warning') return '<span class="pill pill-warn">WARN</span>';
+                if (sev === 'ok') return '<span class="pill pill-ok">OK</span>';
+                return '<span class="pill">—</span>';
+            }
+            function renderAlerts(containerId, cardId, alerts) {
+                const el = document.getElementById(containerId);
+                const card = document.getElementById(cardId);
+                if (!alerts || !alerts.length) { card.style.display = 'none'; return; }
+                card.style.display = 'block';
+                el.innerHTML = alerts.map(function(a) {
+                    return '<div class="alert-card ' + sevClass(a.severity) + '">' + pill(a.severity)
+                        + ' <span class="atitle">' + esc(a.title) + '</span>'
+                        + '<div class="amsg">' + esc(a.message) + '</div></div>';
+                }).join('');
+            }
+            function renderConnectData(data) {
+                renderAlerts('connect-critical', 'connect-critical-card', data.critical_alerts);
+                renderAlerts('connect-proactive', 'connect-proactive-card', data.proactive_alerts);
+                const dash = data.dashboard || {};
+                const dashCard = document.getElementById('connect-dash-card');
+                dashCard.style.display = 'block';
+                document.getElementById('connect-kpis').innerHTML = [
+                    ['Users', dash.total_users],
+                    ['Available', dash.agents_available_total],
+                    ['Online', dash.agents_online_total],
+                    ['In queue', dash.contacts_in_queue_total],
+                    ['Admin Δ 24h', dash.admin_changes_24h],
+                    ['Login fail 24h', dash.login_failures_24h]
+                ].map(function(pair) {
+                    return '<div class="kpi"><div class="val">' + esc(pair[1]) + '</div><div class="lbl">' + esc(pair[0]) + '</div></div>';
+                }).join('');
+                const queues = dash.queues || [];
+                if (!queues.length) {
+                    document.getElementById('connect-queues').innerHTML = '<p class="hint">No queue metrics (check queue IDs or IAM).</p>';
+                } else {
+                    let qh = '<table><thead><tr><th>Queue</th><th>Available</th><th>Online</th><th>In queue</th><th>Oldest (s)</th></tr></thead><tbody>';
+                    queues.forEach(function(q) {
+                        qh += '<tr><td style="font-size:11px;word-break:break-all;">' + esc(q.queue_id) + '</td><td>' + esc(q.agents_available)
+                            + '</td><td>' + esc(q.agents_online) + '</td><td>' + esc(q.contacts_in_queue)
+                            + '</td><td>' + esc(q.oldest_contact_age_sec) + '</td></tr>';
+                    });
+                    qh += '</tbody></table>';
+                    document.getElementById('connect-queues').innerHTML = qh;
+                }
+                const audit = data.audit_trail || [];
+                document.getElementById('connect-audit-card').style.display = 'block';
+                if (!audit.length) {
+                    document.getElementById('connect-audit').innerHTML = '<p class="hint">No admin API events in last 24h.</p>';
+                } else {
+                    let ah = '<table><thead><tr><th>Time</th><th>Event</th><th>Actor</th></tr></thead><tbody>';
+                    audit.forEach(function(e) {
+                        ah += '<tr><td>' + esc(e.event_time) + '</td><td>' + esc(e.event_name) + '</td><td>' + esc(e.username) + '</td></tr>';
+                    });
+                    ah += '</tbody></table>';
+                    document.getElementById('connect-audit').innerHTML = ah;
+                }
+                const lf = data.login_failures || [];
+                if (!lf.length) {
+                    document.getElementById('connect-login-failures').innerHTML = '<p class="hint">No failed login/auth events detected.</p>';
+                } else {
+                    let lh = '<table><thead><tr><th>Time</th><th>Event</th><th>Error</th><th>User</th></tr></thead><tbody>';
+                    lf.forEach(function(e) {
+                        lh += '<tr><td>' + esc(e.event_time) + '</td><td>' + esc(e.event_name) + '</td><td>' + esc(e.error_code) + '</td><td>' + esc(e.username) + '</td></tr>';
+                    });
+                    lh += '</tbody></table>';
+                    document.getElementById('connect-login-failures').innerHTML = lh;
+                }
+                const roster = data.roster || {};
+                document.getElementById('connect-roster-card').style.display = 'block';
+                let rh = '<p>Expected: <strong>' + esc(roster.expected_count) + '</strong> · Actual: <strong>' + esc(roster.actual_count) + '</strong></p>';
+                if (roster.missing_usernames && roster.missing_usernames.length) {
+                    rh += '<p style="margin-top:8px;color:#fecaca;"><strong>Missing in Connect:</strong> ' + esc(roster.missing_usernames.join(', ')) + '</p>';
+                }
+                if (roster.extra_usernames && roster.extra_usernames.length) {
+                    rh += '<p style="margin-top:8px;color:#fde68a;"><strong>Extra in Connect:</strong> ' + esc(roster.extra_usernames.join(', ')) + '</p>';
+                }
+                if (roster.in_sync === true) rh += '<p style="margin-top:8px;color:#86efac;">Roster in sync.</p>';
+                document.getElementById('connect-roster').innerHTML = rh;
+
+                const genesis = data.genesis;
+                const gCard = document.getElementById('connect-genesis-card');
+                if (!genesis) { gCard.style.display = 'none'; return; }
+                gCard.style.display = 'block';
+                document.getElementById('genesis-desc').textContent = genesis.description || 'Genesis Care platform monitoring';
+                const flow = (genesis.auth_flow || []).join(' → ');
+                document.getElementById('genesis-auth-flow').innerHTML = '<strong>Agent auth:</strong> ' + esc(flow);
+                const comps = genesis.components || [];
+                let ch = '<table><thead><tr><th>Component</th><th>Identifier</th><th>Role in incident</th></tr></thead><tbody>';
+                comps.forEach(function(c) {
+                    ch += '<tr><td>' + esc(c.name) + '</td><td><code>' + esc(c.id) + '</code></td><td>' + esc(c.role) + '</td></tr>';
+                });
+                ch += '</tbody></table>';
+                document.getElementById('genesis-components').innerHTML = ch;
+                document.getElementById('genesis-investigation').innerHTML = (genesis.investigation || []).map(function(q) {
+                    return '<div class="alert-card ' + sevClass(q.status) + '"><span class="atitle">' + esc(q.question) + '</span>'
+                        + '<div class="amsg">' + esc(q.finding) + '</div></div>';
+                }).join('');
+                const sync = genesis.azuread_sync || {};
+                document.getElementById('genesis-lambda-kpis').innerHTML = [
+                    ['Invocations 24h', sync.invocations_24h],
+                    ['Errors 24h', sync.errors_24h],
+                    ['Errors 1h', sync.errors_1h],
+                    ['Last Invoke', sync.last_invoke || '—']
+                ].map(function(pair) {
+                    return '<div class="kpi"><div class="val" style="font-size:1rem;">' + esc(pair[1]) + '</div><div class="lbl">' + esc(pair[0]) + '</div></div>';
+                }).join('');
+                const inv = sync.recent_invocations || [];
+                if (!inv.length) {
+                    document.getElementById('genesis-lambda-invokes').innerHTML = '<p class="hint">No Invoke events in CloudTrail (24h).</p>';
+                } else {
+                    let ih = '<table><thead><tr><th>Time</th><th>Actor</th><th>Error</th></tr></thead><tbody>';
+                    inv.forEach(function(e) {
+                        ih += '<tr><td>' + esc(e.event_time) + '</td><td>' + esc(e.username) + '</td><td>' + esc(e.error_code || '—') + '</td></tr>';
+                    });
+                    ih += '</tbody></table>';
+                    document.getElementById('genesis-lambda-invokes').innerHTML = ih;
+                }
+                const changes = sync.config_changes_7d || [];
+                if (!changes.length) {
+                    document.getElementById('genesis-lambda-changes').innerHTML = '<p class="hint">No config/code changes in 7d.</p>';
+                } else {
+                    let lh = '<table><thead><tr><th>Time</th><th>Event</th><th>Actor</th></tr></thead><tbody>';
+                    changes.forEach(function(e) {
+                        lh += '<tr><td>' + esc(e.event_time) + '</td><td>' + esc(e.event_name) + '</td><td>' + esc(e.username) + '</td></tr>';
+                    });
+                    lh += '</tbody></table>';
+                    document.getElementById('genesis-lambda-changes').innerHTML = lh;
+                }
+                const sso = genesis.sso || {};
+                document.getElementById('genesis-sso-info').innerHTML = '<p>IdP: <code>' + esc(sso.idp_name) + '</code><br>Role: <code>' + esc(sso.role_name) + '</code><br>Failures 24h: <strong>' + esc(sso.failures_24h) + '</strong></p>';
+                const sf = sso.recent_failures || [];
+                if (!sf.length) {
+                    document.getElementById('genesis-sso-failures').innerHTML = '<p class="hint">No SAML/STS failures detected.</p>';
+                } else {
+                    let sh = '<table><thead><tr><th>Time</th><th>Event</th><th>Error</th></tr></thead><tbody>';
+                    sf.forEach(function(e) {
+                        sh += '<tr><td>' + esc(e.event_time) + '</td><td>' + esc(e.event_name) + '</td><td>' + esc(e.error_code) + '</td></tr>';
+                    });
+                    sh += '</tbody></table>';
+                    document.getElementById('genesis-sso-failures').innerHTML = sh;
+                }
+                const corr = genesis.correlation || {};
+                const pairs = corr.delete_user_near_sync || [];
+                if (!pairs.length) {
+                    document.getElementById('genesis-correlation').innerHTML = '<p class="hint">No DeleteUser within ' + esc(corr.window_minutes) + ' min of AzureADSync Invoke (24h window).</p>';
+                } else {
+                    let cr = '<table><thead><tr><th>DeleteUser</th><th>AzureADSync Invoke</th><th>Δ min</th></tr></thead><tbody>';
+                    pairs.forEach(function(p) {
+                        cr += '<tr><td>' + esc(p.delete_time) + '</td><td>' + esc(p.sync_invoke_time) + '</td><td>' + esc(p.delta_minutes) + '</td></tr>';
+                    });
+                    cr += '</tbody></table>';
+                    document.getElementById('genesis-correlation').innerHTML = cr;
+                }
+            }
+            async function loadConnectSnapshot(force) {
+                setConnectStatus('Loading Connect snapshot…', false);
+                const payload = {
+                    instance_id: document.getElementById('connect_instance_id').value.trim(),
+                    region: document.getElementById('connect_region').value.trim(),
+                    force_refresh: force ? '1' : '0'
+                };
+                try {
+                    const res = await fetch('/api/aws/connect/monitor', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json().catch(function() { return {}; });
+                    if (!res.ok) { setConnectStatus(data.error || ('HTTP ' + res.status), true); return; }
+                    const alias = (data.dashboard && data.dashboard.instance_alias) || data.instance_id;
+                    setConnectStatus('Updated ' + (data.generated_at || '') + (data.cached ? ' (cached)' : '') + ' · ' + esc(alias), false);
+                    renderConnectData(data);
+                } catch (e) { setConnectStatus(String(e.message || e), true); }
+            }
+            document.getElementById('btn-connect-refresh').addEventListener('click', function() { loadConnectSnapshot(false); });
+            document.getElementById('btn-connect-force').addEventListener('click', function() { loadConnectSnapshot(true); });
         })();
     </script>
 </body>

@@ -19,6 +19,9 @@ from typing import Any
 
 MAX_ENV_UPLOAD_BYTES = 512 * 1024
 
+# PIN fijo para /secrets (guardar tokens sin complicaciones).
+DEFAULT_SECRETS_PIN = "ONEVIEW"
+
 
 def app_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -36,6 +39,19 @@ def verify_admin_request_token(request_token: str | None) -> tuple[bool, str]:
     if not got or got != expected:
         return False, "Token inválido o ausente (cabecera X-Admin-Token)."
     return True, ""
+
+
+def verify_secrets_save_pin(request_token: str | None) -> tuple[bool, str]:
+    """Acepta el PIN fijo ONEVIEW o ADMIN_TOKEN si está definido."""
+    got = (request_token or "").strip()
+    if not got:
+        return False, f"Indica el PIN de guardado ({DEFAULT_SECRETS_PIN})."
+    if got == DEFAULT_SECRETS_PIN:
+        return True, ""
+    expected = (os.environ.get("ADMIN_TOKEN") or "").strip()
+    if expected and got == expected:
+        return True, ""
+    return False, f"PIN incorrecto. Usa {DEFAULT_SECRETS_PIN}."
 
 
 def git_update_status_and_pull(root: Path | None = None) -> dict[str, Any]:

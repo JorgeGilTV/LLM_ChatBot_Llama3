@@ -45,9 +45,9 @@ worker_connections = 1000
 # Status wall + APM wall can exceed several minutes (many Datadog calls). ALB/nginx often default to 60s and
 # return 504 first — raise those proxies in sync (see DOCKER_DEPLOYMENT.md "504").
 try:
-    timeout = int((os.getenv("GUNICORN_TIMEOUT") or "600").strip() or "600")
+    timeout = int((os.getenv("GUNICORN_TIMEOUT") or "900").strip() or "900")
 except ValueError:
-    timeout = 600
+    timeout = 900
 timeout = max(60, min(timeout, 3600))
 keepalive = 5
 

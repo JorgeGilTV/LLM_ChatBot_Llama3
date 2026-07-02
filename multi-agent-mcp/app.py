@@ -412,12 +412,14 @@ def embed_splunk_samsung_latencies():
 
 @flask_app.route("/aws-change-tracker")
 def aws_change_tracker_page():
-    """Standalone CloudTrail lookup UI (Who changed what)."""
+    """AWS operations UI: CloudTrail change lookup + Amazon Connect monitoring."""
     from tools.aws_cloudtrail_tracker import CLOUDTRAIL_RESOURCE_TYPE_OPTIONS
+    from tools.aws_connect_monitor import connect_monitor_config
 
     return render_template(
         "aws_change_tracker.html",
         resource_type_options=CLOUDTRAIL_RESOURCE_TYPE_OPTIONS,
+        connect_config=connect_monitor_config(),
     )
 
 
@@ -471,6 +473,29 @@ def api_aws_cloudtrail_analyze_upload():
         return jsonify(out)
     except Exception as e:
         logging.exception("CloudTrail CSV analyze")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@flask_app.route("/api/aws/connect/monitor", methods=["GET", "POST"])
+def api_aws_connect_monitor():
+    """Amazon Connect operational snapshot: critical alerts, proactive checks, dashboard."""
+    try:
+        from tools.aws_connect_monitor import connect_monitor_snapshot
+
+        data = request.get_json(silent=True) or {}
+        if request.method == "GET":
+            data = request.args
+        force = str(data.get("force_refresh") or "").lower() in ("1", "true", "yes")
+        out = connect_monitor_snapshot(
+            instance_id=str(data.get("instance_id") or "").strip() or None,
+            region=str(data.get("region") or "").strip() or None,
+            force_refresh=force,
+        )
+        if not out.get("success"):
+            return jsonify(out), 400
+        return jsonify(out)
+    except Exception as e:
+        logging.exception("Connect monitor API")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -579,6 +604,37 @@ def api_statusmonitor():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@flask_app.route('/api/statusmonitor/partial', methods=['POST'])
+def api_statusmonitor_partial():
+    """Incremental fragments for /statusmonitor/<env> (bootstrap, sidebar, per-env APM, finalize)."""
+    try:
+        from tools.status_monitor import status_monitor_partial
+
+        data = request.get_json() or {}
+        timerange = int(data.get('timerange', 1))
+        environment = data.get('environment')
+        force_refresh = bool(data.get('force_refresh') or data.get('forceRefresh'))
+        part = data.get('part') or 'meta'
+        session_id = data.get('session_id') or data.get('sessionId')
+        dd_env = data.get('dd_env') or data.get('ddEnv')
+        payload = status_monitor_partial(
+            part,
+            timerange=timerange,
+            environment=environment,
+            force_refresh=force_refresh,
+            session_id=session_id,
+            dd_env=dd_env,
+        )
+        if not payload.get('success'):
+            return jsonify(payload), 400
+        return jsonify(payload)
+    except Exception as e:
+        logging.error(f"Error in status monitor partial ({part}): {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 'part': (request.get_json(silent=True) or {}).get('part')}), 500
 
 
 @flask_app.route('/api/statusmonitor/hub-summary', methods=['POST'])
@@ -889,6 +945,46 @@ def api_health():
 def testconnections_page():
     """Página para comprobar integraciones (lee .env del proceso; no expone secretos)."""
     return render_template('testconnections.html')
+
+
+@flask_app.route('/secrets')
+def secrets_page():
+    """Formulario para editar tokens del .env (valores enmascarados)."""
+    from tools.dev_admin import DEFAULT_SECRETS_PIN
+
+    return render_template('secrets.html', secrets_pin=DEFAULT_SECRETS_PIN)
+
+
+@flask_app.route('/api/secrets', methods=['GET'])
+def api_secrets_get():
+    try:
+        from tools.env_secrets import list_secrets_state
+
+        return jsonify(list_secrets_state())
+    except Exception as e:
+        logging.exception('api_secrets_get failed')
+        return jsonify({'error': str(e)}), 500
+
+
+@flask_app.route('/api/secrets', methods=['POST'])
+def api_secrets_save():
+    from tools import dev_admin as dev_admin_mod
+    from tools.env_secrets import update_secrets_in_dotenv
+
+    ok, msg = dev_admin_mod.verify_secrets_save_pin(_admin_token_from_request())
+    if not ok:
+        return jsonify({'success': False, 'error': msg}), 401
+    try:
+        body = request.get_json(silent=True) or {}
+        updates = body.get('updates') if isinstance(body.get('updates'), dict) else body
+        if not isinstance(updates, dict):
+            return jsonify({'success': False, 'error': 'JSON inválido: usa {"updates": {"KEY": "valor"}}.'}), 400
+        out = update_secrets_in_dotenv(updates)
+        status = 200 if out.get('success') else 400
+        return jsonify(out), status
+    except Exception as e:
+        logging.exception('api_secrets_save failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @flask_app.route('/api/testconnections', methods=['GET', 'POST'])

@@ -39,5 +39,5 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8080/api/health', timeout=5)" || exit 1
 
-# Run the application
-CMD ["python3", "app.py"]
+# Run with Gunicorn (GUNICORN_TIMEOUT default 900s — long APM/status wall loads)
+CMD ["gunicorn", "-c", "gunicorn_config.py", "app:flask_app"]

@@ -75,7 +75,7 @@ variable "task_memory" {
 variable "alb_idle_timeout" {
   type        = number
   description = "ALB idle timeout seconds (raise for long HTTP requests e.g. 600)"
-  default     = 60
+  default     = 900
 }
 
 variable "log_retention_days" {

@@ -9,7 +9,9 @@ import time
 import json
 import html
 import threading
+import uuid
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Import metrics persistence
@@ -265,6 +267,71 @@ def _sm_dd_monitor_alerts_enabled() -> bool:
     return v not in ("0", "false", "no", "off")
 
 
+def _sm_attention_dd_alerts_cell_html(s: dict, dd_site: str) -> str:
+    """Attention queue: boxed list of open Datadog monitors (same data as hover DD pill)."""
+    if not _sm_dd_monitor_alerts_enabled():
+        return "<span style='color:#94a3b8;font-size:10px;font-weight:600;'>—</span>"
+    alerts = [str(x).strip() for x in (s.get("dd_monitor_alerts") or []) if str(x).strip()]
+    suffix = [str(x).strip() for x in (s.get("dd_monitor_alerts_suffix_ab") or []) if str(x).strip()]
+    n_c = len(alerts)
+    n_s = len(suffix)
+    total = int(s.get("dd_monitor_open_count") or 0) or (n_c + n_s)
+    svc = str(s.get("service") or "")
+    env = str(s.get("environment") or "")
+    if total <= 0:
+        return (
+            "<div class='cc-dd-alerts cc-dd-alerts--none' title='No Datadog monitors in Alert'>"
+            "<span class='cc-dd-alerts__count'>0</span>"
+            "<span class='cc-dd-alerts__lbl'>alerts</span>"
+            "</div>"
+        )
+    only_ab = n_c == 0 and n_s > 0
+    dd_url = (s.get("dd_monitors_url_all_alerts") or s.get("dd_monitors_url") or "").strip()
+    if not dd_url and svc and env:
+        dd_url = (
+            _dd_monitors_manage_url_all_alerts(svc, env, dd_site)
+            if n_s
+            else _dd_monitors_manage_url(svc, env, dd_site)
+        )
+    dd_url = _sm_sanitize_href_for_wall(dd_url) or ""
+    box_cls = "cc-dd-alerts cc-dd-alerts--suffix" if only_ab else "cc-dd-alerts cc-dd-alerts--open"
+    title = (
+        f"{total} Datadog alert(s) (-a/-b tier; tile may stay green)"
+        if only_ab
+        else f"{total} Datadog monitor(s) in Alert"
+    )
+    lines: list[str] = []
+    shown = 0
+    max_show = 5
+    for name in alerts:
+        if shown >= max_show:
+            break
+        lines.append(f"<li>{html.escape(name)}</li>")
+        shown += 1
+    for name in suffix:
+        if shown >= max_show:
+            break
+        lines.append(f"<li class='cc-dd-alerts__suffix'>{html.escape(name)}</li>")
+        shown += 1
+    rest = total - shown
+    if rest > 0:
+        lines.append(f"<li class='cc-dd-alerts__more'>+{rest} more</li>")
+    inner = (
+        f"<div class='cc-dd-alerts__head'>"
+        f"<span class='cc-dd-alerts__count'>{total}</span>"
+        f"<span class='cc-dd-alerts__lbl'>DD alert{'s' if total != 1 else ''}</span>"
+        f"</div>"
+        f"<ul class='cc-dd-alerts__list'>{''.join(lines)}</ul>"
+    )
+    if dd_url:
+        url_e = html.escape(dd_url, quote=True)
+        return (
+            f"<a class='{box_cls}' href='{url_e}' target='_blank' rel='noopener noreferrer' "
+            f"title='{html.escape(title, quote=True)}'>{inner}</a>"
+        )
+    return f"<div class='{box_cls}' title='{html.escape(title, quote=True)}'>{inner}</div>"
+
+
 def _sm_splunk_service_search_url(service_name: str, timerange_hours: int = 24) -> str:
     """Splunk Cloud search URL for logs mentioning this APM service name."""
     sn = (service_name or "").strip()
@@ -393,14 +460,14 @@ def _classic_status_wall_attach_eks() -> bool:
 def _status_monitor_dashboard_attach_eks() -> bool:
     """
     /statusmonitor/<env>: per-service EKS cluster lookups add many aws/datadog calls (504 behind short ALB idle).
-    STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0 skips cluster rows (dashboard loads faster).
+    Off by default; set STATUS_MONITOR_DASHBOARD_ATTACH_EKS=1 to re-enable cluster rows.
     """
     v = (os.getenv("STATUS_MONITOR_DASHBOARD_ATTACH_EKS") or "").strip().lower()
     if v in ("0", "false", "no", "off"):
         return False
     if v in ("1", "true", "yes", "on"):
         return True
-    return True
+    return False
 
 
 def _apm_status_wall_header_light() -> bool:
@@ -561,8 +628,21 @@ def _dd_health_worker_count(num_tasks: int) -> int:
     return cap
 
 
-# Datadog query timeout (seconds) — too low causes false "no data" under parallel load
-_DD_QUERY_TIMEOUT = 10
+# Datadog HTTP timeouts — too low causes false "no data" / 504 under parallel wall load
+def _dd_query_timeout_secs() -> int:
+    return _status_monitor_int_env("STATUS_MONITOR_DD_QUERY_TIMEOUT", 30, 5, 120)
+
+
+def _dd_http_connect_timeout() -> int:
+    return _status_monitor_int_env("STATUS_MONITOR_DD_HTTP_CONNECT_TIMEOUT", 15, 5, 60)
+
+
+def _dd_http_read_timeout() -> int:
+    return _status_monitor_int_env("STATUS_MONITOR_DD_HTTP_READ_TIMEOUT", 90, 15, 300)
+
+
+def _dd_requests_timeout() -> tuple[int, int]:
+    return (_dd_http_connect_timeout(), _dd_http_read_timeout())
 
 # Datadog monitor search (error-rate override): short TTL to limit API load
 _DD_MONITOR_SEARCH_CACHE = {}
@@ -579,10 +659,12 @@ def _https_get_with_retries(
     *,
     headers=None,
     params=None,
-    timeout=(12, 45),
+    timeout=None,
     label="HTTPS",
     max_attempts=5,
 ):
+    if timeout is None:
+        timeout = _dd_requests_timeout()
     """
     GET with backoff for flaky TLS (VPN/proxy) — SSLEOF, reset by peer, etc.
     Same symptom often hits Datadog, PagerDuty, and status.arlo.com together.
@@ -1052,7 +1134,7 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
                 url,
                 headers=headers,
                 params={"query": query_str, "page": page, "per_page": per_page},
-                timeout=_DD_QUERY_TIMEOUT,
+                timeout=_dd_query_timeout_secs(),
             )
             if r.status_code == 429:
                 time.sleep(0.75)
@@ -1060,7 +1142,7 @@ def _dd_monitor_search_info(service_name, environment, dd_api_key, dd_app_key, d
                     url,
                     headers=headers,
                     params={"query": query_str, "page": page, "per_page": per_page},
-                    timeout=_DD_QUERY_TIMEOUT,
+                    timeout=_dd_query_timeout_secs(),
                 )
             if r.status_code != 200:
                 _store(None)
@@ -1185,7 +1267,7 @@ def get_service_health_status(service_name, environment, dd_api_key, dd_app_key,
                             dd_query_url,
                             headers=headers,
                             params={"from": from_time, "to": to_time, "query": q},
-                            timeout=_DD_QUERY_TIMEOUT,
+                            timeout=_dd_query_timeout_secs(),
                         )
                     except Exception as ex:
                         fetch_out[key] = ex
@@ -2129,15 +2211,199 @@ def _merge_samsung_dashboard_services(dynamic_services: list) -> list:
     return out
 
 
+def _sm_page_environment_to_wall_dd_env(environment: str | None) -> str | None:
+    """Map /statusmonitor/<slug> to APM wall `dd_env` (same as /apm-services)."""
+    e = (environment or "").strip().lower()
+    return {
+        "production": "production",
+        "goldendev": "goldendev",
+        "goldenqa": "goldenqa",
+        "adt": "adt_prod",
+        "samsung": "samsung_prod",
+        "qa": "qa",
+    }.get(e)
+
+
+def _sm_wall_dd_env_to_dd_tag(wall_dd_env: str) -> str:
+    if wall_dd_env == "samsung_prod":
+        tag = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip()
+        return tag or "samsung_prod"
+    return wall_dd_env
+
+
+def _apm_wall_finalize_statuses(
+    all_statuses: list,
+    scope_services: list,
+    wall_dde: str,
+    dd_tag: str,
+    *,
+    dd_api_key: str | None = None,
+    dd_app_key: str | None = None,
+    dd_site: str | None = None,
+) -> tuple[list, dict]:
+    """
+    Same post-fetch tile set as APM /apm-services: engineering merge → drop Other →
+    org legacy idle shown as healthy (green).
+
+    Returns (statuses, meta) where meta may include dropped_other, owner_by_service.
+    """
+    meta: dict = {"dropped_other": 0, "owner_by_service": None}
+    try:
+        from tools.apm_engineering_groups import (
+            GOLDEN_WALL_DD_ENVS,
+            apm_engineering_groups_enabled,
+            apm_status_wall_use_dd_team,
+            drop_other_unlisted_org_wall_tiles,
+            engineering_wall_uses_org_catalog,
+            fetch_datadog_catalog_service_owners,
+            merge_engineering_wall_statuses,
+            normalize_org_wall_legacy_tile_statuses,
+        )
+    except Exception as e:
+        print(f"⚠️ APM wall finalize: import failed: {e}")
+        return all_statuses, meta
+
+    if wall_dde == "samsung_prod":
+        by_svc = {
+            (s.get("service") or "").strip(): s
+            for s in all_statuses
+            if s.get("service")
+        }
+        statuses: list = []
+        for name in scope_services:
+            row = by_svc.get(name)
+            if row is not None:
+                statuses.append(row)
+            else:
+                statuses.append(
+                    {
+                        "service": name,
+                        "status": "inactive",
+                        "environment": dd_tag,
+                    }
+                )
+        statuses.sort(key=_wall_service_sort_key)
+        return statuses, meta
+
+    try:
+        if apm_engineering_groups_enabled() and engineering_wall_uses_org_catalog(wall_dde):
+            statuses = merge_engineering_wall_statuses(
+                all_statuses,
+                wall_dde,
+                dd_tag,
+                scope_service_names=scope_services,
+            )
+        else:
+            statuses = [
+                s
+                for s in all_statuses
+                if s.get("status") in ("healthy", "warning", "critical")
+            ]
+            statuses.sort(key=_wall_service_sort_key)
+    except Exception:
+        statuses = [
+            s
+            for s in all_statuses
+            if s.get("status") in ("healthy", "warning", "critical")
+        ]
+        statuses.sort(key=_wall_service_sort_key)
+
+    n_dropped_other = 0
+    owner_by_service: dict | None = None
+    try:
+        if (
+            apm_engineering_groups_enabled()
+            and engineering_wall_uses_org_catalog(wall_dde)
+            and apm_status_wall_use_dd_team(wall_dde)
+            and dd_api_key
+            and dd_app_key
+        ):
+            owner_by_service = fetch_datadog_catalog_service_owners(
+                dd_api_key, dd_app_key, dd_site or os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
+            )
+            meta["owner_by_service"] = owner_by_service
+            statuses, n_dropped_other = drop_other_unlisted_org_wall_tiles(
+                statuses, wall_dde, owner_by_service
+            )
+            meta["dropped_other"] = n_dropped_other
+            if n_dropped_other:
+                print(
+                    f"🧭 APM wall scope ({wall_dde}): dropped {n_dropped_other} "
+                    f"unlisted Other-bucket tile(s)"
+                )
+    except Exception as e:
+        print(f"⚠️ Other-bucket filter skipped: {e}")
+
+    try:
+        if engineering_wall_uses_org_catalog(wall_dde) and wall_dde not in GOLDEN_WALL_DD_ENVS:
+            statuses = normalize_org_wall_legacy_tile_statuses(statuses, wall_dde)
+    except Exception as e:
+        print(f"⚠️ Org legacy idle→OK normalization skipped: {e}")
+
+    return statuses, meta
+
+
+def _sm_apply_wall_display_statuses(
+    all_statuses: list,
+    scope_services: list,
+    page_environment: str | None,
+    dd_tag: str,
+    *,
+    dd_api_key: str | None = None,
+    dd_app_key: str | None = None,
+    dd_site: str | None = None,
+) -> list:
+    """Status monitor: same tile count/order/colors as APM status wall."""
+    wall_dde = _sm_page_environment_to_wall_dd_env(page_environment)
+    if not wall_dde or not scope_services:
+        return all_statuses
+    out, _meta = _apm_wall_finalize_statuses(
+        all_statuses,
+        scope_services,
+        wall_dde,
+        dd_tag,
+        dd_api_key=dd_api_key,
+        dd_app_key=dd_app_key,
+        dd_site=dd_site,
+    )
+    if page_environment:
+        print(
+            f"📋 status monitor ({page_environment}): {len(out)} tile(s) after wall scope "
+            f"(was {len(all_statuses)} raw DD rows)"
+        )
+    return out
+
+
+def _sm_op_tile_metric_html(svc: dict) -> tuple[str, str]:
+    """Metric cell for operational tile; org-wall idle → green OK (same as status wall)."""
+    if svc.get("wall_idle"):
+        return "—", "OK"
+    er = svc.get("error_rate")
+    if er is None:
+        er = 0
+    return html.escape(f"{er}"), "ERR"
+
+
 def _sm_resolve_services_and_environments(environment):
     """
-    Same service list + Datadog env tag(s) as status_monitor_dashboard.
-    With STATUS_MONITOR_USE_BUNDLED_LISTS=1 (default), uses the same committed lists/
-    files as the APM Status Wall per environment.
-    environment None => all main envs (production, goldendev, goldenqa) for wide queries.
+    Service list + Datadog env tag(s) for status monitor pages.
+    Uses resolve_software_catalog_wall_service_names (same as APM /apm-services).
+    environment None => legacy hub triple (production, goldendev, goldenqa).
     """
     if environment is None:
         return list(GENERAL_MONITOR_SERVICES), ["production", "goldendev", "goldenqa"]
+
+    wall_dde = _sm_page_environment_to_wall_dd_env(environment)
+    if wall_dde:
+        services, source = resolve_software_catalog_wall_service_names(wall_dde)
+        if services:
+            dd_tag = _sm_wall_dd_env_to_dd_tag(wall_dde)
+            print(
+                f"📋 status monitor ({environment}): {len(services)} service(s) "
+                f"via APM wall resolver ({source}, env tag={dd_tag})"
+            )
+            return services, [dd_tag]
+
     b = _sm_bundled_status_monitor_service_list(environment)
     if b is not None and environment in (
         "production",
@@ -2149,10 +2415,7 @@ def _sm_resolve_services_and_environments(environment):
     if b is not None and environment == "adt":
         return b, ["adt_prod"]
     if b is not None and environment == "samsung":
-        samsung_dd_env = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip()
-        if not samsung_dd_env:
-            samsung_dd_env = "samsung_prod"
-        return b, [samsung_dd_env]
+        return b, [_sm_wall_dd_env_to_dd_tag("samsung_prod")]
     if environment == "samsung":
         # README/APM: Samsung RED services use env tag samsung_prod (not "production").
         samsung_dd_env = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip()
@@ -4126,104 +4389,17 @@ def _software_catalog_wall_payload_for_single_env(
     )
     n_inactive = sum(1 for s in all_statuses if s.get("status") == "inactive")
     n_unknown = sum(1 for s in all_statuses if s.get("status") == "unknown")
-    try:
-        from tools.apm_engineering_groups import (
-            apm_engineering_groups_enabled,
-            engineering_wall_uses_org_catalog,
-            merge_engineering_wall_statuses,
-        )
-
-        if apm_engineering_groups_enabled() and engineering_wall_uses_org_catalog(dde):
-            statuses = merge_engineering_wall_statuses(
-                all_statuses,
-                dde,
-                environments[0] if environments else dde,
-                scope_service_names=services,
-            )
-        elif dde == "samsung_prod":
-            # Same six tiles as /statusmonitor/samsung — include inactive/unknown (qa/dev often idle).
-            by_svc = {(s.get("service") or "").strip(): s for s in all_statuses if s.get("service")}
-            statuses = []
-            for name in services:
-                row = by_svc.get(name)
-                if row is not None:
-                    statuses.append(row)
-                else:
-                    statuses.append(
-                        {
-                            "service": name,
-                            "status": "inactive",
-                            "environment": environments[0] if environments else dde,
-                        }
-                    )
-            statuses.sort(key=_wall_service_sort_key)
-        else:
-            statuses = [
-                s
-                for s in all_statuses
-                if s.get("status") in ("healthy", "warning", "critical")
-            ]
-            statuses.sort(key=_wall_service_sort_key)
-    except Exception:
-        if dde == "samsung_prod":
-            by_svc = {(s.get("service") or "").strip(): s for s in all_statuses if s.get("service")}
-            statuses = []
-            for name in services:
-                row = by_svc.get(name)
-                if row is not None:
-                    statuses.append(row)
-                else:
-                    statuses.append(
-                        {
-                            "service": name,
-                            "status": "inactive",
-                            "environment": environments[0] if environments else dde,
-                        }
-                    )
-            statuses.sort(key=_wall_service_sort_key)
-        else:
-            statuses = [
-                s
-                for s in all_statuses
-                if s.get("status") in ("healthy", "warning", "critical")
-            ]
-            statuses.sort(key=_wall_service_sort_key)
-    n_dropped_other = 0
-    owner_by_service: dict | None = None
-    try:
-        from tools.apm_engineering_groups import (
-            apm_engineering_groups_enabled,
-            apm_status_wall_use_dd_team,
-            drop_other_unlisted_org_wall_tiles,
-            engineering_wall_uses_org_catalog,
-            fetch_datadog_catalog_service_owners,
-        )
-
-        if (
-            apm_engineering_groups_enabled()
-            and engineering_wall_uses_org_catalog(dde)
-            and apm_status_wall_use_dd_team(dde)
-            and dd_api_key
-            and dd_app_key
-        ):
-            owner_by_service = fetch_datadog_catalog_service_owners(
-                dd_api_key, dd_app_key, dd_site
-            )
-            statuses, n_dropped_other = drop_other_unlisted_org_wall_tiles(
-                statuses, dde, owner_by_service
-            )
-    except Exception as e:
-        print(f"⚠️ Other-bucket filter skipped: {e}")
-    try:
-        from tools.apm_engineering_groups import (
-            engineering_wall_uses_org_catalog,
-            normalize_org_wall_legacy_tile_statuses,
-        )
-
-        if engineering_wall_uses_org_catalog(dde):
-            statuses = normalize_org_wall_legacy_tile_statuses(statuses, dde)
-    except Exception as e:
-        print(f"⚠️ Org legacy idle→OK normalization skipped: {e}")
+    statuses, wall_meta = _apm_wall_finalize_statuses(
+        all_statuses,
+        services,
+        dde,
+        environments[0] if environments else dde,
+        dd_api_key=dd_api_key,
+        dd_app_key=dd_app_key,
+        dd_site=dd_site,
+    )
+    n_dropped_other = int(wall_meta.get("dropped_other") or 0)
+    owner_by_service = wall_meta.get("owner_by_service")
     if _apm_status_wall_attach_eks(dde):
         eks_wall_cache: dict = {}
         _attach_eks_clusters_wall(statuses, timerange, eks_wall_cache, force_refresh)
@@ -4649,6 +4825,9 @@ def _splunk_p0_semaphore_light_html(
     short_label: str,
     tooltip_label: str,
     default_url: str,
+    *,
+    link_color: str = "#fff",
+    home_style: bool = False,
 ) -> str:
     """Una luz compacta + etiqueta corta + Σ; hover = zonas z1–z4."""
     row = spl_by_id.get(tid) or {}
@@ -4659,21 +4838,41 @@ def _splunk_p0_semaphore_light_html(
     title = _splunk_p0_zone_hover_title(tooltip_label, zones)
     title_e = html.escape(title, quote=True)
     dot_bg = "#22c55e" if tot == 0 else "#ef4444"
-    dot_sh = "rgba(34,197,94,0.55)" if tot == 0 else "rgba(239,68,68,0.55)"
+    if home_style:
+        dot_sh = "rgba(34,197,94,0.45)" if tot == 0 else "rgba(239,68,68,0.45)"
+        link_color_e = "inherit"
+        dot_px = "11px"
+        label_fs = "8px"
+        num_fs = "10px"
+        min_w = "38px"
+        max_w = ""
+    else:
+        dot_sh = "rgba(34,197,94,0.55)" if tot == 0 else "rgba(239,68,68,0.55)"
+        link_color_e = html.escape(link_color, quote=True)
+        dot_px = "12px"
+        label_fs = "9px"
+        num_fs = "11px"
+        min_w = "40px"
+        max_w = "max-width:72px;"
     return (
         f'<a href="{url_e}" target="_blank" rel="noopener" title="{title_e}" '
         f'style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;'
-        f'text-decoration:none;color:#fff;min-width:40px;max-width:72px;">'
-        f'<span style="width:12px;height:12px;border-radius:50%;background:{dot_bg};'
-        f"box-shadow:0 0 8px {dot_sh};flex-shrink:0;\"></span>"
-        f'<span style="font-size:9px;font-weight:800;opacity:0.95;line-height:1.1;">'
+        f'text-decoration:none;color:{link_color_e};min-width:{min_w};{max_w}">'
+        f'<span style="width:{dot_px};height:{dot_px};border-radius:50%;background:{dot_bg};'
+        f"box-shadow:0 0 6px {dot_sh};flex-shrink:0;\"></span>"
+        f'<span style="font-size:{label_fs};font-weight:800;opacity:0.9;line-height:1;">'
         f"{html.escape(short_label)}</span>"
-        f'<span style="font-size:11px;font-weight:900;line-height:1;">{tot}</span>'
+        f'<span style="font-size:{num_fs};font-weight:900;">{tot}</span>'
         f"</a>"
     )
 
 
-def _splunk_p0_semaphore_bar_html(spl_by_id: dict) -> str:
+def _splunk_p0_semaphore_bar_html(
+    spl_by_id: dict,
+    *,
+    link_color: str = "#fff",
+    home_style: bool = False,
+) -> str:
     """Horizontal traffic-light row (Str · CVR · ADT · US); compact height."""
     items = [
         (
@@ -4697,15 +4896,89 @@ def _splunk_p0_semaphore_bar_html(spl_by_id: dict) -> str:
         ),
     ]
     parts = [
-        _splunk_p0_semaphore_light_html(spl_by_id, tid, short, tip, u)
+        _splunk_p0_semaphore_light_html(
+            spl_by_id, tid, short, tip, u, link_color=link_color, home_style=home_style
+        )
         for tid, short, tip, u in items
     ]
-    sep = '<span style="opacity:0.45;font-size:11px;font-weight:700;padding:0 1px;">|</span>'
+    if home_style:
+        sep = '<span style="opacity:0.35;font-size:10px;padding:0 2px;">|</span>'
+        gap = "4px 8px"
+        pad = "4px 2px"
+    else:
+        sep = '<span style="opacity:0.45;font-size:11px;font-weight:700;padding:0 1px;">|</span>'
+        gap = "6px 10px"
+        pad = "2px 0"
     inner = sep.join(parts)
     return (
         f'<div class="spl-p0-sem" style="display:flex;flex-wrap:wrap;align-items:flex-end;'
-        f'justify-content:center;gap:6px 10px;padding:2px 0;">{inner}</div>'
+        f'justify-content:center;gap:{gap};padding:{pad};">{inner}</div>'
     )
+
+
+_SPLUNK_P0_TOOL_IDS = ("p0_streaming", "p0_cvr", "p0_adt", "p0_streaming_us_infra")
+
+
+def _splunk_p0_grand_total(spl_by_id: dict) -> int:
+    return sum(int((spl_by_id.get(tid) or {}).get("total_outliers") or 0) for tid in _SPLUNK_P0_TOOL_IDS)
+
+
+def _splunk_p0_last_updated_label(tz_name: str | None = None) -> str:
+    """Same footer as home Splunk P0: Last updated: 11:38:14 AM."""
+    tz_raw = (tz_name or "America/Los_Angeles").strip() or "America/Los_Angeles"
+    try:
+        tz_obj = ZoneInfo(tz_raw)
+    except Exception:
+        tz_obj = ZoneInfo("America/Los_Angeles")
+    return datetime.now(tz_obj).strftime("%I:%M:%S %p")
+
+
+def _splunk_p0_sidebar_widget_html(
+    spl_data: dict,
+    *,
+    title: str = "📊 Splunk P0",
+) -> str:
+    """
+    Home Splunk P0 card (index.html): Σ total bar, Str·CVR·ADT·US row, Last updated.
+    Uses splunk_outliers_monitor_payload() — same logic as /api/splunk/monitor.
+    """
+    title_e = html.escape(title)
+    spl_ok = bool(spl_data.get("success"))
+    spl_tools_list = spl_data.get("tools") if spl_ok else []
+    spl_by_id = {t.get("id"): t for t in (spl_tools_list or [])}
+    tr = int(spl_data.get("timerange_hours") or 72)
+    tz_name = str(spl_data.get("timezone") or "America/Los_Angeles")
+    last_updated = html.escape(_splunk_p0_last_updated_label(tz_name))
+
+    if not spl_ok:
+        err = html.escape(str(spl_data.get("error") or "Unavailable")[:160])
+        return f"""
+            <div class="splunk-outliers-card" style='background:#ffffff;padding:16px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #e5e7eb;'>
+                <h3 style='margin:0 0 6px;font-size:13px;color:#111827;'>{title_e}</h3>
+                <div style='padding:6px 10px;border-radius:8px;background:#7f1d1d;color:#fca5a5;font-size:10px;'>{err}</div>
+                <div style='margin-top:10px;font-size:10px;color:#6b7280;text-align:center;'>Last updated: {last_updated}</div>
+            </div>"""
+
+    grand = _splunk_p0_grand_total(spl_by_id)
+    summary_bg = "#7f1d1d" if grand > 0 else "#14532d"
+    sem_bar = _splunk_p0_semaphore_bar_html(spl_by_id, home_style=True)
+
+    return f"""
+            <div class="splunk-outliers-card" style='background:#ffffff;padding:16px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);border:1px solid #e5e7eb;'>
+                <h3 style='margin:0 0 6px;font-size:13px;color:#111827;'>{title_e}</h3>
+                <div style='padding:6px 10px;border-radius:8px;background:{summary_bg};color:#e2e8f0;font-size:10px;margin-bottom:6px;'>
+                    <div style='display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;'>
+                        <span>Σ total: <strong style='color:#fff;font-size:1.2em;'>{grand}</strong></span>
+                        <span style='font-size:9px;opacity:0.9;'>{tr}h LLP</span>
+                    </div>
+                </div>
+                <div style='font-size:11px;margin:0;padding:0;color:#111827;'>
+                    {sem_bar}
+                </div>
+                <div style='margin-top:10px;font-size:10px;color:#6b7280;text-align:center;'>
+                    Last updated: {last_updated}
+                </div>
+            </div>"""
 
 
 def _samsung_splunk_embed_aside_html() -> str:
@@ -4762,7 +5035,652 @@ def _samsung_splunk_embed_aside_html() -> str:
         </aside>"""
 
 
-def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_refresh: bool = False) -> str:
+# Incremental /statusmonitor loads: merge per-env APM before command center + summary.
+_sm_incr_sessions: dict = {}
+_sm_incr_lock = threading.Lock()
+_SM_INCR_TTL_SECS = 900
+
+
+def _sm_incr_purge_sessions() -> None:
+    now = time.time()
+    with _sm_incr_lock:
+        dead = [k for k, v in _sm_incr_sessions.items() if now - float(v.get("created") or 0) > _SM_INCR_TTL_SECS]
+        for k in dead:
+            _sm_incr_sessions.pop(k, None)
+
+
+def _sm_incr_session_ensure(
+    session_id: str,
+    *,
+    environment: str | None,
+    timerange: int,
+    force_refresh: bool,
+    services: list,
+    dd_environments: list,
+) -> dict:
+    _sm_incr_purge_sessions()
+    with _sm_incr_lock:
+        sess = _sm_incr_sessions.get(session_id)
+        if sess is None:
+            sess = {
+                "created": time.time(),
+                "environment": environment,
+                "timerange": int(timerange),
+                "force_refresh": bool(force_refresh),
+                "services": list(services),
+                "dd_environments": list(dd_environments),
+                "statuses_by_env": {},
+                "pd_counts": {"triggered": 0, "acknowledged": 0, "resolved": 0},
+                "pd_incidents": [],
+                "arlo_services_status": [],
+            }
+            _sm_incr_sessions[session_id] = sess
+        return sess
+
+
+def _sm_incr_merged_statuses(session_id: str) -> list:
+    sess = _sm_incr_sessions.get(session_id) or {}
+    out: list = []
+    for env in sess.get("dd_environments") or []:
+        out.extend(list((sess.get("statuses_by_env") or {}).get(env) or []))
+    return out
+
+
+_SM_ENG_HALF_WIDTH_SLUGS = frozenset(
+    {
+        "client-engineering",
+        "firmware",
+        "windows",
+        "onecloud-engineering",
+        "ecommerce",
+        "infrared-services",
+        "samsung-partner",
+        "smart-vision",
+        "sre",
+        "oci",
+        "noc",
+        "npnoc",
+    }
+)
+_SM_ENG_HALF_WIDTH_PAIR_LEAD: dict[str, tuple[str, ...]] = {
+    "samsung-partner": ("samsung-partner", "sre"),
+    "smart-vision": ("smart-vision", "oci"),
+    "noc": ("noc", "npnoc"),
+    "windows": ("windows", "onecloud-engineering"),
+    "ecommerce": ("ecommerce", "infrared-services"),
+    "client-engineering": ("client-engineering", "firmware"),
+}
+_SM_ENG_HALF_WIDTH_PAIR_SKIP = frozenset(
+    {"sre", "oci", "npnoc", "onecloud-engineering", "infrared-services", "firmware"}
+)
+
+
+def _sm_engineering_mosaic_enabled(page_environment: str | None, env: str) -> bool:
+    wall_dde = _sm_page_environment_to_wall_dd_env(page_environment)
+    if not wall_dde:
+        return False
+    expected_tag = _sm_wall_dd_env_to_dd_tag(wall_dde)
+    if (env or "").strip() != expected_tag:
+        return False
+    try:
+        from tools.apm_engineering_groups import (
+            apm_engineering_groups_enabled,
+            engineering_wall_uses_org_catalog,
+        )
+
+        return apm_engineering_groups_enabled() and engineering_wall_uses_org_catalog(wall_dde)
+    except Exception:
+        return False
+
+
+def _sm_safe_http_href(url: str | None) -> str | None:
+    u = (url or "").strip()
+    if u.startswith("http://") or u.startswith("https://"):
+        return u
+    return None
+
+
+def _sm_org_wall_incident_count(s: dict) -> int:
+    n = 0
+    if s.get("pd_incident"):
+        n += 1
+    dd = int(s.get("dd_monitor_alert_count") or 0)
+    if dd > 0:
+        n += dd
+    suff = int(s.get("dd_monitor_alert_suffix_count") or 0)
+    if suff > 0:
+        n += suff
+    return n
+
+
+def _sm_hover_chip_html(text: str, chip_cls: str, href: str | None = None) -> str:
+    if href:
+        return (
+            f'<a class="{chip_cls}" href="{html.escape(href, quote=True)}" '
+            f'target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">'
+            f"{html.escape(text)}</a>"
+        )
+    return f'<span class="{chip_cls}">{html.escape(text)}</span>'
+
+
+def _sm_org_wall_dd_pill_html(s: dict) -> str:
+    wddc = int(s.get("dd_monitor_alert_count") or 0)
+    wdd_suf = int(s.get("dd_monitor_alert_suffix_count") or 0)
+    total = int(s.get("dd_monitor_open_count") or 0) or (wddc + wdd_suf)
+    if total <= 0:
+        return ""
+    only_ab = wddc == 0 and wdd_suf > 0
+    href = _sm_safe_http_href(
+        s.get("dd_monitors_url_all_alerts") if wdd_suf > 0 else s.get("dd_monitors_url")
+    ) or _sm_safe_http_href(s.get("dd_monitors_url"))
+    chip_cls = (
+        "sm-hover-tip-chip sm-hover-tip-chip--dd-open"
+        if only_ab
+        else "sm-hover-tip-chip sm-hover-tip-chip--alert"
+    )
+    label = f"{total} DD"
+    title = (
+        f"{total} Datadog alert(s) (-a/-b tier); tile stays green"
+        if only_ab
+        else f"{total} Datadog monitor(s) in Alert"
+    )
+    title_attr = html.escape(title, quote=True)
+    if href:
+        return (
+            f'<a class="{chip_cls}" href="{html.escape(href, quote=True)}" '
+            f'target="_blank" rel="noopener noreferrer" title="{title_attr}" '
+            f'onclick="event.stopPropagation()">{html.escape(label)}</a>'
+        )
+    return f'<span class="{chip_cls}" title="{title_attr}">{html.escape(label)}</span>'
+
+
+def _sm_org_wall_service_monitor_chips_html(s: dict) -> str:
+    parts: list[str] = []
+    if s.get("pd_incident"):
+        pdu = _sm_safe_http_href(s.get("pd_incident_url"))
+        parts.append(_sm_hover_chip_html("PD", "sm-hover-tip-chip sm-hover-tip-chip--alert", pdu))
+    spl = _sm_safe_http_href(s.get("splunk_url"))
+    if spl:
+        parts.append(_sm_hover_chip_html("SPL", "sm-hover-tip-chip sm-hover-tip-chip--splunk", spl))
+    if s.get("traffic_drop"):
+        parts.append(_sm_hover_chip_html("Traffic drop", "sm-hover-tip-chip sm-hover-tip-chip--alert"))
+    elif s.get("traffic_variance") is not None:
+        tv = int(round(float(s.get("traffic_variance"))))
+        parts.append(_sm_hover_chip_html(f"Traffic {tv}% vs 7d", "sm-hover-tip-chip"))
+    dd = _sm_org_wall_dd_pill_html(s)
+    if dd:
+        parts.append(dd)
+    return "".join(parts)
+
+
+def _sm_org_wall_monitor_chips_html(ser: dict) -> str:
+    st = ser.get("status") or ""
+    if st in ("critical", "warning"):
+        inner = _sm_org_wall_service_monitor_chips_html(ser)
+    else:
+        inner = ""
+        spl = _sm_safe_http_href(ser.get("splunk_url"))
+        if spl:
+            inner += _sm_hover_chip_html("SPL", "sm-hover-tip-chip sm-hover-tip-chip--splunk", spl)
+        inner += _sm_org_wall_dd_pill_html(ser)
+    if not inner:
+        return ""
+    return (
+        f'<div class="sw-tile-org-chips sw-tile-inline-chips sm-hover-tip-chips">{inner}</div>'
+    )
+
+
+def _sm_org_wall_status_foot_html(ser: dict) -> str:
+    st = ser.get("status") or "unknown"
+    badge_cls = "sw-tile-org-badge"
+    if st == "warning":
+        badge_text, badge_cls = "WARN", badge_cls + " sw-tile-org-badge--warn"
+    elif st == "critical":
+        badge_text, badge_cls = "CRIT", badge_cls + " sw-tile-org-badge--crit"
+    else:
+        badge_text = "OK"
+    inc_html = ""
+    inc = _sm_org_wall_incident_count(ser)
+    if st in ("warning", "critical") and inc > 0:
+        inc_html = f'<span class="sw-tile-org-inc">{inc} inc</span>'
+    chips = _sm_org_wall_monitor_chips_html(ser)
+    return (
+        f'<div class="sw-tile-org-foot"><span class="{badge_cls}">{badge_text}</span>'
+        f"{inc_html}{chips}</div>"
+    )
+
+
+def _sm_org_wall_tile_wrap_class(ser: dict) -> str:
+    st = ser.get("status") or "unknown"
+    label = str(ser.get("service") or "")
+    lab_len = len(label)
+    if st == "critical":
+        return "sw-tile-wrap--size-crit-wide" if lab_len > 17 else "sw-tile-wrap--size-crit"
+    if st == "warning":
+        return "sw-tile-wrap--size-warn-wide" if lab_len > 17 else "sw-tile-wrap--size-warn"
+    return "sw-tile-wrap--size-ok"
+
+
+def _sm_org_wall_tile_class(ser: dict) -> str:
+    st = ser.get("status") or "unknown"
+    cls = "sw-tile"
+    if st == "critical":
+        cls += " sw-tile--crit sw-tile--alert"
+    elif st == "warning":
+        cls += " sw-tile--warn sw-tile--alert"
+    elif st == "healthy":
+        cls += " sw-tile--healthy"
+    else:
+        cls += " sw-tile--neutral"
+    return cls
+
+
+def _sm_org_wall_tile_html(
+    ser: dict,
+    raw_svc: dict,
+    env: str,
+    page_environment: str | None,
+) -> str:
+    label = html.escape(str(ser.get("service") or "—"))
+    wrap_cls = _sm_org_wall_tile_wrap_class(ser)
+    tile_cls = _sm_org_wall_tile_class(ser)
+    apm_url = html.escape(str(ser.get("apm_url") or "#"), quote=True)
+    st = ser.get("status") or ""
+    hyphen_split = ""
+    if st in ("warning", "critical") and "-" in str(ser.get("service") or ""):
+        segs = [p.strip() for p in re.split(r"-+", str(ser.get("service") or "")) if p.strip()]
+        if len(segs) >= 2:
+            wrap_cls += " sw-tile-wrap--hyphen-split"
+            hyphen_split = " sw-tile-name-hyphen-split"
+    hover_j = _sm_hover_json_attr(
+        _sm_hover_service_payload(raw_svc, env, page_environment=page_environment)
+    )
+    foot = _sm_org_wall_status_foot_html(ser)
+    return f"""
+    <div class="sw-tile-wrap {wrap_cls} sm-tip-wrap" data-sm-hover="{hover_j}">
+        <div class="{tile_cls}" role="link" tabindex="0"
+             onclick="window.open('{apm_url}', '_blank')" style="cursor:pointer">
+            <div class="sw-tile-name-compact">
+                <div class="sw-tile-name-scroll{hyphen_split}">{label}</div>
+            </div>
+            {foot}
+        </div>
+    </div>
+    """
+
+
+def _sm_build_engineering_mosaic_data(
+    env_services: list,
+    page_environment: str | None,
+    *,
+    timerange: int = 1,
+) -> tuple[list, list] | None:
+    wall_dde = _sm_page_environment_to_wall_dd_env(page_environment)
+    if not wall_dde:
+        return None
+    dd_site = os.getenv("DD_SITE", "datadoghq.com")
+    dd_api_key = os.getenv("DATADOG_API_KEY") or os.getenv("DD_API_KEY")
+    dd_app_key = os.getenv("DATADOG_APP_KEY") or os.getenv("DD_APP_KEY")
+    ser = [
+        _wall_serialize_status(s, dd_site, wall_mode=wall_dde, timerange_hours=timerange)
+        for s in env_services
+        if s.get("status") in ("healthy", "warning", "critical")
+    ]
+    try:
+        from tools.apm_engineering_groups import (
+            apm_status_wall_use_dd_team,
+            build_engineering_sections,
+            engineering_column_layout,
+            fetch_datadog_catalog_service_owners,
+        )
+
+        owner_by_service = None
+        if apm_status_wall_use_dd_team(wall_dde) and dd_api_key and dd_app_key:
+            owner_by_service = fetch_datadog_catalog_service_owners(
+                dd_api_key, dd_app_key, dd_site
+            )
+        eng_sections = build_engineering_sections(
+            ser, dd_env=wall_dde, owner_by_service=owner_by_service
+        )
+        return eng_sections, engineering_column_layout(wall_dde)
+    except Exception as e:
+        print(f"⚠️ SM engineering mosaic skipped: {e}")
+        return None
+
+
+def _sm_render_engineering_block_html(
+    eng: dict,
+    raw_by_service: dict[str, dict],
+    env: str,
+    page_environment: str | None,
+    section_prefix: str,
+    width_mode: str | None = None,
+) -> str:
+    esvcs = eng.get("services") or []
+    if not esvcs:
+        return ""
+    slug = str(eng.get("slug") or "")
+    block_id = html.escape(f"{section_prefix}-{slug}" if slug else section_prefix)
+    block_cls = "sw-eng-block"
+    if width_mode == "quarter":
+        block_cls += " sw-eng-block--quarter"
+    elif width_mode == "half" or slug in _SM_ENG_HALF_WIDTH_SLUGS:
+        block_cls += " sw-eng-block--half"
+    ec = eng.get("counts") or {}
+    cols = max(1, int(eng.get("tile_columns") or 2))
+    tiles = "".join(
+        _sm_org_wall_tile_html(
+            ser,
+            raw_by_service.get(str(ser.get("service") or ""), ser),
+            env,
+            page_environment,
+        )
+        for ser in esvcs
+    )
+    label = html.escape(str(eng.get("label") or eng.get("key") or "Engineering"))
+    return f"""
+    <div class="{block_cls}" id="{block_id}">
+        <div class="sw-eng-head">
+            <div class="sw-eng-head-title">{label}</div>
+            <div class="sw-eng-head-badges">
+                <span class="sw-eng-head-badge--ok" title="Healthy">{int(ec.get('healthy') or 0)}</span>
+                <span class="sw-eng-head-badge--warn" title="Warning">{int(ec.get('warning') or 0)}</span>
+                <span class="sw-eng-head-badge--crit" title="Critical">{int(ec.get('critical') or 0)}</span>
+            </div>
+        </div>
+        <div class="sw-eng-tiles-wrap">
+            <div class="sw-tiles sw-tiles--org-wall" data-tile-cols="{cols}">
+                {tiles}
+            </div>
+        </div>
+    </div>
+    """
+
+
+def _sm_render_engineering_mosaic_html(
+    env_services: list,
+    env: str,
+    page_environment: str | None,
+    *,
+    timerange: int = 1,
+) -> str:
+    data = _sm_build_engineering_mosaic_data(
+        env_services, page_environment, timerange=timerange
+    )
+    if not data:
+        return ""
+    eng_sections, column_layout = data
+    raw_by_service = {str(s.get("service") or ""): s for s in env_services}
+    by_slug = {
+        str(e.get("slug") or ""): e
+        for e in eng_sections
+        if e.get("slug") and (e.get("services") or [])
+    }
+    section_prefix = "sm-eng"
+    placed: set[str] = set()
+    layout_parts: list[str] = ['<div class="sm-eng-mosaic-wrap sw-compact-org-wrap"><div class="sw-eng-layout">']
+
+    for col_slugs in column_layout or []:
+        col_parts: list[str] = ['<div class="sw-eng-col">']
+        col_has = False
+        for slug in col_slugs or []:
+            slug = str(slug)
+            if slug in _SM_ENG_HALF_WIDTH_PAIR_SKIP:
+                continue
+            if slug in _SM_ENG_HALF_WIDTH_PAIR_LEAD:
+                pair = _SM_ENG_HALF_WIDTH_PAIR_LEAD[slug]
+                row_parts = ['<div class="sw-eng-block-row">']
+                row_any = False
+                for ps in pair:
+                    eng = by_slug.get(ps)
+                    if not eng:
+                        continue
+                    blk = _sm_render_engineering_block_html(
+                        eng, raw_by_service, env, page_environment, section_prefix, "half"
+                    )
+                    if blk:
+                        row_parts.append(blk)
+                        placed.add(ps)
+                        row_any = True
+                row_parts.append("</div>")
+                if row_any:
+                    col_parts.append("".join(row_parts))
+                    col_has = True
+                continue
+            eng = by_slug.get(slug)
+            if not eng:
+                continue
+            blk = _sm_render_engineering_block_html(
+                eng, raw_by_service, env, page_environment, section_prefix
+            )
+            if blk:
+                col_parts.append(blk)
+                placed.add(slug)
+                col_has = True
+        col_parts.append("</div>")
+        if col_has:
+            layout_parts.append("".join(col_parts))
+
+    trailing: list[str] = []
+    for eng in eng_sections:
+        slug = str(eng.get("slug") or "")
+        if slug and slug not in placed and (eng.get("services") or []):
+            blk = _sm_render_engineering_block_html(
+                eng, raw_by_service, env, page_environment, section_prefix
+            )
+            if blk:
+                trailing.append(blk)
+                placed.add(slug)
+    if trailing:
+        layout_parts.append(f'<div class="sw-eng-col">{"".join(trailing)}</div>')
+
+    layout_parts.append("</div></div>")
+    return "".join(layout_parts)
+
+
+def _sm_render_dd_env_column_html(
+    env: str,
+    all_statuses: list,
+    page_environment: str | None,
+    environments_list: list,
+    *,
+    timerange: int = 1,
+) -> str:
+    """HTML for one Datadog env column (service groups + tiles)."""
+    env_config = {
+        "production": {"icon": "🔵", "color": "#3b82f6"},
+        "goldendev": {"icon": "🔵", "color": "#3b82f6"},
+        "goldenqa": {"icon": "🔵", "color": "#3b82f6"},
+        "qa": {"icon": "🔵", "color": "#3b82f6"},
+        "samsung_prod": {"icon": "📱", "color": "#0ea5e9"},
+        "adt_prod": {"icon": "🏠", "color": "#8b5cf6"},
+    }
+    if page_environment == "samsung":
+        config = {"icon": "📱", "color": "#0ea5e9"}
+    else:
+        config = env_config.get(env, {"icon": "🔵", "color": "#3b82f6"})
+    env_services = [s for s in all_statuses if s.get("environment") == env]
+    env_services.sort(key=lambda x: (x.get("service") or "").lower())
+
+    if _sm_engineering_mosaic_enabled(page_environment, env):
+        mosaic = _sm_render_engineering_mosaic_html(
+            env_services, env, page_environment, timerange=timerange
+        )
+        if mosaic:
+            return mosaic
+
+    if page_environment == "samsung":
+
+        def _sk(s):
+            return (s.get("service") or "").lower()
+
+        def _is_samsung_partner(sk):
+            return sk.startswith("backend-pp") or "pp-samsung" in sk or "pp_samsung" in sk
+
+        def _is_samsung_hmsguard(sk):
+            return "hmsguard" in sk
+
+        partner_svcs = [s for s in env_services if _is_samsung_partner(_sk(s))]
+        _pkeys = {(s["service"], s["environment"]) for s in partner_svcs}
+        hmg_svcs = [
+            s
+            for s in env_services
+            if _is_samsung_hmsguard(_sk(s)) and (s["service"], s["environment"]) not in _pkeys
+        ]
+        _hkeys = {(s["service"], s["environment"]) for s in hmg_svcs}
+        other_svcs = [
+            s
+            for s in env_services
+            if (s["service"], s["environment"]) not in _pkeys and (s["service"], s["environment"]) not in _hkeys
+        ]
+        for _grp in (partner_svcs, hmg_svcs, other_svcs):
+            _grp.sort(key=lambda x: (x.get("service") or "").lower())
+        service_groups = []
+        if hmg_svcs:
+            service_groups.append({"name": "HMSGUARD", "icon": "🛡️", "color": "#0ea5e9", "services": hmg_svcs})
+        if partner_svcs:
+            service_groups.append({"name": "Partner Platform", "icon": "🤝", "color": "#0284c7", "services": partner_svcs})
+        if other_svcs:
+            service_groups.append({"name": "Samsung services", "icon": "📱", "color": "#06b6d4", "services": other_svcs})
+        if not service_groups and env_services:
+            service_groups.append({"name": "Samsung", "icon": "📱", "color": "#0ea5e9", "services": list(env_services)})
+    else:
+        service_groups = [{"name": env.upper(), "icon": config["icon"], "color": config["color"], "services": env_services}]
+
+    out = ""
+    pad = "12px" if len(environments_list) == 1 else "10px"
+    for group in service_groups:
+        group_services = group["services"]
+        if not group_services:
+            continue
+        group_healthy = sum(1 for s in group_services if s["status"] == "healthy")
+        group_warning = sum(1 for s in group_services if s["status"] == "warning")
+        group_critical = sum(1 for s in group_services if s["status"] == "critical")
+        group_nosig = sum(1 for s in group_services if s["status"] in ("inactive", "unknown"))
+        out += f"""
+        <div>
+            <div style='background: {group['color']}; color: white; padding: 6px 8px; border-radius: 5px 5px 0 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                <div style='display: flex; justify-content: space-between; align-items: center;'>
+                    <div style='font-size: 11px; font-weight: bold;'>{group['icon']} {group['name']}</div>
+                    <div style='font-size: 8px; opacity: 0.9;'>✓ {group_healthy} | ⚠ {group_warning} | ✗ {group_critical} | ○ {group_nosig}</div>
+                </div>
+            </div>
+            <div style='padding: {pad}; background: #f8fafc; border-radius: 0 0 8px 8px; min-height: 80px;'>
+        """
+        issue_svcs = sorted(
+            [s for s in group_services if s["status"] in ("critical", "warning")],
+            key=lambda s: (0 if s["status"] == "critical" else 1, -s["error_rate"], -s["errors"]),
+        )
+        healthy_svcs = sorted([s for s in group_services if s["status"] == "healthy"], key=lambda x: x["service"].lower())
+        dd_site_chips = os.getenv("DD_SITE", "datadoghq.com")
+        op_tile_count = len(issue_svcs) + len(healthy_svcs)
+        if op_tile_count:
+            out += """
+            <div class='sm-band-healthy'>
+            <div class='sm-section-label' style='margin-top:0;'>Operational — """ + str(op_tile_count) + """</div>
+            <div class='sm-op-tiles'>
+        """
+        for svc in issue_svcs:
+            dd_site_tile = os.getenv("DD_SITE", "datadoghq.com")
+            service_name = svc["service"]
+            dd_url = (
+                f"{datadog_ui_origin(dd_site_tile)}/apm/service/"
+                f"{quote(service_name, safe='')}/overview?env={quote(env, safe='')}"
+            )
+            is_crit = svc["status"] == "critical"
+            tile_mod = "sm-op-tile--crit" if is_crit else "sm-op-tile--warn"
+            alert_tile = " service-box-alert" if svc["status"] in ("warning", "critical") else ""
+            icon = "✕" if is_crit else "⚠"
+            t_name = html.escape(svc["service"])
+            t_err = html.escape(f"{svc['error_rate']}")
+            url_attr = html.escape(dd_url, quote=True)
+            hover_j = _sm_hover_json_attr(_sm_hover_service_payload(svc, env, page_environment=page_environment))
+            out += f"""
+                <div class='sm-tip-wrap' data-sm-hover="{hover_j}">
+                <a class='sm-op-tile {tile_mod}{alert_tile}' href="{url_attr}" target="_blank" rel="noopener">
+                    <div class='sm-op-tile-icon'>{icon}</div>
+                    <div class='sm-op-tile-name'>{t_name}</div>
+                    <div class='sm-op-tile-metric'>{t_err}%</div>
+                    <div class='sm-op-tile-metric-lbl'>ERR</div>
+                </a>
+                </div>
+                """
+        for hsvc in healthy_svcs:
+            t_url = f"{datadog_ui_origin(dd_site_chips)}/apm/service/{hsvc['service']}/overview?env={env}"
+            t_name = html.escape(hsvc["service"])
+            t_met, t_lbl = _sm_op_tile_metric_html(hsvc)
+            met_suffix = "" if t_lbl == "OK" else "%"
+            hover_j = _sm_hover_json_attr(_sm_hover_service_payload(hsvc, env, page_environment=page_environment))
+            out += f"""
+                <div class='sm-tip-wrap' data-sm-hover="{hover_j}">
+                <div class='sm-op-tile' onclick="window.open('{t_url}', '_blank')">
+                    <div class='sm-op-tile-icon'>✓</div>
+                    <div class='sm-op-tile-name'>{t_name}</div>
+                    <div class='sm-op-tile-metric'>{t_met}{met_suffix}</div>
+                    <div class='sm-op-tile-metric-lbl'>{html.escape(t_lbl)}</div>
+                </div>
+                </div>
+                """
+        if op_tile_count:
+            out += """
+            </div>
+            </div>
+        """
+        nosig_svcs = sorted(
+            [s for s in group_services if s.get("status") in ("inactive", "unknown")],
+            key=lambda x: (x.get("service") or "").lower(),
+        )
+        if page_environment == "samsung" and nosig_svcs:
+            dd_site_nosig = os.getenv("DD_SITE", "datadoghq.com")
+            out += f"""
+            <div class="sm-band-nosig">
+            <div class="sm-section-label" style="margin-top:0;">No APM signal — {len(nosig_svcs)}</div>
+            <div class="sm-op-tiles">
+        """
+            for svc in nosig_svcs:
+                service_name = svc["service"]
+                dd_url = (
+                    f"{datadog_ui_origin(dd_site_nosig)}/apm/service/"
+                    f"{quote(service_name, safe='')}/overview?env={quote(env, safe='')}"
+                )
+                st = svc.get("status") or "unknown"
+                icon = "○" if st == "inactive" else "?"
+                t_name = html.escape(service_name)
+                url_attr = html.escape(dd_url, quote=True)
+                lbl = "idle" if st == "inactive" else "unknown"
+                hover_j = _sm_hover_json_attr(_sm_hover_service_payload(svc, env, page_environment=page_environment))
+                out += f"""
+                <div class="sm-tip-wrap" data-sm-hover="{hover_j}">
+                <a class="sm-op-tile sm-op-tile--nosig" href="{url_attr}" target="_blank" rel="noopener">
+                    <div class="sm-op-tile-icon">{icon}</div>
+                    <div class="sm-op-tile-name">{t_name}</div>
+                    <div class="sm-op-tile-metric">—</div>
+                    <div class="sm-op-tile-metric-lbl">{html.escape(lbl)}</div>
+                </a>
+                </div>
+                """
+            out += """
+            </div>
+            </div>
+        """
+        out += """
+            </div>
+        </div>
+        """
+    return out
+
+
+def status_monitor_dashboard(
+    timerange: int = 1,
+    environment: str = None,
+    force_refresh: bool = False,
+    *,
+    fragment: str | None = None,
+    only_dd_env: str | None = None,
+    all_statuses_override: list | None = None,
+    incr_session_id: str | None = None,
+    skip_splunk: bool = False,
+) -> str:
     """
     Generate Status Monitor Dashboard HTML
     
@@ -4775,18 +5693,30 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     """
     global _status_cache
     
+    frag = (fragment or "").strip().lower() or None
+    is_full = frag is None
+
     # Check cache first - include version to invalidate cache when logic changes
-    cache_version = "v3.4.20_samsung_layout_compact"  # Change this when logic changes
+    cache_version = "v3.4.27_eng_mosaic_green"  # Change this when logic changes
     cache_key = f"{cache_version}_{timerange}_{environment}_{int(time.time() // _cache_ttl)}"
-    hit = _read_sm_mem_cache(_status_cache, cache_key, force_refresh)
-    if hit is not None:
-        print(f"✅ Using cached dashboard data (cache key: {cache_key}, force_refresh={force_refresh})")
-        return hit
+    if is_full:
+        hit = _read_sm_mem_cache(_status_cache, cache_key, force_refresh)
+        if hit is not None:
+            print(f"✅ Using cached dashboard data (cache key: {cache_key}, force_refresh={force_refresh})")
+            return hit
     
-    print(f"🔄 Cache miss - fetching fresh data (key: {cache_key}, force_refresh={force_refresh})")
-    
-    # Header HTML
-    output = """
+    if is_full:
+        print(f"🔄 Cache miss - fetching fresh data (key: {cache_key}, force_refresh={force_refresh})")
+
+    current_time = int(time.time())
+    from_time = current_time - (timerange * 3600)
+    skip_chrome = frag in ("sidebar_fast", "sidebar_splunk", "env_column", "finalize")
+
+    if skip_chrome:
+        output = ""
+    else:
+        # Header HTML + styles
+        output = """
     <style>
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -4889,6 +5819,83 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         }
         .cc-attention-table tr:hover td {
             background: #f8fafc;
+        }
+        .cc-dd-alerts {
+            display: block;
+            min-width: 120px;
+            max-width: 220px;
+            padding: 6px 8px;
+            border-radius: 8px;
+            border: 1px solid #fecaca;
+            background: #fef2f2;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+        }
+        a.cc-dd-alerts:hover {
+            border-color: #f87171;
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
+        }
+        .cc-dd-alerts--suffix {
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+        }
+        a.cc-dd-alerts--suffix:hover {
+            border-color: #4ade80;
+            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.12);
+        }
+        .cc-dd-alerts--none {
+            border-color: #e2e8f0;
+            background: #f8fafc;
+            text-align: center;
+            padding: 8px;
+        }
+        .cc-dd-alerts__head {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .cc-dd-alerts__count {
+            font-size: 14px;
+            font-weight: 900;
+            color: #b91c1c;
+            line-height: 1;
+        }
+        .cc-dd-alerts--suffix .cc-dd-alerts__count {
+            color: #15803d;
+        }
+        .cc-dd-alerts--none .cc-dd-alerts__count {
+            color: #64748b;
+        }
+        .cc-dd-alerts__lbl {
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #64748b;
+        }
+        .cc-dd-alerts__list {
+            margin: 0;
+            padding: 0 0 0 14px;
+            font-size: 9px;
+            font-weight: 600;
+            color: #334155;
+            line-height: 1.35;
+            max-height: 72px;
+            overflow-y: auto;
+        }
+        .cc-dd-alerts__list li {
+            margin: 0 0 2px 0;
+        }
+        .cc-dd-alerts__suffix {
+            color: #166534;
+        }
+        .cc-dd-alerts__more {
+            list-style: none;
+            margin-left: -14px;
+            color: #64748b;
+            font-weight: 700;
         }
         .cc-cluster-select {
             max-width: 168px;
@@ -5196,13 +6203,13 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         <div style='max-width: 100%; margin: 0; padding: 0;'>
         """
     
-    current_time = int(time.time())
-    from_time = current_time - (timerange * 3600)
-
     try:
         services, environments = _sm_resolve_services_and_environments(environment)
     except ValueError:
         return f"<p style='color: #dc2626;'>⚠️ Error: Invalid environment '{html.escape(str(environment))}'</p>"
+
+    if only_dd_env:
+        environments = [only_dd_env]
 
     dd_api_key = os.getenv("DATADOG_API_KEY")
     dd_app_key = os.getenv("DATADOG_APP_KEY")
@@ -5212,42 +6219,108 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     if not dd_api_key or not dd_app_key:
         return "<p style='color: #dc2626;'>⚠️ Error: Datadog credentials not configured</p>"
 
-    print(f"📡 Fetching health for {len(services)} services across {len(environments)} environment(s): {environments}...")
-    all_statuses = _sm_fetch_parallel_service_health(
-        services,
-        environments,
-        dd_api_key,
-        dd_app_key,
-        dd_site,
-        from_time,
-        current_time,
-        int(timerange),
-        force_refresh,
-    )
-
-    print(f"🔄 Fetching PagerDuty and Arlo status (sequential, resilient)...")
     pd_counts = {"triggered": 0, "acknowledged": 0, "resolved": 0}
     pd_incidents = []
     arlo_services_status = []
 
-    if pd_api_key:
-        try:
-            pd_counts, pd_incidents = get_pagerduty_status_counts(pd_api_key, force_refresh)
-        except Exception as e:
-            print(f"⚠️ Error fetching PagerDuty status: {e}")
+    need_apm = frag in (None, "env_column", "finalize") or all_statuses_override is not None
+    need_pd_arlo = frag in (None, "sidebar_fast", "finalize")
+    if frag == "bootstrap":
+        need_apm = False
+        need_pd_arlo = False
+
+    if need_apm and all_statuses_override is not None:
+        all_statuses = list(all_statuses_override)
+    elif need_apm and frag != "finalize":
+        print(f"📡 Fetching health for {len(services)} services across {len(environments)} environment(s): {environments}...")
+        all_statuses = _sm_fetch_parallel_service_health(
+            services,
+            environments,
+            dd_api_key,
+            dd_app_key,
+            dd_site,
+            from_time,
+            current_time,
+            int(timerange),
+            force_refresh,
+        )
+        if incr_session_id and only_dd_env:
+            sess = _sm_incr_sessions.get(incr_session_id)
+            if sess is not None:
+                with _sm_incr_lock:
+                    sess.setdefault("statuses_by_env", {})[only_dd_env] = list(all_statuses)
+    elif frag == "finalize" and incr_session_id:
+        all_statuses = _sm_incr_merged_statuses(incr_session_id)
     else:
-        print(f"⚠️ PagerDuty API key not available")
+        all_statuses = []
 
-    time.sleep(0.25)
+    if frag == "env_column" and only_dd_env and incr_session_id:
+        sess = _sm_incr_sessions.get(incr_session_id) or {}
+        pd_incidents = list(sess.get("pd_incidents") or [])
+        _sm_apply_pagerduty_correlation(all_statuses, services, [only_dd_env], environment, pd_incidents)
+        all_statuses = _sm_apply_wall_display_statuses(
+            all_statuses,
+            services,
+            environment,
+            only_dd_env,
+            dd_api_key=dd_api_key,
+            dd_app_key=dd_app_key,
+            dd_site=dd_site,
+        )
+        col = _sm_render_dd_env_column_html(
+            only_dd_env, all_statuses, environment, environments, timerange=timerange
+        )
+        return (
+            f'<div class="sm-inc-env-slot" data-sm-dd-env="{html.escape(only_dd_env, quote=True)}">{col}</div>'
+        )
 
-    try:
-        arlo_services_status = get_arlo_services_status(force_refresh)
-        print(f"🎯 Arlo: {len(arlo_services_status)} core services")
-    except Exception as e:
-        print(f"⚠️ Error fetching Arlo status: {e}")
+    if need_pd_arlo and frag in ("sidebar_fast", None):
+        print(f"🔄 Fetching PagerDuty and Arlo status (sequential, resilient)...")
+        if pd_api_key:
+            try:
+                pd_counts, pd_incidents = get_pagerduty_status_counts(pd_api_key, force_refresh)
+            except Exception as e:
+                print(f"⚠️ Error fetching PagerDuty status: {e}")
+        else:
+            print(f"⚠️ PagerDuty API key not available")
+        time.sleep(0.25)
+        try:
+            arlo_services_status = get_arlo_services_status(force_refresh)
+            print(f"🎯 Arlo: {len(arlo_services_status)} core services")
+        except Exception as e:
+            print(f"⚠️ Error fetching Arlo status: {e}")
+        if incr_session_id:
+            sess = _sm_incr_sessions.get(incr_session_id)
+            if sess is not None:
+                with _sm_incr_lock:
+                    sess["pd_counts"] = dict(pd_counts)
+                    sess["pd_incidents"] = list(pd_incidents)
+                    sess["arlo_services_status"] = list(arlo_services_status)
+        if frag == "sidebar_fast":
+            return _sm_incr_sidebar_fast_html(pd_counts, arlo_services_status, int(timerange))
+    elif frag == "env_column" and incr_session_id:
+        sess = _sm_incr_sessions.get(incr_session_id) or {}
+        pd_counts = dict(sess.get("pd_counts") or pd_counts)
+        pd_incidents = list(sess.get("pd_incidents") or [])
+        arlo_services_status = list(sess.get("arlo_services_status") or [])
+    elif frag == "finalize" and incr_session_id:
+        sess = _sm_incr_sessions.get(incr_session_id) or {}
+        pd_counts = dict(sess.get("pd_counts") or pd_counts)
+        pd_incidents = list(sess.get("pd_incidents") or [])
+        arlo_services_status = list(sess.get("arlo_services_status") or [])
 
-    pd_incidents_count = pd_counts["triggered"] + pd_counts["acknowledged"]
-    _sm_apply_pagerduty_correlation(all_statuses, services, environments, environment, pd_incidents)
+    if need_apm and frag != "env_column":
+        _sm_apply_pagerduty_correlation(all_statuses, services, environments, environment, pd_incidents)
+        if environment and all_statuses and environments:
+            all_statuses = _sm_apply_wall_display_statuses(
+                all_statuses,
+                services,
+                environment,
+                environments[0],
+                dd_api_key=dd_api_key,
+                dd_app_key=dd_app_key,
+                dd_site=dd_site,
+            )
 
     total_no_dd = sum(1 for s in all_statuses if s.get('status') in ('inactive', 'unknown'))
     if total_no_dd:
@@ -5256,9 +6329,9 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
             f"— not shown in service bands"
         )
     
-    # EKS cluster lookup: optional (heavy); disable with STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0 to avoid 504 behind short ALB idle.
+    # EKS cluster lookup: off by default (heavy); STATUS_MONITOR_DASHBOARD_ATTACH_EKS=1 to re-enable.
     cluster_service_map = {}
-    if _status_monitor_dashboard_attach_eks():
+    if is_full and _status_monitor_dashboard_attach_eks():
         eks_tr_h = max(1, int(timerange))
         operational_ct = sum(
             1 for s in all_statuses if s.get("status") in ("healthy", "warning", "critical")
@@ -5315,17 +6388,11 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
             print(f"☸️  EKS Summary (All Environments):")
             for cluster_name, services in sorted(cluster_service_map.items()):
                 print(f"   • {cluster_name}: {len(services)} services")
-    else:
+    elif is_full:
         print(
-            "☸️  EKS cluster lookup skipped (STATUS_MONITOR_DASHBOARD_ATTACH_EKS=0) — "
-            "tooltips omit kube_cluster_name; set to 1 after raising ALB/nginx idle timeout."
+            "☸️  EKS cluster lookup skipped (status monitor dashboards) — "
+            "set STATUS_MONITOR_DASHBOARD_ATTACH_EKS=1 to re-enable."
         )
-    
-    # Get Splunk outliers (DISABLED)
-    # print(f"📊 Fetching Splunk outliers...")
-    # splunk_outliers = get_splunk_outliers(timerange)
-    # print(f"🔍 Splunk: {len(splunk_outliers)} outliers found")
-    splunk_outliers = []  # Disabled temporarily
     
     # Get US Infra Exceptions count (DISABLED)
     # print(f"🏗️ Fetching US Infra Exceptions...")
@@ -5342,21 +6409,21 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         "error": None,
         "timerange_hours": splunk_p0_default_timerange_hours(),
     }
-    try:
-        spl_data = splunk_outliers_monitor_payload()
-    except Exception as e:
-        print(f"⚠️ Splunk outliers (status monitor sidebar): {e}")
-        spl_data = {
-            "success": False,
-            "tools": [],
-            "error": str(e),
-            "timerange_hours": splunk_p0_default_timerange_hours(),
-        }
+    if frag in ("sidebar_splunk",) or (is_full and not skip_splunk):
+        try:
+            spl_data = splunk_outliers_monitor_payload()
+        except Exception as e:
+            print(f"⚠️ Splunk outliers (status monitor sidebar): {e}")
+            spl_data = {
+                "success": False,
+                "tools": [],
+                "error": str(e),
+                "timerange_hours": splunk_p0_default_timerange_hours(),
+            }
 
-    print(f"☁️ Fetching AWS cost snapshot...")
-    aws_data = get_aws_costs_and_changes(days=1)
-    print(f"💰 AWS: ${aws_data.get('cost_yesterday', 0):.2f} yesterday")
-    
+    if frag == "sidebar_splunk":
+        return _splunk_p0_sidebar_widget_html(spl_data)
+
     # Build dashboard
     # Get current time (will be replaced by client-side timezone)
     current_dt = datetime.utcnow()
@@ -5381,7 +6448,8 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         dashboard_title = "📊 Service Status Monitor"
         dashboard_subtitle = "Real-time health status across all environments"
     
-    output += f"""
+    if not skip_chrome:
+        output += f"""
     <div style='background: #ffffff; padding: 8px 20px; border-bottom: 1px solid #e5e7eb; margin: -24px -24px 12px -24px;'>
         <div style='display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;'>
             <div>
@@ -5406,7 +6474,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                     </select>
                 </div>
                 
-                <button onclick='loadDashboard()' style='padding: 5px 12px; background: #0095da; color: #ffffff; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s ease-in-out;' onmouseover="this.style.background='#0088c7'" onmouseout="this.style.background='#0095da'">
+                <button onclick='loadDashboardIncremental()' style='padding: 5px 12px; background: #0095da; color: #ffffff; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s ease-in-out;' onmouseover="this.style.background='#0088c7'" onmouseout="this.style.background='#0095da'">
                     🔄 Refresh
                 </button>
                 
@@ -5436,6 +6504,46 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     <div style='display: grid; grid-template-columns: 260px 1fr; gap: 24px; margin-bottom: 20px;'>
         <div style='display: flex; flex-direction: column; gap: 16px;'>
     """
+
+    if frag == "bootstrap":
+        ncols = len(environments)
+        grid_tpl = "1fr" if ncols <= 1 else f"repeat({ncols}, 1fr)"
+        env_slots = "".join(
+            f'<div class="sm-inc-env-slot sm-inc-pulse" data-sm-dd-env="{html.escape(e, quote=True)}" '
+            f'id="sm-inc-env-{html.escape(e, quote=True)}">'
+            f'<div class="sm-inc-loading" style="padding:16px;color:#64748b;font-size:11px;font-weight:600;">'
+            f"Loading {html.escape(e)} services…</div></div>"
+            for e in environments
+        )
+        samsung_aside = ""
+        if environment == "samsung":
+            samsung_aside = (
+                f'<div id="sm-inc-samsung-aside" class="sm-inc-pulse">'
+                f"{_samsung_splunk_embed_aside_html()}</div>"
+            )
+            main_inner = f"""
+        <div class="sm-samsung-splunk-layout"><div class="sm-samsung-groups" style="min-width:0;">
+        <div id="sm-inc-env-grid">{env_slots}</div></div>{samsung_aside}</div>"""
+        else:
+            main_inner = f'<div id="sm-inc-env-grid" style="display:grid;grid-template-columns:{grid_tpl};gap:3px;">{env_slots}</div>'
+        return (
+            output
+            + """
+        <div id="sm-inc-status">Loading…</div>
+        <div id="sm-inc-summary" class="sm-inc-pulse" style="background:#fff;padding:12px;border-radius:10px;border:1px solid #e5e7eb;color:#64748b;font-size:11px;font-weight:600;">Loading summary…</div>
+        <div id="sm-inc-sidebar-fast" class="sm-inc-pulse" style="background:#fff;padding:12px;border-radius:10px;border:1px solid #e5e7eb;color:#64748b;font-size:11px;font-weight:600;margin-top:12px;">Loading PagerDuty…</div>
+        <div id="sm-inc-sidebar-splunk" class="sm-inc-pulse" style="background:#fff;padding:12px;border-radius:10px;border:1px solid #e5e7eb;color:#64748b;font-size:11px;font-weight:600;margin-top:12px;">Loading Splunk P0…</div>
+        </div>
+        <div id="sm-inc-main">
+        <div id="sm-inc-command-center" class="sm-inc-pulse" style="background:#f8fafc;padding:16px;border-radius:10px;border:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:600;margin-bottom:12px;">Loading command center…</div>
+        """
+            + main_inner
+            + """
+        </div>
+    </div>
+    </div>
+        """
+        )
     
     # PagerDuty Status Widget - use counts from API
     pd_triggered = pd_counts["triggered"]
@@ -5461,43 +6569,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
 
     pd_sem_link_esc = html.escape(_sm_pagerduty_external_incidents_url(), quote=True)
 
-    spl_tools_list = spl_data.get("tools") if spl_data.get("success") else []
-    spl_by_id = {t.get("id"): t for t in (spl_tools_list or [])}
-
-    def _spl_tid_outliers(tid: str) -> int:
-        row = spl_by_id.get(tid) or {}
-        return int(row.get("total_outliers") or 0)
-
-    spl_o_stream = _spl_tid_outliers("p0_streaming")
-    spl_o_cvr = _spl_tid_outliers("p0_cvr")
-    spl_o_adt = _spl_tid_outliers("p0_adt")
-    spl_o_us = _spl_tid_outliers("p0_streaming_us_infra")
-    spl_o_grand = spl_o_stream + spl_o_cvr + spl_o_adt + spl_o_us
-    spl_sem_tr = int(spl_data.get("timerange_hours") or 72)
-    spl_p0_sem_bar_html = _splunk_p0_semaphore_bar_html(spl_by_id)
-
-    if not spl_data.get("success"):
-        spl_sem_bg_color = "#6b7280"
-        spl_sem_icon = "⚪"
-        spl_sem_text = "UNAVAILABLE"
-        spl_sem_blink_class = ""
-        spl_sem_err_html = (
-            "<div style='margin-top:6px;font-size:9px;color:#b91c1c;text-align:center;font-weight:600;line-height:1.35;'>"
-            + html.escape(str(spl_data.get("error") or "Unavailable")[:160])
-            + "</div>"
-        )
-    elif spl_o_grand > 0:
-        spl_sem_bg_color = "#dc2626"
-        spl_sem_icon = "🔴"
-        spl_sem_text = "OUTLIERS"
-        spl_sem_blink_class = "pd-status-blink"
-        spl_sem_err_html = ""
-    else:
-        spl_sem_bg_color = "#10b981"
-        spl_sem_icon = "🟢"
-        spl_sem_text = "CLEAR"
-        spl_sem_blink_class = ""
-        spl_sem_err_html = ""
+    spl_p0_widget_html = _splunk_p0_sidebar_widget_html(spl_data)
 
     # Calculate summary statistics (all configured services, including no-telemetry)
     total_services = len(all_statuses)
@@ -5602,8 +6674,11 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         if len(attention_merged) >= 14:
             break
     
-    # Attention queue: warning + critical only (no healthy "watch" rows)
-    attn_missing_clusters = [s for s in attention_merged if not s.get('eks_clusters')]
+    # Attention queue: warning + critical only (no healthy "watch" rows); no EKS cluster column.
+    show_clusters_col = _status_monitor_dashboard_attach_eks()
+    attn_missing_clusters = (
+        [s for s in attention_merged if not s.get('eks_clusters')] if show_clusters_col else []
+    )
     if attn_missing_clusters:
         def _clusters_for_attention_row(status_obj):
             service_name = status_obj['service']
@@ -5668,10 +6743,12 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                 parts.append('Needs review')
         return html.escape(' · '.join(parts))
 
+    attention_colspan = "8" if show_clusters_col else "7"
+    cc_clusters_th = "<th>Clusters</th>" if show_clusters_col else ""
     attention_rows_html = ""
     if not attention_merged:
         attention_rows_html = (
-            "<tr><td colspan='7' style='color:#64748b;padding:12px;'>"
+            f"<tr><td colspan='{attention_colspan}' style='color:#64748b;padding:12px;'>"
             "No warning or critical services in this view.</td></tr>"
         )
     else:
@@ -5698,23 +6775,26 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                 bar_grad = 'linear-gradient(90deg,#fde047,#eab308)'
             else:
                 bar_grad = 'linear-gradient(90deg,#f87171,#dc2626)'
-            clusters = [c for c in (s.get('eks_clusters') or []) if _is_meaningful_kube_cluster_name(c)]
-            if clusters:
-                opt_lines = []
-                for c in clusters:
-                    opt_lines.append(
-                        f'<option value="{html.escape(c, quote=True)}">{html.escape(c)}</option>'
+            cluster_td = ""
+            if show_clusters_col:
+                clusters = [c for c in (s.get('eks_clusters') or []) if _is_meaningful_kube_cluster_name(c)]
+                if clusters:
+                    opt_lines = []
+                    for c in clusters:
+                        opt_lines.append(
+                            f'<option value="{html.escape(c, quote=True)}">{html.escape(c)}</option>'
+                        )
+                    cluster_cell = (
+                        f"<select class='cc-cluster-select' "
+                        f"title='EKS clusters (kube_cluster_name) with traffic for this service' "
+                        f"aria-label='Cluster names for {html.escape(s['service'], quote=True)}'>"
+                        f"{''.join(opt_lines)}</select>"
                     )
-                cluster_cell = (
-                    f"<select class='cc-cluster-select' "
-                    f"title='EKS clusters (kube_cluster_name) with traffic for this service' "
-                    f"aria-label='Cluster names for {html.escape(s['service'], quote=True)}'>"
-                    f"{''.join(opt_lines)}</select>"
-                )
-            else:
-                cluster_cell = (
-                    "<span style='color:#94a3b8;font-size:10px;font-weight:600;'>—</span>"
-                )
+                else:
+                    cluster_cell = (
+                        "<span style='color:#94a3b8;font-size:10px;font-weight:600;'>—</span>"
+                    )
+                cluster_td = f'<td style="vertical-align:middle;">{cluster_cell}</td>'
             err_cell = (
                 f"<div style='display:flex;align-items:center;gap:8px;max-width:96px;'>"
                 f"<span style='font-weight:800;color:#0f172a;min-width:42px;flex-shrink:0;font-size:11px;'>"
@@ -5724,13 +6804,15 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                 f"</div></div></div>"
             )
             reason_cell = _attention_reason_text(s)
+            dd_alerts_cell = _sm_attention_dd_alerts_cell_html(s, dd_site_cc)
             attention_rows_html += f"""<tr>
                 <td>{pill}</td>
                 <td style='font-weight:700;color:#0f172a;'><a href="{svc_url}" target="_blank" rel="noopener" style="color:#0284c7;text-decoration:none;">{html.escape(s['service'])}</a></td>
                 <td style="color:#475569;">{html.escape(s['environment'])}</td>
-                <td style="vertical-align:middle;">{cluster_cell}</td>
+                {cluster_td}
                 <td style="vertical-align:middle;">{err_cell}</td>
                 <td style="font-size:10px;color:#0f172a;font-weight:600;line-height:1.35;max-width:200px;">{reason_cell}</td>
+                <td style="vertical-align:top;max-width:220px;">{dd_alerts_cell}</td>
                 <td style="color:#64748b;font-size:10px;">{s['requests']:,} req · {tv_txt}</td>
             </tr>"""
     
@@ -5773,13 +6855,68 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                 </div>
                 <div style="font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Attention queue (warning &amp; critical)</div>
                 <table class="cc-attention-table">
-                    <thead><tr><th>Status</th><th>Service</th><th>Env</th><th>Clusters</th><th>ERR%</th><th>Reason</th><th>Context</th></tr></thead>
+                    <thead><tr><th>Status</th><th>Service</th><th>Env</th>{cc_clusters_th}<th>ERR%</th><th>Reason</th><th>DD alerts</th><th>Context</th></tr></thead>
                     <tbody>{attention_rows_html}</tbody>
                 </table>
             </div>
     """
+    if frag == "finalize":
+        summary_html = f"""
+            <div style='background: #ffffff; padding: 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;'>
+                <div style='margin-bottom: 10px;'><h3 style='font-size: 14px; font-weight: 700; color: #111827; margin: 0;'>📈 Summary</h3></div>
+                <div style='display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;'>
+                    <div style='display: flex; flex-direction: column; gap: 8px;'>
+                        <div style='display: flex; align-items: center; gap: 6px;'>
+                            <div style='width: 10px; height: 10px; background: #10b981; border-radius: 2px;'></div>
+                            <div><div style='color: #111827; font-weight: 600; font-size: 11px;'>Healthy</div>
+                            <div style='color: #10b981; font-weight: 700; font-size: 16px;'>{total_healthy}</div></div>
+                        </div>
+                        <div style='display: flex; align-items: center; gap: 6px;'>
+                            <div style='width: 10px; height: 10px; background: #f59e0b; border-radius: 2px;'></div>
+                            <div><div style='color: #111827; font-weight: 600; font-size: 11px;'>Warning</div>
+                            <div style='color: #f59e0b; font-weight: 700; font-size: 16px;'>{total_warning}</div></div>
+                        </div>
+                    </div>
+                    <div style='display: flex; flex-direction: column; gap: 8px;'>
+                        <div style='display: flex; align-items: center; gap: 6px;'>
+                            <div style='width: 10px; height: 10px; background: #dc2626; border-radius: 2px;'></div>
+                            <div><div style='color: #111827; font-weight: 600; font-size: 11px;'>Critical</div>
+                            <div style='color: #dc2626; font-weight: 700; font-size: 16px;'>{total_critical}</div></div>
+                        </div>
+                        <div style='display: flex; align-items: center; gap: 6px;'>
+                            <div style='width: 10px; height: 10px; background: #e5e7eb; border-radius: 2px;'></div>
+                            <div><div style='color: #111827; font-weight: 600; font-size: 11px;'>Total listed</div>
+                            <div style='color: #6b7280; font-weight: 700; font-size: 16px;'>{total_listed_ui}</div></div>
+                        </div>
+                    </div>
+                    <div style='background: #f9fafb; padding: 8px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px;'>
+                        <div style='display: flex; justify-content: space-between;'><span style='font-size:10px;color:#6b7280;'>REQ:</span><span style='font-weight:700;font-size:11px;'>{total_requests:,}</span></div>
+                        <div style='display: flex; justify-content: space-between;'><span style='font-size:10px;color:#6b7280;'>ERR:</span><span style='font-weight:700;font-size:11px;color:#dc2626;'>{total_errors:,}</span></div>
+                        <div style='display: flex; justify-content: space-between;'><span style='font-size:10px;color:#6b7280;'>ERR%:</span><span style='font-weight:700;font-size:11px;'>{overall_error_rate:.2f}%</span></div>
+                    </div>
+                </div>
+            </div>
+        """
+        return (
+            summary_html
+            + f"""
+    <script>
+        window.chartData = {{
+            healthy: {total_healthy},
+            warning: {total_warning},
+            critical: {total_critical},
+            total: {total_listed_ui}
+        }};
+        if (window.initializePieChart) {{
+            window.initializePieChart(window.chartData);
+        }}
+    </script>
+    """
+            + command_center_html
+        )
     # First: Overall Summary
-    output += f"""
+    if is_full:
+        output += f"""
             <!-- Overall Summary -->
             <div style='background: #ffffff; padding: 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); border: 1px solid #e5e7eb;'>
                 <div style='margin-bottom: 10px;'>
@@ -5866,19 +7003,7 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                 </a>
             </div>
 
-            <!-- Splunk P0 predict outliers (same 72h window as home Splunk monitor) -->
-            <div style='background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); border: 1px solid #e5e7eb;'>
-                <div style='margin-bottom: 12px;'>
-                    <h3 style='font-size: 15px; font-weight: 700; color: #111827; margin: 0; letter-spacing: -0.02em;'>📊 Splunk Outliers</h3>
-                </div>
-                <div class='{spl_sem_blink_class}' style='display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; background: {spl_sem_bg_color}; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);'>
-                    {spl_p0_sem_bar_html}
-                </div>
-                <div style='margin-top: 8px; font-size: 9px; color: #6b7280; text-align: center; font-weight: 600; line-height: 1.35;'>
-                    P0 predict (LLP) · {spl_sem_tr}h · {spl_sem_icon} {spl_sem_text}
-                </div>
-                {spl_sem_err_html}
-            </div>
+            {spl_p0_widget_html}
             
             <!-- Arlo Platform Status -->
             <div style='background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); border: 1px solid #e5e7eb;'>
@@ -5968,99 +7093,10 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
                     </div>
                 </div>
             </div>
-            
-            <!-- Streaming Outliers -->
-            <div style='background: white; padding: 6px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-                <div style='background: #00c853; color: white; padding: 3px 4px; border-radius: 3px; margin-bottom: 4px; text-align: center;'>
-                    <span style='font-size: 9px; font-weight: bold;'>🔍 Streaming Outliers</span>
-                </div>
-                <div style='display: flex; flex-direction: column; gap: 2px; max-height: 180px; overflow-y: auto;'>
     """
-    
-    if splunk_outliers and len(splunk_outliers) > 0:
-        for outlier in splunk_outliers:
-            service = outlier.get('service', 'Unknown')
-            count = int(outlier.get('count', 0))
-            error_type = outlier.get('error_type', 'Error')
-            
-            # Truncate service name if too long
-            service_display = service.split('.')[-1] if '.' in service else service
-            service_display = service_display[:20] if len(service_display) > 20 else service_display
-            
-            # Color based on count severity
-            if count > 100:
-                bg_color = '#dc2626'  # Red - Critical
-            elif count > 50:
-                bg_color = '#f59e0b'  # Orange - Warning
-            elif count > 10:
-                bg_color = '#fb923c'  # Light orange
-            else:
-                bg_color = '#6b7280'  # Gray - Low
-            
-            # Build Splunk search link
-            splunk_search_url = f"https://arlo.splunkcloud.com/en-US/app/search/search?q=search%20index%3D*%20service%3D{service}%20earliest%3D-{timerange_hours}h"
-            
-            output += f"""
-                    <div style='background: {bg_color}; padding: 3px 4px; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: opacity 0.2s;' 
-                         onclick="window.open('{splunk_search_url}', '_blank')" 
-                         title='Click to view {service} errors in Splunk ({error_type}: {count} occurrences)'
-                         onmouseover="this.style.opacity='0.85'" 
-                         onmouseout="this.style.opacity='1'">
-                        <div style='font-size: 7px; color: white; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;'>{service_display}</div>
-                        <div style='font-size: 9px; color: white; font-weight: bold; margin-left: 4px;'>{count}</div>
-                    </div>
-            """
-    else:
-        output += """
-                    <div style='text-align: center; padding: 8px; color: #6b7280; font-size: 7px;'>
-                        ✅ No outliers detected
-                    </div>
-        """
-    
-    output += f"""
-                </div>
-            </div>
-            
-            <!-- AWS cost (Cost Explorer) -->
-            <div style='background: white; padding: 6px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-                <div style='background: #ff9900; color: white; padding: 3px 4px; border-radius: 3px; margin-bottom: 4px; text-align: center;'>
-                    <span style='font-size: 9px; font-weight: bold;'>☁️ AWS cost</span>
-                </div>
-    """
-    
-    if not aws_data.get("error"):
-        cost_yesterday = aws_data.get("cost_yesterday", 0)
 
-        if cost_yesterday > 1000:
-            cost_bg = '#dc2626'
-        elif cost_yesterday > 500:
-            cost_bg = '#f59e0b'
-        else:
-            cost_bg = '#10b981'
-
-        aws_console_url = 'https://console.aws.amazon.com/cost-management/home'
-
+    if is_full:
         output += f"""
-                <div style='background: {cost_bg}; padding: 4px; border-radius: 3px; color: white; cursor: pointer; transition: opacity 0.2s;'
-                     onclick="window.open('{aws_console_url}', '_blank')"
-                     title='Click to view AWS Cost Explorer'
-                     onmouseover="this.style.opacity='0.9'"
-                     onmouseout="this.style.opacity='1'">
-                    <div style='text-align: center;'>
-                        <div style='font-size: 6px; opacity: 0.9; margin-bottom: 2px;'>Yesterday cost</div>
-                        <div style='font-size: 14px; font-weight: bold;'>${cost_yesterday:.2f}</div>
-                    </div>
-                </div>
-        """
-    else:
-        output += f"""
-                <div style='text-align: center; padding: 8px; color: #6b7280; font-size: 7px;'>
-                    ⚠️ Not configured
-                </div>
-        """
-    
-    output += f"""
-            </div>
         </div>
         
         <!-- Main Content Area -->
@@ -6084,17 +7120,6 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
     """
     
     # Build environment layout (1 or 3 columns depending on mode)
-    # Using same blue color for all environments to avoid confusion
-    env_config = {
-        'production': {'icon': '🔵', 'color': '#3b82f6'},
-        'goldendev': {'icon': '🔵', 'color': '#3b82f6'},
-        'goldenqa': {'icon': '🔵', 'color': '#3b82f6'},
-        'qa': {'icon': '🔵', 'color': '#3b82f6'},
-        'samsung_prod': {'icon': '📱', 'color': '#0ea5e9'},
-        'adt_prod': {'icon': '🏠', 'color': '#8b5cf6'},
-    }
-    
-    # Adjust grid columns based on number of environments
     # Samsung: two columns — service mosaics (left) + Splunk REST viewer (right)
     if environment == 'samsung':
         output += """
@@ -6107,231 +7132,12 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         output += f"""
     <div style='display: grid; grid-template-columns: {grid_template}; gap: 3px;'>
     """
-    
+
     for env in environments:
-        if environment == 'samsung':
-            config = {'icon': '📱', 'color': '#0ea5e9'}
-        else:
-            config = env_config[env]
-        env_services = [s for s in all_statuses if s['environment'] == env]
-        
-        # Sort services alphabetically
-        env_services.sort(key=lambda x: x['service'].lower())
-        
-        # Samsung: group by APM naming — hmsguard-samsung-{env}, backend-pp-samsung-{env}, etc.
-        if environment == 'samsung':
-            def _sk(s):
-                return (s.get('service') or '').lower()
+        output += _sm_render_dd_env_column_html(
+            env, all_statuses, environment, environments, timerange=timerange
+        )
 
-            def _is_samsung_partner(sk):
-                return (
-                    sk.startswith('backend-pp')
-                    or 'pp-samsung' in sk
-                    or 'pp_samsung' in sk
-                )
-
-            def _is_samsung_hmsguard(sk):
-                return 'hmsguard' in sk
-
-            partner_svcs = [s for s in env_services if _is_samsung_partner(_sk(s))]
-            _pkeys = {(s['service'], s['environment']) for s in partner_svcs}
-            hmg_svcs = [
-                s for s in env_services
-                if _is_samsung_hmsguard(_sk(s)) and (s['service'], s['environment']) not in _pkeys
-            ]
-            _hkeys = {(s['service'], s['environment']) for s in hmg_svcs}
-            other_svcs = [
-                s for s in env_services
-                if (s['service'], s['environment']) not in _pkeys
-                and (s['service'], s['environment']) not in _hkeys
-            ]
-            for _grp in (partner_svcs, hmg_svcs, other_svcs):
-                _grp.sort(key=lambda x: (x.get('service') or '').lower())
-
-            service_groups = []
-            if hmg_svcs:
-                service_groups.append({
-                    'name': 'HMSGUARD',
-                    'icon': '🛡️',
-                    'color': '#0ea5e9',
-                    'services': hmg_svcs,
-                })
-            if partner_svcs:
-                service_groups.append({
-                    'name': 'Partner Platform',
-                    'icon': '🤝',
-                    'color': '#0284c7',
-                    'services': partner_svcs,
-                })
-            if other_svcs:
-                service_groups.append({
-                    'name': 'Samsung services',
-                    'icon': '📱',
-                    'color': '#06b6d4',
-                    'services': other_svcs,
-                })
-            if not service_groups and env_services:
-                service_groups.append({
-                    'name': 'Samsung',
-                    'icon': '📱',
-                    'color': '#0ea5e9',
-                    'services': list(env_services),
-                })
-        else:
-            # For other environments, use single group
-            service_groups = [{
-                'name': env.upper(),
-                'icon': config['icon'],
-                'color': config['color'],
-                'services': env_services
-            }]
-        
-        # Render each service group
-        for group in service_groups:
-            group_services = group['services']
-            
-            if not group_services:
-                continue
-            
-            # Count statuses for this group (○ = inactive/unknown, header only — not listed in bands)
-            group_healthy = sum(1 for s in group_services if s['status'] == 'healthy')
-            group_warning = sum(1 for s in group_services if s['status'] == 'warning')
-            group_critical = sum(1 for s in group_services if s['status'] == 'critical')
-            group_nosig = sum(1 for s in group_services if s['status'] in ('inactive', 'unknown'))
-            output += f"""
-        <div>
-            <!-- Group Header -->
-            <div style='background: {group['color']}; color: white; padding: 6px 8px; border-radius: 5px 5px 0 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-                <div style='display: flex; justify-content: space-between; align-items: center;'>
-                    <div style='font-size: 11px; font-weight: bold;'>
-                        {group['icon']} {group['name']}
-                    </div>
-                    <div style='font-size: 8px; opacity: 0.9;'>
-                        ✓ {group_healthy} | ⚠ {group_warning} | ✗ {group_critical} | ○ {group_nosig}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Services: single operational band — warning/critical tiles first, then healthy -->
-            <div style='padding: {'12px' if len(environments) == 1 else '10px'}; background: #f8fafc; border-radius: 0 0 8px 8px; min-height: 80px;'>
-        """
-            issue_svcs = sorted(
-                [s for s in group_services if s['status'] in ('critical', 'warning')],
-                key=lambda s: (0 if s['status'] == 'critical' else 1, -s['error_rate'], -s['errors']),
-            )
-            healthy_svcs = sorted(
-                [s for s in group_services if s['status'] == 'healthy'],
-                key=lambda x: x['service'].lower(),
-            )
-            dd_site_chips = os.getenv('DD_SITE', 'datadoghq.com')
-            op_tile_count = len(issue_svcs) + len(healthy_svcs)
-
-            if op_tile_count:
-                output += f"""
-            <div class='sm-band-healthy'>
-            <div class='sm-section-label' style='margin-top:0;'>Operational — {op_tile_count}</div>
-            <div class='sm-op-tiles'>
-        """
-            for svc in issue_svcs:
-                dd_site_tile = os.getenv('DD_SITE', 'datadoghq.com')
-                service_name = svc['service']
-                dd_url = (
-                    f"{datadog_ui_origin(dd_site_tile)}/apm/service/"
-                    f"{quote(service_name, safe='')}/overview?env={quote(env, safe='')}"
-                )
-                is_crit = svc['status'] == 'critical'
-                tile_mod = 'sm-op-tile--crit' if is_crit else 'sm-op-tile--warn'
-                alert_tile = ' service-box-alert' if svc['status'] in ('warning', 'critical') else ''
-                icon = '✕' if is_crit else '⚠'
-                tip_bits = [
-                    f"APM: {service_name}",
-                    f"{svc['requests']:,} req · ERR {svc['error_rate']}%",
-                ]
-                if svc.get('pd_incident'):
-                    tip_bits.append('PD')
-                if svc.get('high_latency') and svc.get('p95_latency'):
-                    tip_bits.append(f"P95 {svc['p95_latency']:.0f}ms")
-                if svc.get('traffic_drop'):
-                    tip_bits.append('Traffic drop vs 7d')
-                elif svc.get('traffic_variance') is not None:
-                    tip_bits.append(f"Traffic {svc['traffic_variance']:+.0f}% vs 7d")
-                t_name = html.escape(svc['service'])
-                t_err = html.escape(f"{svc['error_rate']}")
-                url_attr = html.escape(dd_url, quote=True)
-                hover_j = _sm_hover_json_attr(_sm_hover_service_payload(svc, env, page_environment=environment))
-                output += f"""
-                <div class='sm-tip-wrap' data-sm-hover="{hover_j}">
-                <a class='sm-op-tile {tile_mod}{alert_tile}' href="{url_attr}" target="_blank" rel="noopener">
-                    <div class='sm-op-tile-icon'>{icon}</div>
-                    <div class='sm-op-tile-name'>{t_name}</div>
-                    <div class='sm-op-tile-metric'>{t_err}%</div>
-                    <div class='sm-op-tile-metric-lbl'>ERR</div>
-                </a>
-                </div>
-                """
-            for hsvc in healthy_svcs:
-                t_url = f"{datadog_ui_origin(dd_site_chips)}/apm/service/{hsvc['service']}/overview?env={env}"
-                t_name = html.escape(hsvc['service'])
-                t_err = html.escape(f"{hsvc['error_rate']}")
-                hover_j = _sm_hover_json_attr(_sm_hover_service_payload(hsvc, env, page_environment=environment))
-                output += f"""
-                <div class='sm-tip-wrap' data-sm-hover="{hover_j}">
-                <div class='sm-op-tile' onclick="window.open('{t_url}', '_blank')">
-                    <div class='sm-op-tile-icon'>✓</div>
-                    <div class='sm-op-tile-name'>{t_name}</div>
-                    <div class='sm-op-tile-metric'>{t_err}%</div>
-                    <div class='sm-op-tile-metric-lbl'>ERR</div>
-                </div>
-                </div>
-                """
-            if op_tile_count:
-                output += """
-            </div>
-            </div>
-        """
-            # Samsung: show inactive/unknown as tiles too (operational band omits them; wrong DD env used to hide all six).
-            nosig_svcs = sorted(
-                [s for s in group_services if s.get("status") in ("inactive", "unknown")],
-                key=lambda x: (x.get("service") or "").lower(),
-            )
-            if environment == "samsung" and nosig_svcs:
-                dd_site_nosig = os.getenv("DD_SITE", "datadoghq.com")
-                output += f"""
-            <div class="sm-band-nosig">
-            <div class="sm-section-label" style="margin-top:0;">No APM signal — {len(nosig_svcs)}</div>
-            <div class="sm-op-tiles">
-        """
-                for svc in nosig_svcs:
-                    service_name = svc["service"]
-                    dd_url = (
-                        f"{datadog_ui_origin(dd_site_nosig)}/apm/service/"
-                        f"{quote(service_name, safe='')}/overview?env={quote(env, safe='')}"
-                    )
-                    st = svc.get("status") or "unknown"
-                    icon = "○" if st == "inactive" else "?"
-                    t_name = html.escape(service_name)
-                    url_attr = html.escape(dd_url, quote=True)
-                    lbl = "idle" if st == "inactive" else "unknown"
-                    hover_j = _sm_hover_json_attr(_sm_hover_service_payload(svc, env, page_environment=environment))
-                    output += f"""
-                <div class="sm-tip-wrap" data-sm-hover="{hover_j}">
-                <a class="sm-op-tile sm-op-tile--nosig" href="{url_attr}" target="_blank" rel="noopener">
-                    <div class="sm-op-tile-icon">{icon}</div>
-                    <div class="sm-op-tile-name">{t_name}</div>
-                    <div class="sm-op-tile-metric">—</div>
-                    <div class="sm-op-tile-metric-lbl">{html.escape(lbl)}</div>
-                </a>
-                </div>
-                """
-                output += """
-            </div>
-            </div>
-        """
-            output += """
-            </div>
-        </div>
-        """
-    
     if environment == "samsung":
         output += """
     </div>
@@ -6410,7 +7216,8 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         print(f"⚠️ Error saving metrics to database: {e}")
     
     # Cache the result
-    _write_sm_mem_cache(_status_cache, cache_key, output)
+    if is_full:
+        _write_sm_mem_cache(_status_cache, cache_key, output)
     
     # Clean old cache entries (keep only last 5)
     if len(_status_cache) > 5:
@@ -6419,3 +7226,169 @@ def status_monitor_dashboard(timerange: int = 1, environment: str = None, force_
         _mem_cache_saved_at.pop(oldest_key, None)
     
     return output
+
+
+def _sm_incr_sidebar_fast_html(pd_counts: dict, arlo_services_status: list, timerange: int) -> str:
+    """PagerDuty + Arlo + US Infra (Splunk P0 loads in #sm-inc-sidebar-splunk)."""
+    pd_triggered = int(pd_counts.get("triggered") or 0)
+    pd_acknowledged = int(pd_counts.get("acknowledged") or 0)
+    pd_resolved = int(pd_counts.get("resolved") or 0)
+    if pd_triggered > 0:
+        pd_bg_color, pd_blink_class = "#dc2626", "pd-status-blink"
+    elif pd_acknowledged > 0:
+        pd_bg_color, pd_blink_class = "#f59e0b", "pd-status-blink"
+    else:
+        pd_bg_color, pd_blink_class = "#10b981", ""
+    pd_sem_link_esc = html.escape(_sm_pagerduty_external_incidents_url(), quote=True)
+    infra_exceptions_count = 0
+    infra_bg_color, infra_icon, infra_status = "#10b981", "🟢", "HEALTHY"
+    infra_dashboard_url = "https://arlo.splunkcloud.com/en-GB/app/search/us_infra_exceptions"
+    arlo_cells = ""
+    if arlo_services_status:
+        for service in arlo_services_status:
+            service_name = service["name"]
+            status = service["status"]
+            bg_color = "#dc2626" if status == "critical" else "#f59e0b" if status == "warning" else "#10b981"
+            short_name = service_name.replace("Live ", "").replace("Video ", "")
+            arlo_cells += f"""
+                    <div style='background: {bg_color}; padding: 7px 8px; border-radius: 5px; text-align: center;'>
+                        <div style='font-size: 10px; color: white; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>{html.escape(short_name)}</div>
+                    </div>"""
+    else:
+        arlo_cells = """<div style='grid-column:1/-1;text-align:center;padding:12px;color:#6b7280;font-size:11px;'>No data available</div>"""
+    return f"""
+            <div style='background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;'>
+                <div style='display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;'>
+                    <h3 style='font-size: 15px; font-weight: 700; color: #111827; margin: 0;'>🚨 PagerDuty</h3>
+                    <a href="{pd_sem_link_esc}" target="_blank" rel="noopener noreferrer" style="font-size:10px;font-weight:800;color:#2563eb;text-decoration:none;">Incidents ↗</a>
+                </div>
+                <a href="{pd_sem_link_esc}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;color:inherit;">
+                <div class='{pd_blink_class}' style='display:flex;justify-content:space-between;gap:12px;padding:12px;background:{pd_bg_color};border-radius:8px;color:white;'>
+                    <div style='text-align:center;flex:1;'><div style='font-size:24px;font-weight:700;'>{pd_triggered}</div><div style='font-size:10px;opacity:0.9;'>Triggered</div></div>
+                    <div style='text-align:center;flex:1;'><div style='font-size:24px;font-weight:700;'>{pd_acknowledged}</div><div style='font-size:10px;opacity:0.9;'>Ack</div></div>
+                    <div style='text-align:center;flex:1;'><div style='font-size:24px;font-weight:700;'>{pd_resolved}</div><div style='font-size:10px;opacity:0.9;'>Resolved</div></div>
+                </div></a>
+            </div>
+            <div style='background: #ffffff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e5e7eb; margin-top:12px;'>
+                <div style='margin-bottom: 12px;'><h3 style='font-size: 15px; font-weight: 700; color: #111827; margin: 0;'>🎯 Arlo Platform</h3></div>
+                <div style='display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;'>{arlo_cells}</div>
+            </div>
+            <div style='background: white; padding: 6px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top:12px;'>
+                <div style='background: #00c853; color: white; padding: 3px 4px; border-radius: 3px; margin-bottom: 4px; text-align: center;'>
+                    <span style='font-size: 9px; font-weight: bold;'>🏗️ US Infra Exceptions</span>
+                </div>
+                <div style='background: {infra_bg_color}; padding: 5px; border-radius: 3px; color: white; cursor: pointer;' onclick="window.open('{infra_dashboard_url}', '_blank')">
+                    <div style='text-align:center;'><div style='font-size:16px;'>{infra_icon}</div><div style='font-size:7px;font-weight:bold;'>{infra_status}</div></div>
+                    <div style='text-align:center;border-top:1px solid rgba(255,255,255,0.3);padding-top:3px;'>
+                        <div style='font-size:14px;font-weight:bold;'>{infra_exceptions_count:,}</div>
+                        <div style='font-size:6px;opacity:0.9;'>Exceptions (last {timerange}h)</div>
+                    </div>
+                </div>
+            </div>
+    """
+
+
+def status_monitor_partial(
+    part: str,
+    *,
+    timerange: int = 1,
+    environment: str | None = None,
+    force_refresh: bool = False,
+    session_id: str | None = None,
+    dd_env: str | None = None,
+) -> dict:
+    """
+    Incremental /statusmonitor/<env> fragments. Client loads bootstrap first, then parallel parts.
+    """
+    part = (part or "").strip().lower()
+    try:
+        services, dd_environments = _sm_resolve_services_and_environments(environment)
+    except ValueError as e:
+        return {"success": False, "error": str(e), "part": part}
+
+    sid = (session_id or "").strip() or uuid.uuid4().hex
+    _sm_incr_session_ensure(
+        sid,
+        environment=environment,
+        timerange=timerange,
+        force_refresh=force_refresh,
+        services=services,
+        dd_environments=dd_environments,
+    )
+
+    if part == "meta":
+        return {
+            "success": True,
+            "part": "meta",
+            "session_id": sid,
+            "environment": environment,
+            "dd_environments": dd_environments,
+            "layout": "samsung" if environment == "samsung" else "default",
+        }
+
+    if part == "bootstrap":
+        html = status_monitor_dashboard(
+            timerange=timerange,
+            environment=environment,
+            force_refresh=force_refresh,
+            fragment="bootstrap",
+            incr_session_id=sid,
+        )
+        return {"success": True, "part": "bootstrap", "session_id": sid, "html": html}
+
+    if part == "sidebar_fast":
+        html = status_monitor_dashboard(
+            timerange=timerange,
+            environment=environment,
+            force_refresh=force_refresh,
+            fragment="sidebar_fast",
+            incr_session_id=sid,
+            skip_splunk=True,
+        )
+        return {"success": True, "part": "sidebar_fast", "session_id": sid, "html": html}
+
+    if part == "sidebar_splunk":
+        html = status_monitor_dashboard(
+            timerange=timerange,
+            environment=environment,
+            force_refresh=force_refresh,
+            fragment="sidebar_splunk",
+            incr_session_id=sid,
+        )
+        return {"success": True, "part": "sidebar_splunk", "session_id": sid, "html": html}
+
+    if part == "apm":
+        if not dd_env:
+            return {"success": False, "error": "dd_env required for part=apm", "part": part}
+        html = status_monitor_dashboard(
+            timerange=timerange,
+            environment=environment,
+            force_refresh=force_refresh,
+            fragment="env_column",
+            only_dd_env=dd_env,
+            incr_session_id=sid,
+            skip_splunk=True,
+        )
+        sess = _sm_incr_sessions.get(sid) or {}
+        ready = len(sess.get("statuses_by_env") or {}) >= len(dd_environments)
+        return {
+            "success": True,
+            "part": "apm",
+            "session_id": sid,
+            "dd_env": dd_env,
+            "html": html,
+            "ready_for_finalize": ready,
+        }
+
+    if part == "finalize":
+        html = status_monitor_dashboard(
+            timerange=timerange,
+            environment=environment,
+            force_refresh=force_refresh,
+            fragment="finalize",
+            incr_session_id=sid,
+            skip_splunk=True,
+        )
+        return {"success": True, "part": "finalize", "session_id": sid, "html": html}
+
+    return {"success": False, "error": f"Unknown part: {part}", "part": part}

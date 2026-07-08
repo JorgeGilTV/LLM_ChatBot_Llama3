@@ -498,6 +498,53 @@ body {
     transform: scale(0.96);
 }
 
+/* Home shortcuts row — same look as GOC Onboarding / ADT EP / AWS Operations */
+.gv-shortcut-btn {
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: inherit;
+    line-height: 1.25;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.gv-shortcut-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.gv-shortcut-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.gv-shortcut-btn:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.gv-shortcut-btn--teal {
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+}
+
+.gv-shortcut-btn--teal:hover:not(:disabled) {
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.45);
+}
+
+.top-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
 /* Home page — environment status hub (inside tools column) */
 .env-hub-home {
     margin-bottom: 0.75rem;

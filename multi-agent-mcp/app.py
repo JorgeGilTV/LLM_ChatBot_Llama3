@@ -2132,6 +2132,100 @@ def api_extension_chat():
     )
 
 
+@flask_app.route("/api/shift/report", methods=["POST"])
+def api_shift_report():
+    """
+    Shift handoff table: PagerDuty, Datadog, Slack, GRM calendar + Jira GRM tickets for a fixed shift window.
+    mode: shift1 (Mexico 11:30–20:00) | shift2 (20:00–02:30) | shift3 (02:30–11:30) Mexico time
+    """
+    data = request.get_json(silent=True) or {}
+    mode = str(data.get("mode") or "shift1").strip().lower()
+    try:
+        from tools.shift_report import _normalize_shift_mode
+
+        mode = _normalize_shift_mode(mode)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    send_slack = bool(data.get("send_slack", False))
+    start = time.time()
+
+    try:
+        from tools.shift_report import generate_shift_report
+        from tools.issues_context import html_to_plain_text
+        from tools.bedrock_tool import summarize_page_for_slack
+
+        report = generate_shift_report(mode)
+        html_result = report["html"]
+        answer_text = report.get("plain_text") or html_to_plain_text(html_result)
+        exec_time = round(time.time() - start, 2)
+
+        slack_sent = False
+        if send_slack:
+            webhook = (os.getenv("SLACK_WEBHOOK_URL") or "").strip()
+            if not webhook:
+                return jsonify(
+                    {
+                        "success": True,
+                        "result": html_result,
+                        "summary": report.get("summary"),
+                        "row_count": report.get("row_count", 0),
+                        "csv": report.get("csv"),
+                        "mode": mode,
+                        "label": report["label"],
+                        "window_start": report["window_start"],
+                        "window_end": report["window_end"],
+                        "timezone": report["timezone"],
+                        "sources": report["sources"],
+                        "exec_time": exec_time,
+                        "slack_sent": False,
+                        "slack_error": _SLACK_WEBHOOK_MISSING_MSG,
+                    }
+                ), 200
+
+            page_title = f"GocView Shift — {report['label']}"
+            summary = summarize_page_for_slack(answer_text, page_title, "")
+            slack_payload = _slack_summary_blocks_payload(summary, page_title, "")
+            r = post_incoming_webhook(webhook, slack_payload, timeout=(15, 90))
+            if r.status_code != 200:
+                return jsonify(
+                    {
+                        "success": True,
+                        "result": html_result,
+                        "summary": report.get("summary"),
+                        "row_count": report.get("row_count", 0),
+                        "csv": report.get("csv"),
+                        "mode": mode,
+                        "label": report["label"],
+                        "exec_time": exec_time,
+                        "slack_sent": False,
+                        "slack_error": f"Slack returned HTTP {r.status_code}",
+                    }
+                ), 200
+            slack_sent = True
+
+        return jsonify(
+            {
+                "success": True,
+                "result": html_result,
+                "summary": report.get("summary"),
+                "row_count": report.get("row_count", 0),
+                "csv": report.get("csv"),
+                "mode": mode,
+                "label": report["label"],
+                "window_start": report["window_start"],
+                "window_end": report["window_end"],
+                "timezone": report["timezone"],
+                "sources": report["sources"],
+                "exec_time": exec_time,
+                "slack_sent": slack_sent,
+            }
+        )
+    except Exception as e:
+        logging.exception("Shift report mode=%s", mode)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 def _extension_quick_search(input_text: str) -> str:
     """
     Onboarding-style quick lookup: Confluence Wiki + short Bedrock answer (no MCP / deep triage).

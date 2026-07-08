@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -201,3 +202,78 @@ async def run_jira_mcp_search(session, question: str, max_results: int = 25) -> 
     except Exception:
         return None
     return None
+
+
+def _mcp_result_text(result: Any) -> str:
+    text = ""
+    if hasattr(result, "content"):
+        for item in result.content:
+            if hasattr(item, "text"):
+                text += item.text
+    return text
+
+
+async def fetch_jira_issues_by_keys(
+    session,
+    keys: list[str],
+    *,
+    max_results: int = 50,
+) -> dict[str, Any]:
+    """
+    Fetch Jira issues by key (e.g. GRM-3543).
+    Returns {issues: [...], jql: str, requested_keys: [...], found_keys: [...]}.
+    """
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in keys:
+        key = (raw or "").strip().upper()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+
+    if not normalized:
+        return {"issues": [], "jql": "", "requested_keys": [], "found_keys": []}
+
+    cloud_id = await resolve_atlassian_cloud_id(session)
+    if not cloud_id:
+        return {
+            "issues": [],
+            "jql": "",
+            "requested_keys": normalized,
+            "found_keys": [],
+            "error": "Atlassian cloudId not resolved",
+        }
+
+    limit = max(1, min(max_results, 50))
+    keys_for_jql = normalized[:limit]
+    jql = f"key in ({', '.join(keys_for_jql)}) ORDER BY updated DESC"
+
+    try:
+        result = await session.call_tool(
+            JIRA_SEARCH_TOOL,
+            {"cloudId": cloud_id, "jql": jql, "maxResults": limit},
+        )
+        text = _mcp_result_text(result)
+        if not text.strip():
+            return {"issues": [], "jql": jql, "requested_keys": normalized, "found_keys": []}
+        data = json.loads(text)
+        issues = data.get("issues") if isinstance(data, dict) else []
+        if not isinstance(issues, list):
+            issues = []
+        found_keys = [str(i.get("key") or "").upper() for i in issues if isinstance(i, dict)]
+        return {
+            "issues": issues,
+            "jql": jql,
+            "requested_keys": normalized,
+            "found_keys": [k for k in found_keys if k],
+        }
+    except Exception as exc:
+        logging.exception("Jira fetch by keys failed")
+        return {
+            "issues": [],
+            "jql": jql,
+            "requested_keys": normalized,
+            "found_keys": [],
+            "error": str(exc),
+        }

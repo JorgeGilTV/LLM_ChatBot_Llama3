@@ -4,7 +4,13 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-def ask_bedrock(prompt: str, selected_tools: list = None, enable_mcp_access: bool = False) -> str:
+def ask_bedrock(
+    prompt: str,
+    selected_tools: list = None,
+    enable_mcp_access: bool = False,
+    temperature: float = 0.7,
+    max_tokens: int = 8000,
+) -> str:
     """
     Call AWS Bedrock API using Claude Sonnet 4.6 with optional MCP tool access
     
@@ -97,14 +103,14 @@ IMPORTANT: Return ONLY the HTML content, without wrapping it in markdown code bl
         # Prepare the request body
         request_body = {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 8000,  # Increased from 4096 to allow longer responses (Claude Sonnet 4 max: 8192)
+            "max_tokens": max_tokens,
             "messages": [
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            "temperature": 0.7
+            "temperature": temperature
         }
         
         # Call Bedrock API

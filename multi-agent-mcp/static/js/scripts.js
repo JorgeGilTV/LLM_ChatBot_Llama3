@@ -442,6 +442,82 @@ function sendMainPageSlackSummary() {
 
 window.sendMainPageSlackSummary = sendMainPageSlackSummary;
 
+const SHIFT_REPORT_LABELS = {
+    shift1: 'Shift 1 — Mexico (11:30–20:00)',
+    shift2: 'Shift 2 (20:00–02:30)',
+    shift3: 'Shift 3 (02:30–11:30)',
+};
+
+/** Shift handoff table: MintMCP + GRM for a fixed 8h rotation slot */
+async function runShiftReport(mode) {
+    const shiftMode = mode || 'shift1';
+    const label = SHIFT_REPORT_LABELS[shiftMode] || shiftMode;
+    const toolsLabel = `${label} · PagerDuty, Datadog, Slack, GRM, Jira, Outlook`;
+
+    showLoading([label]);
+    document.querySelectorAll('[data-shift-report]').forEach(function (btn) {
+        btn.disabled = true;
+    });
+    const loadingToolsList = document.getElementById('loading-tools-list');
+    if (loadingToolsList) {
+        loadingToolsList.textContent = toolsLabel;
+    }
+
+    try {
+        const res = await fetch('/api/shift/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: shiftMode, send_slack: true }),
+        });
+        const data = await res.json();
+        clearInterval(counterInterval);
+        hideLoadingOverlay();
+        document.getElementById('loading-message').innerHTML = '';
+
+        const resultsBox = document.getElementById('results-box');
+        if (!data.success) {
+            resultsBox.innerHTML = `<div style="padding:16px;border-left:4px solid #f56565;background:#fee;">
+                <strong>❌ ${label} failed</strong><p>${(data.error || 'Unknown error').replace(/</g, '&lt;')}</p></div>`;
+            return;
+        }
+
+        const meta = [
+            data.label || label,
+            data.row_count != null ? `${data.row_count} rows` : null,
+            data.exec_time != null ? `${data.exec_time}s` : null,
+            data.slack_sent ? 'Slack ✓' : (data.slack_error ? `Slack: ${data.slack_error}` : null),
+        ].filter(Boolean).join(' · ');
+
+        const csvBlob = data.csv
+            ? `data:text/csv;charset=utf-8,${encodeURIComponent(data.csv)}`
+            : '';
+        const csvName = `gocview-${shiftMode}-${new Date().toISOString().slice(0, 10)}.csv`;
+
+        resultsBox.innerHTML = `
+            <div style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:linear-gradient(135deg,#1e3a5f,#0f172a);color:#e2e8f0;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div><strong>${label} table</strong> — ${meta}</div>
+                ${csvBlob ? `<a href="${csvBlob}" download="${csvName}" style="padding:6px 12px;background:#217346;color:#fff;border-radius:6px;text-decoration:none;font-weight:700;font-size:12px;">📥 Download Excel (.csv)</a>` : ''}
+            </div>
+            ${data.result || '<p>No report content</p>'}
+        `;
+        setTimeout(() => addResultActions(resultsBox), 300);
+        showNotification(`✅ ${label} report ready`);
+    } catch (err) {
+        clearInterval(counterInterval);
+        hideLoadingOverlay();
+        document.getElementById('loading-message').innerHTML = '';
+        const resultsBox = document.getElementById('results-box');
+        resultsBox.innerHTML = `<div style="padding:16px;border-left:4px solid #f56565;background:#fee;">
+            <strong>❌ ${label} failed</strong><p>${(err && err.message ? err.message : 'Network error').replace(/</g, '&lt;')}</p></div>`;
+    } finally {
+        document.querySelectorAll('[data-shift-report]').forEach(function (btn) {
+            btn.disabled = false;
+        });
+    }
+}
+
+window.runShiftReport = runShiftReport;
+
 function expandAllSections() {
     // Expand all subsections in the active tab
     const activeTab = document.querySelector('.tab-content[style*="display: block"]');

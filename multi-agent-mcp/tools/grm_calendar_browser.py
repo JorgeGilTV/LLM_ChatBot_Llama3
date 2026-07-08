@@ -232,6 +232,55 @@ def load_calendar_events_browser_style(
     return raw_events, partial
 
 
+def walk_subcalendar_id_name_pairs(payload: object) -> list[tuple[str, str]]:
+    """Collect (subCalendarId, name) pairs from Team Calendars subcalendars.json payload."""
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def walk(node: object) -> None:
+        if node is None:
+            return
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+        elif isinstance(node, dict):
+            sc = node.get("subCalendar")
+            if isinstance(sc, dict):
+                sid = str(sc.get("id") or "").strip()
+                name = str(sc.get("name") or sc.get("summary") or "").strip()
+                if sid and sid not in seen:
+                    seen.add(sid)
+                    pairs.append((sid, name))
+            for ch in ("childSubCalendars", "childSubCals", "payload"):
+                if ch in node and node[ch] is not None:
+                    walk(node[ch])
+
+    if isinstance(payload, dict):
+        walk(payload.get("payload"))
+    else:
+        walk(payload)
+    return pairs
+
+
+def match_subcalendar_ids_by_name_patterns(
+    payload: object,
+    patterns: list[str],
+) -> list[tuple[str, str]]:
+    """Return [(id, name), ...] for sub-calendars whose name contains any pattern."""
+    needles = [p.strip().lower() for p in patterns if (p or "").strip()]
+    if not needles:
+        return []
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for sid, name in walk_subcalendar_id_name_pairs(payload):
+        lname = name.lower()
+        if any(n in lname for n in needles):
+            if sid not in seen:
+                seen.add(sid)
+                out.append((sid, name))
+    return out
+
+
 def list_space_subcalendars_for_name_match(
     email: str,
     token: str,

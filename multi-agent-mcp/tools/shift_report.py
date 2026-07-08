@@ -23,7 +23,7 @@ from tools.deployments_calendar import (
     _internal_deployments_api_url,
     _internal_deployments_http_timeout,
 )
-from tools.jira_mcp import fetch_jira_issues_by_keys
+from tools.jira_mcp import fetch_jira_grm_updated_in_window, fetch_jira_issues_by_keys
 from tools.mcp_connect import get_mcp_api_key, open_mcp_session
 
 PD_LIST_INCIDENTS = "pagerduty__list_incidents"
@@ -308,7 +308,7 @@ async def _resolve_prod_dep_channel_id(session) -> str | None:
     )
 
 
-async def _fetch_pagerduty(session, start_utc: datetime, end_utc: datetime) -> str:
+async def _fetch_pagerduty_mcp(session, start_utc: datetime, end_utc: datetime) -> str:
     try:
         result = await session.call_tool(
             PD_LIST_INCIDENTS,
@@ -324,6 +324,168 @@ async def _fetch_pagerduty(session, start_utc: datetime, end_utc: datetime) -> s
     except Exception as exc:
         logging.exception("PagerDuty MCP fetch failed")
         return json.dumps({"error": str(exc)})
+
+
+def _shift_pd_partner_dashboards() -> list[tuple[str, str]]:
+    """External status boards for partner incidents (Samsung, ADT, etc.)."""
+    raw = (os.getenv("SHIFT_PD_PARTNER_DASHBOARD_IDS") or "").strip()
+    if raw.lower() in ("0", "false", "off", "none"):
+        return []
+    if raw:
+        boards: list[tuple[str, str]] = []
+        for part in raw.split(","):
+            piece = part.strip()
+            if not piece:
+                continue
+            if ":" in piece:
+                bid, label = piece.split(":", 1)
+                boards.append((bid.strip(), label.strip() or bid.strip()))
+            else:
+                boards.append((piece, piece))
+        return boards
+    boards = []
+    samsung = (os.getenv("SAMSUNG_STATUS_DASHBOARD_ID") or "PRBJIO4").strip()
+    adt = (os.getenv("ADT_STATUS_DASHBOARD_ID") or "PK1QF1G").strip()
+    if samsung and samsung.lower() not in ("0", "false", "off", "none"):
+        boards.append((samsung, "Samsung"))
+    if adt and adt.lower() not in ("0", "false", "off", "none"):
+        boards.append((adt, "ADT"))
+    return boards
+
+
+def _pd_parse_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pd_incident_in_window(incident: dict[str, Any], start_utc: datetime, end_utc: datetime) -> bool:
+    for field in ("created_at", "last_status_change_at", "resolved_at"):
+        ts = _pd_parse_timestamp(incident.get(field))
+        if ts and start_utc <= ts <= end_utc:
+            return True
+    return False
+
+
+def _fetch_pagerduty_partner_boards(start_utc: datetime, end_utc: datetime) -> tuple[list[int], list[dict[str, Any]]]:
+    """PagerDuty incidents from partner external status boards in the shift window."""
+    token = (os.getenv("PAGERDUTY_API_TOKEN") or "").strip()
+    boards = _shift_pd_partner_dashboards()
+    if not token or not boards:
+        return [], []
+
+    try:
+        from tools.status_monitor import _pagerduty_fetch_slices
+    except ImportError:
+        logging.warning("status_monitor unavailable for partner PagerDuty boards")
+        return [], []
+
+    auto_numbers: list[int] = []
+    actionable: list[dict[str, Any]] = []
+    seen_numbers: set[int] = set()
+
+    for board_id, label in boards:
+        try:
+            _, incidents_by_status, _ = _pagerduty_fetch_slices(token, False, board_id)
+        except Exception as exc:
+            logging.warning("Partner PagerDuty board %s failed: %s", board_id, exc)
+            continue
+        for inc_list in incidents_by_status.values():
+            for incident in inc_list:
+                if not isinstance(incident, dict):
+                    continue
+                if not _pd_incident_in_window(incident, start_utc, end_utc):
+                    continue
+                num = incident.get("incident_number")
+                try:
+                    num_int = int(num) if num is not None else None
+                except (TypeError, ValueError):
+                    num_int = None
+                if num_int is not None and num_int in seen_numbers:
+                    continue
+                if _is_pagerduty_auto_resolved(incident):
+                    if num_int is not None:
+                        auto_numbers.append(num_int)
+                        seen_numbers.add(num_int)
+                    continue
+                slim = _slim_pagerduty_incident(incident)
+                slim["pd_scope"] = label
+                actionable.append(slim)
+                if num_int is not None:
+                    seen_numbers.add(num_int)
+
+    auto_numbers.sort()
+    return auto_numbers, actionable
+
+
+def _merge_pagerduty_shift_payload(
+    mcp_prepared: str,
+    partner_auto_numbers: list[int],
+    partner_actionable: list[dict[str, Any]],
+) -> str:
+    try:
+        data = json.loads(mcp_prepared)
+    except json.JSONDecodeError:
+        data = {"incidents": [], "auto_resolved_count": 0, "auto_resolved_incident_numbers": []}
+
+    incidents = [
+        i for i in (data.get("incidents") or []) if isinstance(i, dict)
+    ]
+    auto_numbers = list(data.get("auto_resolved_incident_numbers") or [])
+    seen = {int(n) for n in auto_numbers if n is not None}
+    seen.update(
+        int(i.get("incident_number"))
+        for i in incidents
+        if i.get("incident_number") is not None
+    )
+
+    for num in partner_auto_numbers:
+        if num not in seen:
+            auto_numbers.append(num)
+            seen.add(num)
+
+    for inc in partner_actionable:
+        num = inc.get("incident_number")
+        try:
+            num_int = int(num) if num is not None else None
+        except (TypeError, ValueError):
+            num_int = None
+        if num_int is not None and num_int in seen:
+            continue
+        incidents.append(inc)
+        if num_int is not None:
+            seen.add(num_int)
+
+    auto_numbers.sort()
+    boards = [label for _, label in _shift_pd_partner_dashboards()]
+    return json.dumps(
+        {
+            "auto_resolved_count": len(auto_numbers),
+            "auto_resolved_incident_numbers": auto_numbers,
+            "auto_resolved_note": (
+                "Auto-resolved PagerDuty incidents are summarized by count only — not listed individually."
+                if auto_numbers
+                else ""
+            ),
+            "incidents": incidents,
+            "partner_boards_included": boards,
+            "scopes_included": ["account"] + boards,
+        },
+        indent=2,
+    )
+
+
+async def _fetch_pagerduty(session, start_utc: datetime, end_utc: datetime) -> str:
+    mcp_prepared = await _fetch_pagerduty_mcp(session, start_utc, end_utc)
+    partner_auto, partner_actionable = _fetch_pagerduty_partner_boards(start_utc, end_utc)
+    return _merge_pagerduty_shift_payload(mcp_prepared, partner_auto, partner_actionable)
 
 
 def _is_pagerduty_auto_resolved(incident: dict[str, Any]) -> bool:
@@ -1094,12 +1256,227 @@ async def _fetch_jira_for_grm_ids(session, grm_ids: list[str]) -> str:
                 "count": len(issues),
                 "issues": issues,
                 "error": payload.get("error"),
+                "source": "discovered_keys",
             },
             indent=2,
         )
     except Exception as exc:
         logging.exception("Jira GRM lookup failed")
         return json.dumps({"error": str(exc), "requested_keys": grm_ids})
+
+
+async def _fetch_jira_grm_in_window(session, start_utc: datetime, end_utc: datetime) -> str:
+    """GRM Jira tickets updated during the shift (prod + partner)."""
+    limit = max(1, min(int(os.getenv("SHIFT_JIRA_GRM_LIMIT", "25")), 50))
+    try:
+        payload = await fetch_jira_grm_updated_in_window(
+            session,
+            start_utc,
+            end_utc,
+            max_results=limit,
+            include_partner_terms=True,
+        )
+        issues = [
+            _slim_jira_issue(issue)
+            for issue in (payload.get("issues") or [])
+            if isinstance(issue, dict)
+        ]
+        return json.dumps(
+            {
+                "count": len(issues),
+                "issues": issues,
+                "found_keys": payload.get("found_keys") or [],
+                "jql": payload.get("jql"),
+                "window_utc": payload.get("window_utc"),
+                "error": payload.get("error"),
+                "source": "shift_window",
+            },
+            indent=2,
+        )
+    except Exception as exc:
+        logging.exception("Jira GRM window fetch failed")
+        return json.dumps({"error": str(exc), "issues": [], "count": 0})
+
+
+def _merge_jira_shift_payloads(*raw_payloads: str) -> str:
+    issues_by_key: dict[str, dict[str, Any]] = {}
+    requested_keys: list[str] = []
+    missing_keys: list[str] = []
+    jql_parts: list[str] = []
+    errors: list[str] = []
+
+    for raw in raw_payloads:
+        if not (raw or "").strip():
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if data.get("error"):
+            errors.append(str(data["error"]))
+        if data.get("jql"):
+            jql_parts.append(str(data["jql"]))
+        for key in data.get("requested_keys") or []:
+            k = str(key).upper()
+            if k and k not in requested_keys:
+                requested_keys.append(k)
+        for key in data.get("missing_keys") or []:
+            k = str(key).upper()
+            if k and k not in missing_keys:
+                missing_keys.append(k)
+        for issue in data.get("issues") or []:
+            if not isinstance(issue, dict):
+                continue
+            key = str(issue.get("key") or "").upper()
+            if key:
+                issues_by_key[key] = issue
+
+    found = sorted(issues_by_key.keys())
+    still_missing = [k for k in requested_keys if k not in issues_by_key]
+    for k in missing_keys:
+        if k not in still_missing:
+            still_missing.append(k)
+
+    return json.dumps(
+        {
+            "count": len(issues_by_key),
+            "issues": list(issues_by_key.values()),
+            "requested_keys": requested_keys,
+            "found_keys": found,
+            "missing_keys": still_missing,
+            "jql": " | ".join(jql_parts),
+            "includes_shift_window_grm": True,
+            "includes_partner_grm": True,
+            "errors": errors[:3],
+        },
+        indent=2,
+    )
+
+
+def _normalize_team_calendar_events_minimal(payload: object) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [e for e in payload if isinstance(e, dict)]
+    if isinstance(payload, dict):
+        for key in ("events", "payload", "values", "allEvents"):
+            val = payload.get(key)
+            if isinstance(val, list):
+                return [e for e in val if isinstance(e, dict)]
+    return []
+
+
+def _team_calendar_event_title(event: dict[str, Any]) -> str:
+    for key in ("what", "title", "summary", "name"):
+        val = event.get(key)
+        if val:
+            return str(val).strip()
+    return "Untitled Deployment"
+
+
+def _team_calendar_event_start_utc(event: dict[str, Any]) -> datetime | None:
+    for key in ("start", "startDate", "startDateTime", "fromDateTime"):
+        val = event.get(key)
+        if val is None:
+            continue
+        if isinstance(val, dict):
+            for sub in ("iso", "dateTime", "date", "value"):
+                if val.get(sub):
+                    val = val[sub]
+                    break
+        if isinstance(val, (int, float)):
+            sec = val / 1000.0 if val > 1e12 else float(val)
+            try:
+                return datetime.fromtimestamp(sec, tz=timezone.utc)
+            except (OSError, ValueError, OverflowError):
+                continue
+        if isinstance(val, str) and val.strip():
+            try:
+                dt = datetime.fromisoformat(val.strip().replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            except ValueError:
+                continue
+    return None
+
+
+def _shift_grm_partner_subcalendar_patterns() -> list[str]:
+    raw = (os.getenv("SHIFT_GRM_PARTNER_SUBCALENDAR_NAMES") or "Partner,Samsung,ADT").strip()
+    if raw.lower() in ("0", "false", "off", "none"):
+        return []
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def _fetch_partner_grm_deployments_in_window(start_utc: datetime, end_utc: datetime) -> list[dict[str, Any]]:
+    """Extra GRM calendar rows from partner-named sub-calendars (Samsung/ADT/Partner)."""
+    patterns = _shift_grm_partner_subcalendar_patterns()
+    email = (os.getenv("ATLASSIAN_EMAIL") or "").strip()
+    token = (os.getenv("CONFLUENCE_TOKEN") or "").strip()
+    if not patterns or not email or not token:
+        return []
+
+    from tools.grm_calendar_browser import (
+        deployments_space_key,
+        fetch_events_for_subcalendar_ids,
+        list_space_subcalendars_for_name_match,
+        match_subcalendar_ids_by_name_patterns,
+    )
+
+    data, _base = list_space_subcalendars_for_name_match(email, token, deployments_space_key())
+    if data is None:
+        return []
+
+    matches = match_subcalendar_ids_by_name_patterns(data, patterns)
+    if not matches:
+        return []
+
+    start_iso = start_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    end_iso = end_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    sub_ids = [sid for sid, _name in matches]
+    raw_events, _partial = fetch_events_for_subcalendar_ids(
+        email,
+        token,
+        sub_ids,
+        start_iso,
+        end_iso,
+        normalize_events=_normalize_team_calendar_events_minimal,
+    )
+
+    rows: list[dict[str, Any]] = []
+    for event in raw_events:
+        start_dt = _team_calendar_event_start_utc(event)
+        if start_dt is None or not (start_utc <= start_dt <= end_utc):
+            continue
+        title = _team_calendar_event_title(event)
+        rows.append(
+            {
+                "timestamp": start_dt.isoformat(),
+                "date": start_dt.strftime("%b %d, %Y"),
+                "time": start_dt.strftime("%H:%M"),
+                "service": title,
+                "calendar_scope": "partner",
+                "subcalendars": [name for _sid, name in matches],
+            }
+        )
+    rows.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    return rows
+
+
+def _merge_grm_deployment_rows(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for rows in groups:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            key = f"{row.get('timestamp')}|{row.get('service')}".lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(row)
+    merged.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    return merged
 
 
 def _fetch_grm_deployments_in_window(start_utc: datetime, end_utc: datetime) -> str:
@@ -1129,7 +1506,17 @@ def _fetch_grm_deployments_in_window(start_utc: datetime, end_utc: datetime) -> 
             except Exception:
                 continue
         rows.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
-        return json.dumps({"count": len(rows), "deployments": rows}, indent=2)
+        partner_rows = _fetch_partner_grm_deployments_in_window(start_utc, end_utc)
+        rows = _merge_grm_deployment_rows(rows, partner_rows)
+        return json.dumps(
+            {
+                "count": len(rows),
+                "deployments": rows,
+                "includes_partner_calendar": bool(partner_rows),
+                "partner_subcalendar_patterns": _shift_grm_partner_subcalendar_patterns(),
+            },
+            indent=2,
+        )
     except requests.RequestException:
         hours = max(1, int((end_utc - start_utc).total_seconds() / 3600) + 1)
         try:
@@ -1174,7 +1561,7 @@ Display timezone: {window.tz_name}
 
 DATA (do not invent rows; dedupe same incident across sources when obvious):
 
-=== PagerDuty (auto-resolved = count only; others listed individually) ===
+=== PagerDuty (account + partner boards Samsung/ADT; auto-resolved = count only) ===
 {_truncate(pagerduty_raw, 12000)}
 
 === Datadog active alerts (prod, P1–P3, last triggered within 24h only) ===
@@ -1188,10 +1575,10 @@ DATA (do not invent rows; dedupe same incident across sources when obvious):
 
 Note: release_threads[] is parsed from Production Release Checklist thread replies (Post Check List / Pre Check List).
 
-=== GRM deployments (calendar window) ===
+=== GRM deployments (calendar window — prod + partner sub-calendars) ===
 {_truncate(grm_raw, 6000)}
 
-=== Jira GRM tickets (status for each GRM id found in sources) ===
+=== Jira GRM tickets (discovered ids + all GRM updated in shift window, incl. partner) ===
 {_truncate(jira_raw, 12000)}
 
 === Outlook emails tied to shift issues (GRM, INC, PagerDuty, deployment, escalation) ===
@@ -1216,7 +1603,7 @@ JSON schema:
 
 Rules:
 - One row per distinct item.
-- PagerDuty: if auto_resolved_count > 0, add exactly ONE row (source = "PagerDuty", service_or_topic = "Auto-resolved", summary = "<N> PagerDuty incidents auto-resolved", status = "resolved", action_item = "—"). Do NOT list auto-resolved incidents individually. For incidents in the incidents array (triggered, acknowledged, or resolved with assignee), one row each.
+- PagerDuty: if auto_resolved_count > 0, add exactly ONE row (source = "PagerDuty", service_or_topic = "Auto-resolved", summary = "<N> PagerDuty incidents auto-resolved", status = "resolved", action_item = "—"). Do NOT list auto-resolved incidents individually. For incidents in the incidents array (triggered, acknowledged, or resolved with assignee), one row each. Include partner-board incidents (pd_scope Samsung/ADT) when present.
 - Datadog: one row per prioritized alert monitor listed (source = "Datadog", status = "alert"). Use the priority field from data (P1/P2/P3). Stale monitors (not triggered in the last 24h) are already excluded — do not add them.
 - Slack Prod Dep: one row per item in release_threads[] (source = "Slack Prod Dep"). Use postcheck_status exactly:
   • done/in deployment — pre-check done and deployment in progress
@@ -1224,8 +1611,8 @@ Rules:
   • Done — post-check complete (use exactly "Done", not "postcheck done")
   • pending postcheck — release started, pre/post not complete
   Put grm_id in service_or_topic, release_summary in summary, latest_activity in action_item.
-- GRM calendar: rows for deployments scheduled/completed in the shift window (source = "GRM", status = scheduled/completed/info). Calendar data alone does not describe ticket outcome — pair with Jira when available.
-- Jira: one row per GRM ticket returned in the Jira section (source = "Jira"). Put the GRM key (e.g. GRM-3543) in service_or_topic. Use ticket status (Scheduled, In Progress, SO Sign Off, Done, Closed, etc.), summary, assignee, and updated time. action_item = next step for on-call based on current Jira status (not just calendar schedule).
+- GRM calendar: rows for deployments scheduled/completed in the shift window (source = "GRM", status = scheduled/completed/info). Includes partner sub-calendars (Samsung/ADT/Partner). Calendar data alone does not describe ticket outcome — pair with Jira when available.
+- Jira: one row per GRM ticket in the Jira section (source = "Jira") — both tickets discovered from other sources and GRM tickets updated during the shift (prod + partner). Put the GRM key (e.g. GRM-3543) in service_or_topic. Use ticket status (Scheduled, In Progress, SO Sign Off, Done, Closed, etc.), summary, assignee, and updated time. action_item = next step for on-call based on current Jira status (not just calendar schedule).
 - When the same GRM appears in Slack/GRM calendar and Jira, prefer one merged row with Jira status/details (source = "Jira" or "GRM" with Jira status in summary).
 - Outlook: include emails from the Outlook section (source = "Outlook"). Rows are grouped server-side by sender name; related_topic in service_or_topic, subjects combined in summary.
 - Jira / GRM: rows with the same GRM id or ticket name are grouped server-side into one row.
@@ -1734,7 +2121,15 @@ async def _collect_shift_data(window: ShiftWindow) -> dict[str, Any]:
             grm_raw,
         ]
         grm_ids = _extract_grm_ids(*issue_blobs)
-        jira_raw = await _fetch_jira_for_grm_ids(session, grm_ids)
+        jira_by_ids_raw, jira_window_raw = await asyncio.gather(
+            _fetch_jira_for_grm_ids(session, grm_ids),
+            _fetch_jira_grm_in_window(session, window.start_utc, window.end_utc),
+        )
+        jira_raw = _merge_jira_shift_payloads(jira_by_ids_raw, jira_window_raw)
+        grm_ids = sorted(
+            set(grm_ids)
+            | set(_extract_grm_ids(jira_raw))
+        )
         outlook_raw = await _fetch_related_outlook_emails(
             session,
             window,

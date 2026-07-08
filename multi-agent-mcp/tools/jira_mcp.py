@@ -277,3 +277,88 @@ async def fetch_jira_issues_by_keys(
             "found_keys": [],
             "error": str(exc),
         }
+
+
+def _jira_jql_datetime(dt) -> str:
+    from datetime import timezone
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+
+async def fetch_jira_grm_updated_in_window(
+    session,
+    start_utc,
+    end_utc,
+    *,
+    max_results: int = 50,
+    include_partner_terms: bool = True,
+) -> dict[str, Any]:
+    """
+    Fetch GRM project tickets updated inside a shift window (prod + partner releases).
+  """
+    from datetime import timezone
+
+    limit = max(1, min(max_results, 50))
+    start_s = _jira_jql_datetime(start_utc)
+    end_s = _jira_jql_datetime(end_utc)
+    clauses = [
+        (
+            f'project = GRM AND updated >= "{start_s}" AND updated <= "{end_s}" '
+            f"ORDER BY updated DESC"
+        )
+    ]
+    if include_partner_terms:
+        partner_clause = (
+            f'project = GRM AND updated >= "{start_s}" AND updated <= "{end_s}" AND '
+            '(summary ~ "partner" OR summary ~ "Samsung" OR summary ~ "ADT" OR '
+            'summary ~ "Verisure" OR summary ~ "partnerplatform" OR labels = partner) '
+            "ORDER BY updated DESC"
+        )
+        clauses.append(partner_clause)
+
+    cloud_id = await resolve_atlassian_cloud_id(session)
+    if not cloud_id:
+        return {
+            "issues": [],
+            "jql": clauses[0],
+            "found_keys": [],
+            "error": "Atlassian cloudId not resolved",
+        }
+
+    issues_by_key: dict[str, dict[str, Any]] = {}
+    jql_used: list[str] = []
+    for jql in clauses:
+        jql_used.append(jql)
+        try:
+            result = await session.call_tool(
+                JIRA_SEARCH_TOOL,
+                {"cloudId": cloud_id, "jql": jql, "maxResults": limit},
+            )
+            text = _mcp_result_text(result)
+            if not text.strip():
+                continue
+            data = json.loads(text)
+            issues = data.get("issues") if isinstance(data, dict) else []
+            if not isinstance(issues, list):
+                continue
+            for issue in issues:
+                if not isinstance(issue, dict):
+                    continue
+                key = str(issue.get("key") or "").upper()
+                if key and key not in issues_by_key:
+                    issues_by_key[key] = issue
+        except Exception as exc:
+            logging.warning("Jira GRM window query failed: %s", exc)
+
+    found = sorted(issues_by_key.keys())
+    return {
+        "issues": list(issues_by_key.values()),
+        "jql": " | ".join(jql_used),
+        "found_keys": found,
+        "window_utc": {
+            "start": start_utc.astimezone(timezone.utc).isoformat(),
+            "end": end_utc.astimezone(timezone.utc).isoformat(),
+        },
+    }

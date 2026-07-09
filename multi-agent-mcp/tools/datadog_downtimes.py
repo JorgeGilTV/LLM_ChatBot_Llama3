@@ -65,6 +65,9 @@ DEFAULT_NOC_CREATOR_PATTERNS = (
 DEFAULT_NOC_TAG_PATTERNS = (
     "team:noc",
     "env:adt_prod",
+    "env:production",
+    "env:prod",
+    "env:prd",
     "host:partner",
     "adt_prod",
 )

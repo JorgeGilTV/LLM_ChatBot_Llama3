@@ -52,6 +52,7 @@ from tools.datadog_dashboards import (
     search_datadog_dashboards,
     search_datadog_services
 )
+from tools.datadog_downtimes import get_datadog_maintenance_windows
 from tools.splunk_tool import (
     read_splunk_p0_dashboard,
     read_splunk_p0_cvr_dashboard,
@@ -161,6 +162,27 @@ TOOL_REGISTRY = {
                 }
             }
         }
+    },
+    "datadog_maintenance_windows": {
+        "description": (
+            "List Datadog monitor downtimes (maintenance windows) from "
+            "https://arlo.datadoghq.com/monitors/downtimes — creator, schedule, active status. "
+            "Defaults to NOC team creators and next 24 hours."
+        ),
+        "function": get_datadog_maintenance_windows,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": (
+                        "Natural language question, e.g. 'maintenance windows next 24 hours' "
+                        "or 'downtimes last 48 hours'"
+                    ),
+                    "default": "maintenance windows next 24 hours",
+                }
+            },
+        },
     },
     "datadog_red_metrics": {
         "description": "Get Datadog RED metrics (Rate, Errors, Duration) for Arlo services",

@@ -1058,7 +1058,7 @@ async def ask_arlo_async(question: str = "") -> str:
                 filter_keywords = {
                     'jira': ['jira', 'ticket', 'tickets', 'issue', 'issues', 'epic', 'story', 'bug', 'incidencia'],
                     'confluence': ['confluence', 'wiki', 'document', 'page'],
-                    'datadog': ['datadog', 'metric', 'monitor', 'dashboard', 'apm'],
+                    'datadog': ['datadog', 'metric', 'monitor', 'dashboard', 'apm', 'downtime', 'maintenance window', 'maintenance windows'],
                     'pagerduty': ['pagerduty', 'incident', 'alert', 'oncall'],
                     'splunk': ['splunk', 'log', 'search'],
                     'aws': ['aws', 'cost', 'billing', 'account'],
@@ -2021,6 +2021,27 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
         # Import required modules at the start
         from tools.bedrock_tool import ask_bedrock
         from tools.deployments_calendar import get_grm_deployments
+        from tools.datadog_downtimes import (
+            get_datadog_maintenance_windows,
+            is_maintenance_window_question,
+        )
+        
+        # Check if question is about Datadog maintenance windows / downtimes
+        if is_maintenance_window_question(question):
+            print("🛠️ Detected Datadog maintenance window query")
+            maintenance_html = get_datadog_maintenance_windows(question)
+            return f"""
+        <div style='background-color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <div style='background: linear-gradient(135deg, #632ca6 0%, #4f46e5 100%); padding: 12px; border-radius: 6px; margin-bottom: 16px;'>
+                <h2 style='margin: 0; color: white; font-size: 16px;'>
+                    🤖 GocBedrock Response (Datadog Maintenance Windows)
+                </h2>
+            </div>
+            <div style='background-color: #f7fafc; padding: 16px; border-radius: 4px;'>
+                {maintenance_html}
+            </div>
+        </div>
+        """
         
         # Check if question is about deployments (before MCP)
         question_lower = question.lower()

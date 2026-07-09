@@ -1,6 +1,31 @@
 import requests, html
 from bs4 import BeautifulSoup
 
+ARLO_PUBLIC_STATUS_KEYWORDS = (
+    "status.arlo.com",
+    "status arlo",
+    "arlo status",
+    "arlo public status",
+    "public status page",
+    "status page",
+)
+
+
+def is_arlo_public_status_question(question: str) -> bool:
+    if not (question or "").strip():
+        return False
+    ql = question.lower()
+    if "status.arlo.com" in ql.replace(" ", ""):
+        return True
+    if "arlo status" in ql or "arlo public status" in ql:
+        return True
+    if "status page" in ql and "arlo" in ql:
+        return True
+    if ql.strip() in ("status?", "arlo status?", "what is arlo status"):
+        return True
+    return False
+
+
 def read_arlo_status(query: str) -> str:
     print("🔎 Leyendo el status de Arlo:", query)
     """

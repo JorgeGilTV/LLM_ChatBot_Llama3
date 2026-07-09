@@ -56,6 +56,28 @@ from tools.mcp_connect import (
 )
 
 
+def _mcp_call_result_text(result) -> str:
+    parts: list[str] = []
+    if hasattr(result, "content"):
+        for content in result.content:
+            if hasattr(content, "text"):
+                parts.append(content.text)
+    return "".join(parts)
+
+
+def _mcp_direct_response_html(title: str, body_html: str, gradient: str) -> str:
+    return f"""
+        <div style='background-color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <div style='background: {gradient}; padding: 12px; border-radius: 6px; margin-bottom: 16px;'>
+                <h2 style='margin: 0; color: white; font-size: 16px;'>{title}</h2>
+            </div>
+            <div style='background-color: #f7fafc; padding: 16px; border-radius: 4px;'>
+                {body_html}
+            </div>
+        </div>
+        """
+
+
 def _mcp_uses_local_server() -> bool:
     u = get_mcp_server_url().lower()
     return "127.0.0.1" in u or "localhost" in u
@@ -1059,7 +1081,12 @@ async def ask_arlo_async(question: str = "") -> str:
                     'jira': ['jira', 'ticket', 'tickets', 'issue', 'issues', 'epic', 'story', 'bug', 'incidencia'],
                     'confluence': ['confluence', 'wiki', 'document', 'page'],
                     'datadog': ['datadog', 'metric', 'monitor', 'dashboard', 'apm', 'downtime', 'maintenance window', 'maintenance windows'],
+                    'deployment': ['deployment', 'deploy', 'despliegue', 'release', 'grm', 'calendario', 'calendar', 'scheduled'],
                     'pagerduty': ['pagerduty', 'incident', 'alert', 'oncall'],
+                    'arlo_status': ['status.arlo', 'arlo status', 'status page', 'public status'],
+                    'noc_kt': ['noc kt', 'knowledge transfer', 'kt table', 'noc knowledge'],
+                    'status_monitor': ['status monitor', 'status wall', 'hub summary', 'environment health'],
+                    'shift_report': ['shift report', 'shift handoff', 'handoff report', 'turnover'],
                     'splunk': ['splunk', 'log', 'search'],
                     'aws': ['aws', 'cost', 'billing', 'account'],
                     'appbot': ['appbot', 'review', 'feedback', 'rating'],
@@ -1163,6 +1190,16 @@ async def ask_arlo_async(question: str = "") -> str:
                                 )
                             if category == 'confluence' and not name_match:
                                 name_match = 'confluence' in tool_name_lower
+                            if category == 'arlo_status' and not name_match:
+                                name_match = 'arlo_public_status' in tool_name_lower
+                            if category == 'noc_kt' and not name_match:
+                                name_match = 'noc_kt' in tool_name_lower
+                            if category == 'status_monitor' and not name_match:
+                                name_match = 'status_monitor' in tool_name_lower
+                            if category == 'shift_report' and not name_match:
+                                name_match = 'shift_report' in tool_name_lower
+                            if category == 'deployment' and not name_match:
+                                name_match = 'grm_deployments' in tool_name_lower
                             if name_match:
                                 filtered_tools.append(tool)
                                 break
@@ -2018,182 +2055,7 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
         """
     
     try:
-        # Import required modules at the start
         from tools.bedrock_tool import ask_bedrock
-        from tools.deployments_calendar import get_grm_deployments
-        from tools.datadog_downtimes import (
-            get_datadog_maintenance_windows,
-            is_maintenance_window_question,
-        )
-        
-        # Check if question is about Datadog maintenance windows / downtimes
-        if is_maintenance_window_question(question):
-            print("🛠️ Detected Datadog maintenance window query")
-            maintenance_html = get_datadog_maintenance_windows(question)
-            return f"""
-        <div style='background-color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-            <div style='background: linear-gradient(135deg, #632ca6 0%, #4f46e5 100%); padding: 12px; border-radius: 6px; margin-bottom: 16px;'>
-                <h2 style='margin: 0; color: white; font-size: 16px;'>
-                    🤖 GocBedrock Response (Datadog Maintenance Windows)
-                </h2>
-            </div>
-            <div style='background-color: #f7fafc; padding: 16px; border-radius: 4px;'>
-                {maintenance_html}
-            </div>
-        </div>
-        """
-        
-        # Check if question is about deployments (before MCP)
-        question_lower = question.lower()
-        deployment_keywords = ['deployment', 'deploy', 'despliegue', 'release', 'próximo', 
-                              'proximas', 'pasados', 'pasado', 'past', 'anteriores', 'previous', 
-                              'scheduled', 'programado', 'calendario', 'calendar', 'grm']
-        
-        is_deployment_query = any(kw in question_lower for kw in deployment_keywords)
-        
-        if is_deployment_query:
-            print("📅 Detected deployment query - using local GRM Deployments tool")
-            
-            # Detect if asking for past deployments
-            past_keywords = ['past', 'pasado', 'pasados', 'anteriores', 'previous', 'último', 'ultimos', 'last']
-            is_past_query = any(kw in question_lower for kw in past_keywords)
-            
-            # Extract time range if mentioned
-            limit_count = None  # Will limit results if user asked for specific number
-            
-            # Try to find time range with unit
-            timerange_match = re.search(r'(\d+)\s*(hora|hour|horas|hours|day|days|dia|dias)', question_lower)
-            if timerange_match:
-                timerange_hours = int(timerange_match.group(1))
-                unit = timerange_match.group(2)
-                if 'day' in unit or 'dia' in unit:
-                    timerange_hours *= 24  # Convert days to hours
-                print(f"⏰ Extracted time range: {timerange_hours} hours")
-            else:
-                # Try to find number without unit (e.g., "past 3 deployments")
-                number_match = re.search(r'(?:past|last|próximos?|últimos?|next)\s+(\d+)', question_lower)
-                if number_match:
-                    limit_count = int(number_match.group(1))
-                    # Use a large window to ensure we capture enough deployments
-                    timerange_hours = 72  # 3 days
-                    print(f"⏰ User asked for {limit_count} deployments → using {timerange_hours} hours window, will limit to {limit_count} results")
-                else:
-                    # No specific number mentioned - if it's a generic "últimos/past/next" query, show at least 4
-                    generic_plural_keywords = ['deployments', 'despliegues', 'releases', 'últimos', 'ultimos', 'past', 'próximos', 'proximos']
-                    if any(kw in question_lower for kw in generic_plural_keywords):
-                        timerange_hours = 96  # 4 days to capture enough deployments
-                        limit_count = 4 if is_past_query else 5  # Show at least 4 for past, 5 for future
-                        print(f"⏰ Generic plural query detected → using {timerange_hours} hours window, will show at least {limit_count} deployments")
-                    else:
-                        timerange_hours = 24  # Default for singular queries
-            
-            # If asking for past deployments, use negative timerange
-            if is_past_query:
-                print(f"⏮️  Query is for PAST deployments")
-                timerange_hours = -timerange_hours  # Negative = past
-            else:
-                print(f"⏭️  Query is for FUTURE deployments")
-            
-            # Call GRM deployments directly (passing limit via query parameter if needed)
-            query_param = f"limit:{limit_count}" if limit_count else ""
-            deployments_result = get_grm_deployments(query_param, timerange_hours)
-            
-            # Use Bedrock to generate a conversational response
-            time_context = "past" if is_past_query else "upcoming"
-            response_prompt = f"""You are GocBedrock, an AI assistant for Arlo infrastructure.
-
-User question: "{question}"
-
-Context: {time_context} deployments ({"last" if is_past_query else "next"} {abs(timerange_hours)} hours).
-
-GRM Calendar Data:
-{deployments_result}
-
-Use this EXACT HTML - BE VISUAL:
-
-<div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-width: 100%;">
-    
-    <!-- Hero Header -->
-    <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%); padding: 28px 24px; border-radius: 12px; margin-bottom: 28px; box-shadow: 0 12px 48px rgba(139, 92, 246, 0.3);">
-        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
-            <span style="font-size: 36px;">📅</span>
-            <h1 style="margin: 0; color: white; font-size: 26px; font-weight: 800; letter-spacing: -0.8px;">Deployment Calendar</h1>
-        </div>
-        <div style="display: inline-block; background: rgba(255,255,255,0.25); padding: 8px 16px; border-radius: 24px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3);">
-            <span style="color: white; font-size: 14px; font-weight: 700;">📌 {time_context.capitalize()}</span>
-        </div>
-    </div>
-    
-    <!-- Count Card -->
-    <div style="display: inline-flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #f0f9ff, #e0f2fe); padding: 16px 24px; border-radius: 12px; border: 2px solid #38bdf8; margin-bottom: 28px; box-shadow: 0 6px 20px rgba(56, 189, 248, 0.2);">
-        <span style="font-size: 28px;">📊</span>
-        <div>
-            <div style="font-size: 32px; font-weight: 900; color: #0369a1; letter-spacing: -1px; line-height: 1;">[X]</div>
-            <div style="font-size: 12px; color: #075985; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DEPLOYMENTS</div>
-        </div>
-    </div>
-    
-    <!-- Deployments Table -->
-    <div style="background: white; padding: 26px; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 6px 20px rgba(0,0,0,0.1);">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-            <span style="font-size: 30px;">🚀</span>
-            <h2 style="margin: 0; color: #0f172a; font-size: 22px; font-weight: 800;">Deployments</h2>
-        </div>
-        
-        <table style="width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden;">
-            <thead>
-                <tr style="background: linear-gradient(to right, #f8fafc, #f1f5f9);">
-                    <th style="padding: 14px 16px; text-align: left; color: #475569; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1;">🚀 Service</th>
-                    <th style="padding: 14px 16px; text-align: left; color: #475569; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1;">📅 Date/Time</th>
-                    <th style="padding: 14px 16px; text-align: left; color: #475569; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1;">📝 Details</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr style="border-bottom: 1px solid #f1f5f9;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
-                    <td style="padding: 14px 16px; color: #6366f1; font-weight: 700; font-size: 14px;">[Service]</td>
-                    <td style="padding: 14px 16px; color: #64748b; font-weight: 500;">[Date]</td>
-                    <td style="padding: 14px 16px; color: #475569;">[Details]</td>
-                </tr>
-                <!-- OR if no deployments -->
-                <tr>
-                    <td colspan="3" style="padding: 32px; text-align: center;">
-                        <span style="font-size: 48px; display: block; margin-bottom: 12px;">✨</span>
-                        <div style="color: #64748b; font-size: 15px; font-weight: 600;">No deployments in this period</div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    
-</div>
-
-Return ONLY the HTML (no markdown blocks)."""
-            
-            response_html = ask_bedrock(response_prompt, selected_tools=None)
-            
-            # Clean up any remaining markdown code blocks
-            if '```' in response_html:
-                match = re.search(r'```(?:html)?\s*\n(.*?)\n```', response_html, re.DOTALL)
-                if match:
-                    response_html = match.group(1)
-            
-            # Wrap response with tool info
-            calendar_type = "Past Deployments" if is_past_query else "Upcoming Deployments"
-            final_html = f"""
-        <div style='background-color: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 6px; margin-bottom: 16px;'>
-                <h2 style='margin: 0; color: white; font-size: 16px;'>
-                    🤖 GocBedrock Response (GRM Calendar - {calendar_type})
-                </h2>
-            </div>
-            <div style='background-color: #f7fafc; padding: 16px; border-radius: 4px;'>
-                {response_html}
-            </div>
-            {deployments_result}
-        </div>
-        """
-            
-            return final_html
         
         print("🔗 Connecting to MCP server...")
         async with open_mcp_session() as session:
@@ -2208,6 +2070,25 @@ Return ONLY the HTML (no markdown blocks)."""
                     raise Exception("No tools available from MCP server")
 
                 from tools.jira_mcp import is_jira_question, run_jira_mcp_search
+                from tools.mcp_intent_router import resolve_mcp_fast_route
+
+                fast_route = resolve_mcp_fast_route(question)
+                if fast_route:
+                    print(fast_route.log_label)
+                    fast_result = await session.call_tool(
+                        fast_route.tool_name,
+                        fast_route.arguments,
+                    )
+                    fast_html = _mcp_call_result_text(fast_result)
+                    if not fast_html.strip():
+                        fast_html = (
+                            f"<p style='color:#b45309;'>No response from {fast_route.tool_name}.</p>"
+                        )
+                    return _mcp_direct_response_html(
+                        fast_route.title,
+                        fast_html,
+                        fast_route.gradient,
+                    )
 
                 tool_results = []
                 if is_jira_question(question):
@@ -2265,7 +2146,16 @@ Guidelines:
 - Single Jira issue: atlassian-rovo__getJiraIssue with cloudId + issueIdOrKey
 - cloudId for arlo.atlassian.net: call atlassian-rovo__getAccessibleAtlassianResources if needed
 - For Confluence searches: use cql parameter on atlassian-rovo__searchConfluenceUsingCql
-- For Datadog: use query parameter with metric name
+- For Datadog metrics/dashboards: use datadog_red_metrics, datadog_red_adt, datadog_red_samsung, datadog_red_metrics_us, datadog_errors, datadog_samsung_errors
+- For Datadog maintenance windows / downtimes: use datadog_maintenance_windows with question
+- For GRM deployments / release calendar: use grm_deployments with question
+- For Arlo public status page (status.arlo.com): use arlo_public_status
+- For NOC KT / knowledge transfer table: use noc_kt_search with query
+- For Samsung PagerDuty external status board: use pagerduty_samsung_board
+- For shift handoff report: use shift_report with mode shift1|shift2|shift3 (slow, several minutes)
+- For status monitor hub / all environments health: use status_monitor_summary
+- For AWS CloudTrail lookup (admin): use aws_cloudtrail_search with resource_name + account_id
+- For AWS Connect health (admin): use aws_connect_monitor
 - If question asks for explanations/information, prioritize Confluence tools
 - If question is conversational, set needs_tools=false
 - Be selective - only call truly relevant tools
@@ -2658,7 +2548,16 @@ Respond in JSON format with:
 Guidelines:
 - For Jira searches: use jql parameter like 'text ~ "keywords"' or 'summary ~ "keywords"'
 - For Confluence searches: use cql parameter
-- For Datadog: use query parameter with metric name
+- For Datadog metrics/dashboards: use datadog_red_metrics, datadog_red_samsung, datadog_red_metrics_us, datadog_errors
+- For Datadog maintenance windows / downtimes: use datadog_maintenance_windows with question param
+- For GRM deployments / calendar: use grm_deployments with question param
+- For Arlo public status: use arlo_public_status
+- For NOC KT table: use noc_kt_search with query
+- For Samsung PagerDuty board: use pagerduty_samsung_board
+- For shift handoff: use shift_report (mode shift1|shift2|shift3)
+- For status monitor hub: use status_monitor_summary
+- For AWS CloudTrail: use aws_cloudtrail_search
+- For AWS Connect: use aws_connect_monitor
 - **IMPORTANT**: If question starts with "what", "how", "where", "why", "when", "que", "como", "donde" or asks for explanations/information, prioritize Confluence tools (wiki/documentation)
 - If question is conversational or doesn't need data lookup, set needs_tools=false
 - Be selective - only call tools that are truly relevant

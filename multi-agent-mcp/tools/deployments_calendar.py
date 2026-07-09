@@ -3,12 +3,114 @@ GRM Calendar Deployments Tool
 Fetches upcoming deployments from Confluence GRM Calendar
 """
 import os
+import re
 import requests
 import html
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
+
+DEPLOYMENT_KEYWORDS = (
+    "deployment",
+    "deploy",
+    "despliegue",
+    "release",
+    "próximo",
+    "proximas",
+    "pasados",
+    "pasado",
+    "past",
+    "anteriores",
+    "previous",
+    "scheduled",
+    "programado",
+    "calendario",
+    "calendar",
+    "grm",
+)
+
+
+def is_grm_deployment_question(question: str) -> bool:
+    if not (question or "").strip():
+        return False
+    ql = question.lower()
+    return any(kw in ql for kw in DEPLOYMENT_KEYWORDS)
+
+
+def parse_grm_deployment_query(question: str) -> tuple[str, int]:
+    """
+    Parse natural-language deployment questions.
+    Returns (query_param, timerange_hours) where negative hours = past window.
+    query_param may be 'limit:N' or a service filter substring.
+    """
+    question_lower = (question or "").lower()
+    past_keywords = (
+        "past",
+        "pasado",
+        "pasados",
+        "anteriores",
+        "previous",
+        "último",
+        "ultimos",
+        "last",
+    )
+    is_past_query = any(kw in question_lower for kw in past_keywords)
+    limit_count = None
+
+    timerange_match = re.search(
+        r"(\d+)\s*(hora|hour|horas|hours|day|days|dia|dias|día|días)",
+        question_lower,
+    )
+    if timerange_match:
+        timerange_hours = int(timerange_match.group(1))
+        unit = timerange_match.group(2)
+        if "day" in unit or "dia" in unit or "día" in unit:
+            timerange_hours *= 24
+    else:
+        number_match = re.search(
+            r"(?:past|last|próximos?|proximos|últimos?|ultimos|next)\s+(\d+)",
+            question_lower,
+        )
+        if number_match:
+            limit_count = int(number_match.group(1))
+            timerange_hours = 72
+        else:
+            generic_plural_keywords = (
+                "deployments",
+                "despliegues",
+                "releases",
+                "últimos",
+                "ultimos",
+                "past",
+                "próximos",
+                "proximos",
+            )
+            if any(kw in question_lower for kw in generic_plural_keywords):
+                timerange_hours = 96
+                limit_count = 4 if is_past_query else 5
+            else:
+                timerange_hours = 24
+
+    if is_past_query:
+        timerange_hours = -timerange_hours
+
+    query_param = f"limit:{limit_count}" if limit_count else ""
+    return query_param, timerange_hours
+
+
+def get_grm_deployments_mcp(
+    question: str = "",
+    query: str = "",
+    timerange_hours: int | None = None,
+) -> str:
+    """MCP entry point: structured args or natural-language question."""
+    if (question or "").strip() and query == "" and timerange_hours is None:
+        query_param, hours = parse_grm_deployment_query(question)
+        return get_grm_deployments(query_param, hours)
+    hours = 24 if timerange_hours is None else timerange_hours
+    return get_grm_deployments(query or "", hours)
+
 
 # Local /api/deployments/upcoming can take 25s+25s (two Confluence attempts) plus parsing — keep above that.
 def _internal_deployments_api_url() -> str:

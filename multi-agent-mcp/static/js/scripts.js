@@ -736,15 +736,138 @@ const SPLUNK_P0_TOOL_NAMES = new Set([
     'P0_ADT_Streaming',
     'P0_Streaming_US',
 ]);
+
+const MCP_TIMERANGE_TOOLS = new Set([
+    'MCP:datadog_search',
+    'MCP:datadog_services',
+    'MCP:datadog_red_metrics',
+    'MCP:datadog_red_adt',
+    'MCP:datadog_red_samsung',
+    'MCP:datadog_red_metrics_us',
+    'MCP:datadog_errors',
+    'MCP:datadog_samsung_errors',
+    'MCP:datadog_failed_pods',
+    'MCP:datadog_403_errors',
+    'MCP:splunk_p0_streaming',
+    'MCP:splunk_p0_cvr',
+    'MCP:splunk_p0_adt',
+    'MCP:splunk_p0_us_infra',
+    'MCP:grafana_dns_mapper',
+    'MCP:grafana_savant_z2',
+    'MCP:status_monitor_summary',
+]);
+
+const MCP_SPLUNK_P0_TOOLS = new Set([
+    'MCP:splunk_p0_streaming',
+    'MCP:splunk_p0_cvr',
+    'MCP:splunk_p0_adt',
+    'MCP:splunk_p0_us_infra',
+]);
 let _lastSplunkP0OnlySelection = false;
 
 function splunkP0OnlyToolSelection(selectedTools) {
-    return (
+    const legacy = (
         selectedTools.length > 0 &&
         selectedTools.every(function (t) {
             return SPLUNK_P0_TOOL_NAMES.has(t);
         })
     );
+    const mcp = (
+        selectedTools.length > 0 &&
+        selectedTools.every(function (t) {
+            return MCP_SPLUNK_P0_TOOLS.has(t);
+        })
+    );
+    return legacy || mcp;
+}
+
+function toolSelectionNeedsTimerange(selectedTools) {
+    const legacy = [
+        'DD_Red_Metrics', 'DD_Errors', 'DD_Red_ADT', 'DD_Red_Samsung',
+        'DD_Red_Metrics_US', 'DD_Samsung_Errors', 'DD_Failed_Pods', 'DD_403_Errors',
+        'P0_Streaming', 'P0_CVR_Streaming', 'P0_ADT_Streaming', 'P0_Streaming_US',
+    ];
+    if (legacy.some(function (t) { return selectedTools.includes(t); })) {
+        return true;
+    }
+    return selectedTools.some(function (t) { return MCP_TIMERANGE_TOOLS.has(t); });
+}
+
+function getToolSectionLogo(sectionKey) {
+    const logos = {
+        ai: '🤖',
+        datadog: '<img src="/static/images/logos/datadog.svg" class="section-logo" alt="Datadog">',
+        splunk: '<img src="/static/images/logos/splunk.svg" class="section-logo" alt="Splunk">',
+        pagerduty: '<img src="/static/images/logos/pagerduty.svg" class="section-logo" alt="PagerDuty">',
+        confluence: '<img src="/static/images/logos/confluence.svg" class="section-logo" alt="Confluence">',
+        slack: '<img src="/static/images/logos/slack.svg" class="section-logo" alt="Slack">',
+        grafana: '📈',
+        services: '🧩',
+        noc_ops: '🛡️',
+        aws: '☁️',
+        other: '🔧',
+    };
+    return logos[sectionKey] || '🔧';
+}
+
+function renderToolCheckboxSections(container, sections, groupedTools, idPrefix) {
+    sections.forEach(function (section) {
+        const tools = groupedTools[section.key];
+        if (!tools || tools.length === 0) return;
+
+        const categoryId = idPrefix + section.key;
+        const dropdownDiv = document.createElement('div');
+        dropdownDiv.className = 'tool-dropdown';
+
+        const header = document.createElement('div');
+        header.className = 'tool-dropdown-header';
+        header.style.borderLeftColor = section.color;
+        const dropdownId = 'dropdown-' + categoryId;
+        const selectAllId = 'select-all-' + categoryId;
+        const logo = getToolSectionLogo(section.key);
+        header.innerHTML =
+            '<span class="tool-dropdown-icon" onclick="toggleToolDropdown(\'' + dropdownId + '\', event)">' + logo + '</span>' +
+            '<span class="tool-dropdown-title" onclick="toggleToolDropdown(\'' + dropdownId + '\', event)">' + section.title + '</span>' +
+            '<span class="tool-dropdown-toggle" onclick="toggleToolDropdown(\'' + dropdownId + '\', event)">▼</span>';
+        dropdownDiv.appendChild(header);
+
+        const content = document.createElement('div');
+        content.className = 'tool-dropdown-content';
+        content.id = dropdownId;
+
+        const toolsContainer = document.createElement('div');
+        toolsContainer.className = 'tool-dropdown-items';
+
+        const selectAllLabel = document.createElement('label');
+        selectAllLabel.className = 'tool-item tool-item-main';
+        selectAllLabel.innerHTML =
+            '<input type="checkbox" id="' + selectAllId + '" onchange="toggleSelectAll(\'' + categoryId + '\', this.checked)">' +
+            '<span class="tool-item-text" style="font-weight: 700;">Select All</span>';
+        toolsContainer.appendChild(selectAllLabel);
+
+        const previewWrap = document.createElement('div');
+        previewWrap.className = 'tool-items-preview';
+        tools.forEach(function (tool) {
+            const label = document.createElement('label');
+            label.className = 'tool-item tool-item-sub';
+            label.title = tool.desc || tool.name || '';
+            const displayName = tool.name === 'Ask_ARLOCHAT' ? 'MCP_ARLO' : (tool.name || '');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = 'tool';
+            input.value = tool.value || tool.name || '';
+            const span = document.createElement('span');
+            span.className = 'tool-item-text';
+            span.textContent = displayName;
+            label.appendChild(input);
+            label.appendChild(span);
+            previewWrap.appendChild(label);
+        });
+        toolsContainer.appendChild(previewWrap);
+        content.appendChild(toolsContainer);
+        dropdownDiv.appendChild(content);
+        container.appendChild(dropdownDiv);
+    });
 }
 
 // Function to show/hide timerange selector based on selected tools
@@ -756,18 +879,7 @@ function setupTimeRangeSelector() {
         const selectedTools = Array.from(checkboxes).map(cb => cb.value);
         
         // Show timerange if any Datadog or Splunk tool is selected
-        const showTimeRange = selectedTools.includes('DD_Red_Metrics') || 
-                              selectedTools.includes('DD_Errors') ||
-                              selectedTools.includes('DD_Red_ADT') ||
-                              selectedTools.includes('DD_Red_Samsung') ||
-                              selectedTools.includes('DD_Red_Metrics_US') ||
-                              selectedTools.includes('DD_Samsung_Errors') ||
-                              selectedTools.includes('DD_Failed_Pods') ||
-                              selectedTools.includes('DD_403_Errors') ||
-                              selectedTools.includes('P0_Streaming') ||
-                              selectedTools.includes('P0_CVR_Streaming') ||
-                              selectedTools.includes('P0_ADT_Streaming') ||
-                              selectedTools.includes('P0_Streaming_US');
+        const showTimeRange = toolSelectionNeedsTimerange(selectedTools);
         
         if (timerangeContainer) {
             timerangeContainer.style.display = showTimeRange ? 'block' : 'none';
@@ -1972,167 +2084,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update timestamp initially
     updateLastUpdateTime();
 
-    // Cargar herramientas desde API
-    fetch('/api/tools')
-        .then(res => {
+    // Cargar catálogo unificado (MCP local + síntesis legacy)
+    fetch('/api/mcp/tools')
+        .then(function (res) {
             if (!res.ok) throw new Error('Error loading tools');
             return res.json();
         })
-        .then(data => {
+        .then(function (payload) {
             const toolList = document.getElementById('tool-list');
             if (!toolList) {
                 console.error('Tool list container not found');
                 return;
             }
-            
+
             toolList.innerHTML = '';
-            
-            if (!data || data.length === 0) {
-                toolList.innerHTML = '<p style="color: #666; padding: 10px;">No tools available</p>';
+
+            const categories = (payload && payload.categories) || [];
+            if (categories.length === 0) {
+                toolList.innerHTML = '<p style="color: #f56565; padding: 10px;">⚠️ No tools available.</p>';
                 return;
             }
-            
-            // Function to get logo for section
-            function getSectionLogo(sectionKey) {
-                const logos = {
-                    'datadog': '<img src="/static/images/logos/datadog.svg" class="section-logo" alt="Datadog">',
-                    'splunk': '<img src="/static/images/logos/splunk.svg" class="section-logo" alt="Splunk">',
-                    'pagerduty': '<img src="/static/images/logos/pagerduty.svg" class="section-logo" alt="PagerDuty">',
-                    'confluence': '<img src="/static/images/logos/confluence.svg" class="section-logo" alt="Confluence">',
-                    'slack': '<img src="/static/images/logos/slack.svg" class="section-logo" alt="Slack">',
-                    'other': '🔧'
-                };
-                return logos[sectionKey] || '🔧';
-            }
-            
-            // Function to categorize tools
-            function categorizeTool(toolName) {
-                if (toolName.startsWith('DD_') || toolName.includes('Datadog')) {
-                    return 'datadog';
-                } else if (toolName.startsWith('P0_') || toolName.includes('Splunk')) {
-                    return 'splunk';
-                } else if (toolName.includes('PagerDuty')) {
-                    return 'pagerduty';
-                } else if (
-                    toolName === 'Wiki' ||
-                    toolName === 'Owners' ||
-                    toolName === 'Arlo_Versions' ||
-                    toolName === 'Deployed_FW_Versions' ||
-                    toolName === 'Holiday_Oncall'
-                ) {
-                    return 'confluence';
-                } else if (toolName.includes('Slack')) {
-                    return 'slack';
-                } else if (toolName === 'Ask_ARLOCHAT') {
-                    return 'other';
-                }
-                return 'other';
-            }
-            
-            // Group tools by category
-            const groupedTools = {
-                confluence: [],
-                datadog: [],
-                pagerduty: [],
-                splunk: [],
-                slack: [],
-                other: []
-            };
-            
-            data.forEach(tool => {
-                const category = categorizeTool(tool.name);
-                groupedTools[category].push(tool);
-            });
-            
-            // Create sections with icons and names
-            const sections = [
-                { key: 'confluence', title: 'Confluence', color: '#0052CC' },
-                { key: 'datadog', title: 'Datadog', color: '#632CA6' },
-                { key: 'pagerduty', title: 'PagerDuty', color: '#06AC38' },
-                { key: 'splunk', title: 'Splunk', color: '#000000' },
-                { key: 'slack', title: 'Slack', color: '#4A154B' },
-                { key: 'other', title: 'Others', color: '#6b7280' }
-            ];
-            
-            sections.forEach(section => {
-                const tools = groupedTools[section.key];
-                if (tools.length === 0) return; // Skip empty sections
-                
-                // Create dropdown container
-                const dropdownDiv = document.createElement('div');
-                dropdownDiv.className = 'tool-dropdown';
-                
-                // Create dropdown header
-                const header = document.createElement('div');
-                header.className = 'tool-dropdown-header';
-                header.style.borderLeftColor = section.color;
-                const dropdownId = `dropdown-${section.key}`;
-                const selectAllId = `select-all-${section.key}`;
-                const logo = getSectionLogo(section.key);
-                header.innerHTML = `
-                    <span class="tool-dropdown-icon" onclick="toggleToolDropdown('${dropdownId}', event)">${logo}</span>
-                    <span class="tool-dropdown-title" onclick="toggleToolDropdown('${dropdownId}', event)">${section.title}</span>
-                    <span class="tool-dropdown-toggle" onclick="toggleToolDropdown('${dropdownId}', event)">
-                        ▼
-                    </span>
-                `;
-                dropdownDiv.appendChild(header);
-                
-                // Collapsed by default
-                const content = document.createElement('div');
-                content.className = 'tool-dropdown-content';
-                content.id = dropdownId;
-                
-                // Create tools container
-                const toolsContainer = document.createElement('div');
-                toolsContainer.className = 'tool-dropdown-items';
-                
-                // Add "Select All" checkbox at the top with main indentation
-                const selectAllLabel = document.createElement('label');
-                selectAllLabel.className = 'tool-item tool-item-main';
-                selectAllLabel.innerHTML = `
-                    <input type="checkbox" id="${selectAllId}" onchange="toggleSelectAll('${section.key}', this.checked)">
-                    <span class="tool-item-text" style="font-weight: 700;">Select All</span>
-                `;
-                toolsContainer.appendChild(selectAllLabel);
 
-                function createToolCheckboxLabel(tool) {
-                    const label = document.createElement('label');
-                    label.className = 'tool-item tool-item-sub';
-                    label.title = tool.desc || tool.name || '';
-                    const displayName = tool.name === 'Ask_ARLOCHAT' ? 'MCP_ARLO' : tool.name;
-                    const input = document.createElement('input');
-                    input.type = 'checkbox';
-                    input.name = 'tool';
-                    input.value = tool.name || '';
-                    const span = document.createElement('span');
-                    span.className = 'tool-item-text';
-                    span.textContent = displayName;
-                    label.appendChild(input);
-                    label.appendChild(span);
-                    return label;
-                }
-
-                // List every tool in this section (no "Show N more" fold) so nothing looks missing.
-                const previewWrap = document.createElement('div');
-                previewWrap.className = 'tool-items-preview';
-                tools.forEach(tool => {
-                    previewWrap.appendChild(createToolCheckboxLabel(tool));
-                });
-                toolsContainer.appendChild(previewWrap);
-                
-                content.appendChild(toolsContainer);
-                dropdownDiv.appendChild(content);
-                toolList.appendChild(dropdownDiv);
+            const grouped = {};
+            const sections = [];
+            categories.forEach(function (cat) {
+                grouped[cat.key] = cat.tools || [];
+                sections.push({ key: cat.key, title: cat.title, color: cat.color || '#6b7280' });
             });
-            
-            console.log(`✅ Loaded ${data.length} tools in ${sections.filter(s => groupedTools[s.key].length > 0).length} sections`);
-            
-            // Add event listeners to show/hide timerange selector
+            renderToolCheckboxSections(toolList, sections, grouped, 'tool-');
+
+            console.log('✅ Loaded ' + (payload.total_tools || 0) + ' tools in ' + categories.length + ' categories');
             setupTimeRangeSelector();
-            
         })
-        .catch(err => {
+        .catch(function (err) {
             console.error('Error loading tools:', err);
             const toolList = document.getElementById('tool-list');
             if (toolList) {

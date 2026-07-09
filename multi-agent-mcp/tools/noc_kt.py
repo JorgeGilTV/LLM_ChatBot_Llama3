@@ -2,6 +2,23 @@ import os
 import requests
 import html
 
+NOC_KT_KEYWORDS = (
+    "noc kt",
+    "noc knowledge",
+    "knowledge transfer",
+    "kt table",
+    "noc runbook",
+    "noc playbook",
+)
+
+
+def is_noc_kt_question(question: str) -> bool:
+    if not (question or "").strip():
+        return False
+    ql = question.lower()
+    return any(kw in ql for kw in NOC_KT_KEYWORDS)
+
+
 def noc_kt_search(query):
     print("🔎 Searching NOC KT table:", query)
 
@@ -66,3 +83,37 @@ def noc_kt_search(query):
     table_html += "</table>"
 
     return table_html
+
+
+def extract_noc_kt_query(question: str) -> str:
+    """Pull search term from natural-language NOC KT questions."""
+    q = (question or "").strip()
+    if not q:
+        return ""
+    ql = q.lower()
+    for marker in (
+        "search noc kt for",
+        "noc kt for",
+        "noc kt about",
+        "noc knowledge for",
+        "kt table for",
+        "noc kt ",
+        "kt table ",
+    ):
+        if marker in ql:
+            idx = ql.index(marker) + len(marker)
+            return q[idx:].strip(" :?.")
+    return q
+
+
+def noc_kt_search_mcp(query: str = "", question: str = "") -> str:
+    """MCP entry: search the NOC KT Confluence table."""
+    search = (query or "").strip()
+    if not search and (question or "").strip():
+        search = extract_noc_kt_query(question)
+    if not search:
+        return (
+            "<p style='color:#b45309;'>Provide a <code>query</code> or <code>question</code> "
+            "to search the NOC KT table (e.g. service name, escalation path).</p>"
+        )
+    return noc_kt_search(search)

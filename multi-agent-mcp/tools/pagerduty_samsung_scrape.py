@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import time
+import html as html_module
 from collections.abc import Mapping
 from typing import Any
 
@@ -216,3 +217,131 @@ def build_samsung_pagerduty_scrape_payload(dashboard_id: str) -> dict[str, Any]:
         "source": "scrape",
         "scrape_ms": int((time.time() - t0) * 1000),
     }
+
+
+SAMSUNG_BOARD_KEYWORDS = (
+    "samsung pagerduty",
+    "pagerduty samsung",
+    "samsung board",
+    "samsung incidents",
+    "samsung status dashboard",
+    "external status samsung",
+)
+
+
+def _default_samsung_dashboard_id() -> str:
+    v = os.getenv("SAMSUNG_STATUS_DASHBOARD_ID")
+    if v is None:
+        return "PRBJIO4"
+    s = str(v).strip()
+    if not s or s.lower() in ("off", "false", "no", "0", "none", "*"):
+        return "PRBJIO4"
+    return s
+
+
+def _external_status_url(dashboard_id: str, tab: str = "active") -> str:
+    sub = _subdomain()
+    base = f"https://{sub}.pagerduty.com/external-status-dashboard/{dashboard_id}/incidents"
+    if tab in ("active", "resolved", "pending"):
+        return f"{base}?tab={tab}"
+    return base
+
+
+def is_pagerduty_samsung_board_question(question: str) -> bool:
+    if not (question or "").strip():
+        return False
+    ql = question.lower()
+    if "samsung" not in ql:
+        return False
+    return any(kw in ql for kw in SAMSUNG_BOARD_KEYWORDS) or (
+        "pagerduty" in ql and "samsung" in ql
+    )
+
+
+def _filter_incident_rows(rows: list[dict], query: str) -> list[dict]:
+    q = (query or "").strip().lower()
+    if not q:
+        return rows
+    out = []
+    for row in rows:
+        blob = " ".join(
+            str(row.get(k) or "") for k in ("title", "service", "status", "number")
+        ).lower()
+        if q in blob:
+            out.append(row)
+    return out
+
+
+def _incidents_table_html(title: str, rows: list[dict]) -> str:
+    if not rows:
+        return f"<p style='color:#64748b;margin:8px 0;'>{html_module.escape(title)}: none</p>"
+    body = ""
+    for row in rows:
+        url = html_module.escape(str(row.get("url") or "#"))
+        num = html_module.escape(str(row.get("number") or "—"))
+        st = html_module.escape(str(row.get("status") or "—"))
+        svc = html_module.escape(str(row.get("service") or "—"))
+        tit = html_module.escape(str(row.get("title") or "Incident"))
+        body += (
+            f"<tr>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0;'>#{num}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0;'>{tit}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0;'>{svc}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0;'>{st}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #e2e8f0;'>"
+            f"<a href='{url}' target='_blank' rel='noopener'>Open ↗</a></td>"
+            f"</tr>"
+        )
+    return f"""
+    <h3 style='margin:16px 0 8px;color:#0f172a;'>{html_module.escape(title)}</h3>
+    <table style='width:100%;border-collapse:collapse;font-size:13px;'>
+      <thead>
+        <tr style='background:#f8fafc;'>
+          <th style='padding:8px;text-align:left;'>#</th>
+          <th style='padding:8px;text-align:left;'>Title</th>
+          <th style='padding:8px;text-align:left;'>Service</th>
+          <th style='padding:8px;text-align:left;'>Status</th>
+          <th style='padding:8px;text-align:left;'>Link</th>
+        </tr>
+      </thead>
+      <tbody>{body}</tbody>
+    </table>
+    """
+
+
+def get_pagerduty_samsung_board_html(
+    dashboard_id: str = "",
+    query: str = "",
+) -> str:
+    """MCP entry: scrape Samsung PagerDuty external status dashboard."""
+    bid = (dashboard_id or _default_samsung_dashboard_id()).strip()
+    try:
+        payload = build_samsung_pagerduty_scrape_payload(bid)
+    except Exception as exc:
+        logging.exception("Samsung PagerDuty scrape failed")
+        return (
+            f"<p style='color:#dc2626;'>Error scraping Samsung PagerDuty board "
+            f"{html_module.escape(bid)}: {html_module.escape(str(exc))}</p>"
+        )
+
+    active = _filter_incident_rows(payload.get("active") or [], query)
+    resolved = _filter_incident_rows(payload.get("recently_resolved") or [], query)
+    board_url = _external_status_url(bid, "active")
+
+    header = f"""
+    <div style='background:linear-gradient(135deg,#06b6d4 0%,#3b82f6 100%);padding:14px 16px;border-radius:8px;color:white;margin-bottom:12px;'>
+      <h2 style='margin:0;font-size:16px;'>Samsung PagerDuty External Status</h2>
+      <p style='margin:6px 0 0;font-size:12px;opacity:0.95;'>
+        Board <strong>{html_module.escape(bid)}</strong> ·
+        triggered {int(payload.get('triggered') or 0)} ·
+        acknowledged {int(payload.get('acknowledged') or 0)} ·
+        scrape {int(payload.get('scrape_ms') or 0)}ms ·
+        <a href='{html_module.escape(board_url)}' target='_blank' rel='noopener' style='color:#e0f2fe;'>Open dashboard ↗</a>
+      </p>
+    </div>
+    """
+    return (
+        header
+        + _incidents_table_html("Active / Ongoing", active)
+        + _incidents_table_html("Recently resolved", resolved)
+    )

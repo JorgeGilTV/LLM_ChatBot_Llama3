@@ -671,7 +671,7 @@ def format_maintenance_windows_html(
 
 
 def get_datadog_maintenance_windows(question: str = "") -> str:
-    """Entry point for chat/MCP: parse question, fetch downtimes, return HTML table."""
+    """MCP tool entry point: parse question, fetch downtimes, return HTML table."""
     query = parse_maintenance_window_query(question)
     data = fetch_datadog_downtimes(
         window_start_utc=query.window_start_utc,

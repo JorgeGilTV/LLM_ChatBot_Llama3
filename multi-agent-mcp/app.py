@@ -1083,6 +1083,21 @@ def api_clear_cache():
 def api_tools():
     return jsonify([{'name': name, 'desc': desc} for name, desc in registered_tools])
 
+
+@flask_app.route('/api/mcp/tools')
+def api_mcp_tools():
+    """Unified categorized tools for checkbox UI (MCP local + synthesis-only legacy)."""
+    from mcp_server import TOOL_REGISTRY
+    from tools.mcp_tool_catalog import UI_SYNTHESIS_TOOL_NAMES, build_ui_tool_catalog
+
+    synthesis = {
+        name: TOOLS[name]["description"]
+        for name in UI_SYNTHESIS_TOOL_NAMES
+        if name in TOOLS
+    }
+    return jsonify(build_ui_tool_catalog(TOOL_REGISTRY, synthesis_tools=synthesis))
+
+
 @flask_app.route('/api/suggest-tools', methods=['POST'])
 def suggest_tools():
     """Use AI to suggest which tools to use based on the user's query"""
@@ -1355,6 +1370,32 @@ Examples:
     
     def execute_tool(idx, tool_name, context_from_other_tools=None, query_analysis=None):
         """Execute a single tool and store result."""
+        from tools.mcp_tool_catalog import build_mcp_tool_arguments, parse_mcp_checkbox_value
+        from tools.mcp_tool_dispatch import invoke_tool
+
+        mcp_name = parse_mcp_checkbox_value(tool_name)
+        if mcp_name:
+            try:
+                from mcp_server import TOOL_REGISTRY
+
+                info = TOOL_REGISTRY.get(mcp_name)
+                if not info:
+                    return idx, tool_name, f"<pre>MCP tool not found: {mcp_name}</pre>", True
+                svc = ""
+                if query_analysis and not query_analysis.get("is_general_query"):
+                    svc = (query_analysis.get("service_name") or "").strip()
+                args = build_mcp_tool_arguments(
+                    mcp_name,
+                    user_query=input_text,
+                    timerange_hours=timerange,
+                    service_filter=svc,
+                )
+                res = invoke_tool(mcp_name, args, info["function"])
+                display = f"MCP:{mcp_name}"
+                return idx, display, res, False
+            except Exception as e:
+                return idx, tool_name, f"<pre>Error executing MCP '{mcp_name}': {e}</pre>", True
+
         func = TOOLS.get(tool_name, {}).get('function')
         if not func:
             return idx, tool_name, f"<pre>No tool found for {tool_name}</pre>", True

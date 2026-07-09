@@ -49,18 +49,31 @@ from tools.datadog_dashboards import (
     read_datadog_all_errors, 
     read_datadog_failed_pods, 
     read_datadog_403_errors,
+    read_datadog_samsung,
+    read_datadog_samsung_errors_only,
+    read_datadog_redmetrics_us,
     search_datadog_dashboards,
     search_datadog_services
 )
 from tools.datadog_downtimes import get_datadog_maintenance_windows
+from tools.deployments_calendar import get_grm_deployments_mcp
+from tools.mcp_tool_dispatch import invoke_tool
+from tools.noc_kt import noc_kt_search_mcp
+from tools.read_arlo_status import read_arlo_status
+from tools.pagerduty_samsung_scrape import get_pagerduty_samsung_board_html
+from tools.mcp_phase3_tools import (
+    aws_cloudtrail_search_mcp,
+    aws_connect_monitor_mcp,
+    get_shift_report_mcp,
+    get_status_monitor_summary_mcp,
+)
+from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.splunk_tool import (
     read_splunk_p0_dashboard,
     read_splunk_p0_cvr_dashboard,
     read_splunk_p0_adt_dashboard,
     read_splunk_p0_us_infra_dashboard,
-    splunk_p0_coerce_timerange_hours,
 )
-from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.pagerduty_tool import get_pagerduty_incidents
 from tools.pagerduty_analytics import get_pagerduty_analytics
 from tools.pagerduty_insights import get_pagerduty_insights
@@ -167,7 +180,8 @@ TOOL_REGISTRY = {
         "description": (
             "List Datadog monitor downtimes (maintenance windows) from "
             "https://arlo.datadoghq.com/monitors/downtimes — creator, schedule, active status. "
-            "Defaults to NOC team creators and next 24 hours."
+            "Filters NOC team creators and tags (team:noc, partner hosts, env:production/prod/prd/adt_prod). "
+            "Default window: active now + next 24 hours."
         ),
         "function": get_datadog_maintenance_windows,
         "schema": {
@@ -176,12 +190,12 @@ TOOL_REGISTRY = {
                 "question": {
                     "type": "string",
                     "description": (
-                        "Natural language question, e.g. 'maintenance windows next 24 hours' "
-                        "or 'downtimes last 48 hours'"
+                        "Natural-language time/filter hint, e.g. 'maintenance windows next 24 hours', "
+                        "'downtimes last 48 hours', 'all creators next 12 hours'"
                     ),
-                    "default": "maintenance windows next 24 hours",
                 }
             },
+            "required": ["question"],
         },
     },
     "datadog_red_metrics": {
@@ -222,9 +236,65 @@ TOOL_REGISTRY = {
             "required": ["service"]
         }
     },
+    "datadog_red_samsung": {
+        "description": "Get Datadog RED metrics for Samsung / partner network dashboard",
+        "function": read_datadog_samsung,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name to query"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            },
+            "required": ["service"]
+        }
+    },
+    "datadog_red_metrics_us": {
+        "description": "Get Datadog RED metrics for US region dashboard",
+        "function": read_datadog_redmetrics_us,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name to query"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            },
+            "required": ["service"]
+        }
+    },
     "datadog_errors": {
         "description": "Show services with errors > 0 from RED Metrics and ADT dashboards",
         "function": read_datadog_all_errors,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Optional: filter by service name"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            }
+        }
+    },
+    "datadog_samsung_errors": {
+        "description": "Show Samsung network services with errors > 0 from Datadog",
+        "function": read_datadog_samsung_errors_only,
         "schema": {
             "type": "object",
             "properties": {
@@ -384,6 +454,41 @@ TOOL_REGISTRY = {
             }
         }
     },
+    "grafana_dashboard_list": {
+        "description": "List available Grafana dashboards (DNS Mapper, Savant z2, etc.)",
+        "function": get_grafana_dashboard_list,
+        "schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    "grm_deployments": {
+        "description": (
+            "GRM Calendar deployments from Confluence — upcoming or past releases. "
+            "Natural language supported (e.g. 'next deployments 48 hours', 'past 3 deployments')."
+        ),
+        "function": get_grm_deployments_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": (
+                        "Natural-language query, e.g. 'upcoming deployments next 24 hours', "
+                        "'past 3 deployments', 'GRM calendar last 48 hours'"
+                    ),
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Optional service filter or limit:N (structured override)",
+                },
+                "timerange_hours": {
+                    "type": "integer",
+                    "description": "Hours ahead (positive) or behind (negative). Default 24.",
+                },
+            },
+        },
+    },
     "pagerduty_incidents": {
         "description": "Get active incidents from PagerDuty for Arlo services",
         "function": get_pagerduty_incidents,
@@ -437,6 +542,143 @@ TOOL_REGISTRY = {
             }
         }
     },
+    "arlo_public_status": {
+        "description": (
+            "Scrape https://status.arlo.com — overall health, core services, and past incidents."
+        ),
+        "function": read_arlo_status,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional; reserved for future filters",
+                }
+            },
+        },
+    },
+    "noc_kt_search": {
+        "description": (
+            "Search the NOC Knowledge Transfer table in Confluence (escalations, runbooks, contacts)."
+        ),
+        "function": noc_kt_search_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search term to match rows (service, team, contact, etc.)",
+                },
+                "question": {
+                    "type": "string",
+                    "description": "Alias for query when using natural language",
+                },
+            },
+        },
+    },
+    "pagerduty_samsung_board": {
+        "description": (
+            "Scrape Samsung PagerDuty external status dashboard (default board PRBJIO4) — "
+            "active and recently resolved incidents without REST API."
+        ),
+        "function": get_pagerduty_samsung_board_html,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {
+                    "type": "string",
+                    "description": "External status dashboard ID (default SAMSUNG_STATUS_DASHBOARD_ID or PRBJIO4)",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Optional filter on title/service/status",
+                },
+            },
+        },
+    },
+    "shift_report": {
+        "description": (
+            "Shift handoff report (PagerDuty, Datadog, Slack, GRM, Jira, Outlook) for shift1/2/3 "
+            "Mexico time. Heavy orchestration via MintMCP + Bedrock — may take several minutes."
+        ),
+        "function": get_shift_report_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "description": "shift1 | shift2 | shift3 (default shift1)",
+                },
+                "question": {
+                    "type": "string",
+                    "description": "Natural language, e.g. 'shift 2 handoff report'",
+                },
+            },
+        },
+    },
+    "status_monitor_summary": {
+        "description": (
+            "Compact Status Monitor hub summary — per-environment healthy/warning/critical counts "
+            "and Datadog monitor alerts rollup."
+        ),
+        "function": get_status_monitor_summary_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "timerange": {
+                    "type": "integer",
+                    "description": "Hours to look back (1–24, default 1)",
+                },
+                "question": {
+                    "type": "string",
+                    "description": "Optional NL hint for timerange, e.g. 'status monitor last 4 hours'",
+                },
+                "force_refresh": {
+                    "type": "boolean",
+                    "description": "Bypass cache",
+                    "default": False,
+                },
+            },
+        },
+    },
+    "aws_cloudtrail_search": {
+        "description": (
+            "Search AWS CloudTrail events by resource name (admin/niche). "
+            "Requires resource_name, account_id (12 digits), region."
+        ),
+        "function": aws_cloudtrail_search_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "resource_name": {"type": "string"},
+                "resource_type": {
+                    "type": "string",
+                    "description": "EC2, Lambda, IAM, S3, OTHER, etc.",
+                    "default": "OTHER",
+                },
+                "region": {"type": "string", "default": "us-east-1"},
+                "account_id": {"type": "string", "description": "12-digit AWS account ID"},
+                "lookback_days": {"type": "integer", "default": 7},
+                "max_events": {"type": "integer", "default": 50},
+            },
+            "required": ["resource_name", "account_id"],
+        },
+    },
+    "aws_connect_monitor": {
+        "description": (
+            "AWS Connect contact-center health snapshot (queues, agents, alerts). "
+            "Uses CONNECT_INSTANCE_ID / CONNECT_REGION from env when omitted."
+        ),
+        "function": aws_connect_monitor_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "instance_id": {"type": "string"},
+                "region": {"type": "string"},
+                "force_refresh": {"type": "boolean", "default": False},
+            },
+        },
+    },
 }
 
 
@@ -470,26 +712,7 @@ async def call_tool(name: str, arguments: dict) -> Sequence[TextContent]:
     try:
         tool_info = TOOL_REGISTRY[name]
         func = tool_info["function"]
-        
-        # Extract arguments
-        query = arguments.get("query", "")
-        service = arguments.get("service", "")
-        timerange = arguments.get("timerange", "4h")
-        status = arguments.get("status", "all")
-        
-        # Determine which arguments to pass based on function signature
-        if name in ["splunk_p0_streaming", "splunk_p0_cvr", "splunk_p0_adt", "splunk_p0_us_infra"]:
-            input_text = service if service else query
-            result = func(input_text, splunk_p0_coerce_timerange_hours(arguments.get("timerange")))
-        elif name in ["datadog_red_metrics", "datadog_red_adt", "datadog_errors", "datadog_failed_pods", "datadog_403_errors"]:
-            input_text = service if service else query
-            result = func(input_text, timerange)
-        elif name == "pagerduty_incidents":
-            result = func(status)
-        else:
-            # Simple query-based tools
-            input_text = service if service else query
-            result = func(input_text)
+        result = invoke_tool(name, arguments, func)
         
         logger.info(f"✅ MCP Server: Tool '{name}' executed successfully")
         

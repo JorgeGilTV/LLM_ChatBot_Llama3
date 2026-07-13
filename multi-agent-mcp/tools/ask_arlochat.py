@@ -1099,6 +1099,16 @@ async def ask_arlo_async(question: str = "") -> str:
                     if any(kw in question_lower for kw in category_keywords):
                         detected_categories.add(category)
                 
+                # Auto-detect service health queries → Datadog + ownership tools
+                from tools.mcp_tool_suggest import is_service_health_question
+                from tools.service_query import extract_service_name_from_query
+
+                if is_service_health_question(question):
+                    detected_categories.add('datadog')
+                    detected_categories.add('services')
+                    svc = extract_service_name_from_query(question)
+                    print(f"📊 Auto-detected service health query for '{svc}' -> Datadog MCP tools")
+
                 # Auto-detect informational questions -> use Confluence (documentation/wiki)
                 informational_keywords = ['what', 'que', 'qué', 'how', 'como', 'cómo', 'where', 
                                          'donde', 'dónde', 'why', 'porque', 'por qué', 'when', 
@@ -1200,6 +1210,11 @@ async def ask_arlo_async(question: str = "") -> str:
                                 name_match = 'shift_report' in tool_name_lower
                             if category == 'deployment' and not name_match:
                                 name_match = 'grm_deployments' in tool_name_lower
+                            if category == 'services' and not name_match:
+                                name_match = any(
+                                    x in tool_name_lower
+                                    for x in ('service_owners', 'arlo_versions', 'deployed_fw')
+                                )
                             if name_match:
                                 filtered_tools.append(tool)
                                 break
@@ -2071,6 +2086,11 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
 
                 from tools.jira_mcp import is_jira_question, run_jira_mcp_search
                 from tools.mcp_intent_router import resolve_mcp_fast_route
+                from tools.mcp_tool_suggest import (
+                    bedrock_service_health_tool_calls,
+                    is_service_health_question,
+                )
+                from tools.service_query import extract_service_name_from_query
 
                 fast_route = resolve_mcp_fast_route(question)
                 if fast_route:
@@ -2121,9 +2141,43 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
                     tool_desc = tool.description if hasattr(tool, 'description') else 'No description'
                     tools_description += f"- **{tool_name}**: {tool_desc}\n"
                     tools_map_mcp[tool_name] = tool
-                
+
+                # Service-specific health: prefetch Datadog before Bedrock tool-pick
+                service_name = extract_service_name_from_query(question)
+                if is_service_health_question(question) and service_name:
+                    print(
+                        f"📊 Service health query for '{service_name}' — "
+                        "prefetching Datadog MCP tools..."
+                    )
+                    for tool_call in bedrock_service_health_tool_calls(service_name):
+                        tname = tool_call.get("tool_name")
+                        tparams = tool_call.get("params") or {}
+                        treason = tool_call.get("reason") or ""
+                        if not tname or tname not in tools_map_mcp:
+                            continue
+                        try:
+                            result = await session.call_tool(tname, tparams)
+                            result_text = _mcp_call_result_text(result)
+                            if result_text.strip():
+                                tool_results.append({
+                                    "tool": tname,
+                                    "result": result_text,
+                                    "description": treason,
+                                    "reason": treason,
+                                })
+                                print(f"   ✅ Prefetch {tname}")
+                        except Exception as prefetch_err:
+                            print(f"   ⚠️ Prefetch {tname} failed: {prefetch_err}")
+
                 # Step 1: Ask Bedrock to analyze and select tools
                 print("\n🧠 Step 1: Asking Bedrock to analyze question and select MCP tools...")
+                service_dd_rule = ""
+                if service_name:
+                    service_dd_rule = (
+                        f'- SERVICE QUERY detected ("{service_name}"): MUST call datadog_services, '
+                        f"datadog_search, datadog_errors, datadog_red_metrics with service/query="
+                        f'"{service_name}" (in addition to any prefetched data).\n'
+                    )
                 analysis_prompt = f"""You are Bedrock Report, an AI assistant that helps with Arlo infrastructure questions.
 
 {tools_description}
@@ -2142,11 +2196,13 @@ Respond with ONLY a JSON object (no markdown, no explanation):
 }}
 
 Guidelines:
-- Jira (MintMCP): use atlassian-rovo__searchJiraIssuesUsingJql with cloudId + jql (e.g. project = "GOC" AND text ~ "shm")
+{service_dd_rule}- Jira (MintMCP): use atlassian-rovo__searchJiraIssuesUsingJql with cloudId + jql (e.g. project = "GOC" AND text ~ "shm")
 - Single Jira issue: atlassian-rovo__getJiraIssue with cloudId + issueIdOrKey
 - cloudId for arlo.atlassian.net: call atlassian-rovo__getAccessibleAtlassianResources if needed
 - For Confluence searches: use cql parameter on atlassian-rovo__searchConfluenceUsingCql
-- For Datadog metrics/dashboards: use datadog_red_metrics, datadog_red_adt, datadog_red_samsung, datadog_red_metrics_us, datadog_errors, datadog_samsung_errors
+- For Datadog service lookup: datadog_services + datadog_search with query=service name
+- For Datadog metrics/errors for one service: datadog_errors + datadog_red_metrics with service= name
+- For org-wide Datadog: datadog_red_metrics, datadog_red_adt, datadog_red_samsung, datadog_red_metrics_us, datadog_errors
 - For Datadog maintenance windows / downtimes: use datadog_maintenance_windows with question
 - For GRM deployments / release calendar: use grm_deployments with question
 - For Arlo public status page (status.arlo.com): use arlo_public_status
@@ -2156,9 +2212,8 @@ Guidelines:
 - For status monitor hub / all environments health: use status_monitor_summary
 - For AWS CloudTrail lookup (admin): use aws_cloudtrail_search with resource_name + account_id
 - For AWS Connect health (admin): use aws_connect_monitor
-- If question asks for explanations/information, prioritize Confluence tools
-- If question is conversational, set needs_tools=false
-- Be selective - only call truly relevant tools
+- If question asks what is wrong / status / errors for a named service, ALWAYS use Datadog tools (not only Confluence)
+- If question is conversational with no data lookup, set needs_tools=false
 - Extract specific search terms from the question
 
 Return ONLY the JSON object."""

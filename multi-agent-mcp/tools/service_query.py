@@ -12,7 +12,16 @@ _BARE_SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$", re.I)
 
 # "with/for/about" only — avoid bare "on" ("going on with …" would capture "with").
 _AFTER_PREP_RE = re.compile(
-    r"\b(?:with|for|about|regarding)\s+['\"]?([a-z0-9][a-z0-9_-]*)['\"]?\b",
+    r"\b(?:with|for|about|regarding|con|en)\s+['\"]?([a-z0-9][a-z0-9_-]*)['\"]?\b",
+    re.I,
+)
+
+# Spanish / English "what's happening with X"
+_WHATS_HAPPENING_RE = re.compile(
+    r"\b(?:"
+    r"what(?:'s| is)\s+(?:going\s+on|happening|wrong)|"
+    r"qu[eé]\s+(?:pasa|est[aá]\s+pasando|hay)\s+(?:con|en)?"
+    r")\s+['\"]?([a-z0-9][a-z0-9_-]*)['\"]?\b",
     re.I,
 )
 
@@ -52,6 +61,12 @@ def extract_service_name_from_query(text: str) -> str:
     matches = _SERVICE_TOKEN_RE.findall(raw)
     if matches:
         return max(matches, key=lambda m: (m.count("-"), len(m))).lower()
+
+    m_wh = _WHATS_HAPPENING_RE.search(raw)
+    if m_wh:
+        token = _normalize_token(m_wh.group(1))
+        if token and token not in _NOISE_TOKENS and len(token) >= 3:
+            return token
 
     candidates: list[str] = []
     for m in _AFTER_PREP_RE.finditer(raw):

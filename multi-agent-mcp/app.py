@@ -1110,117 +1110,43 @@ def suggest_tools():
     try:
         logging.info(f"🤖 AI Auto-Select: Analyzing query: {user_query[:100]}")
         
-        # Build a prompt for Bedrock to analyze the query and suggest tools
-        available_tools = "\n".join([f"- {name}: {tool['description']}" for name, tool in TOOLS.items()])
-        
+        from mcp_server import TOOL_REGISTRY
+        from tools.mcp_tool_suggest import (
+            augment_suggested_tools_for_query,
+            build_suggest_tools_catalog_text,
+            is_service_health_question,
+            normalize_and_validate_suggested_tools,
+            service_health_mcp_checkboxes,
+        )
+        from tools.service_query import extract_service_name_from_query
+
+        available_tools = build_suggest_tools_catalog_text(TOOL_REGISTRY)
+        service_hint = ""
+        if is_service_health_question(user_query):
+            svc = extract_service_name_from_query(user_query)
+            service_hint = (
+                f'\nDetected service-specific health query for "{svc}" — MUST include '
+                "MCP:datadog_services, MCP:datadog_search, MCP:datadog_errors, MCP:datadog_red_metrics, "
+                "MCP:service_owners, and Bedrock_Report.\n"
+            )
+
         analysis_prompt = f"""Analyze this question and select the appropriate tools.
 
 QUESTION: "{user_query}"
-
-AVAILABLE TOOLS:
+{service_hint}
+AVAILABLE TOOLS (use exact checkbox values):
 {available_tools}
 
-SELECTION GUIDELINES (Use these as a starting point, but select ALL relevant tools):
+RULES:
+1. Return checkbox values exactly as listed (e.g. MCP:datadog_services, Bedrock_Report).
+2. For a SPECIFIC SERVICE (errors, status, what is wrong, inappayments, backend-hmsfoo): include MCP:datadog_services, MCP:datadog_search, MCP:datadog_errors, MCP:datadog_red_metrics, MCP:service_owners, and Bedrock_Report.
+3. For incidents/alerts: add MCP:pagerduty_incidents.
+4. For Confluence/docs only: MCP:wiki_search + Bedrock_Report.
+5. Bedrock_Report synthesizes all data — include it for any data lookup (not pure definitions).
+6. Select ALL relevant tools; err on the side of more Datadog tools for service questions.
 
-📋 TOOL CATEGORIES:
-
-**CONFLUENCE/WIKI/DOCUMENTATION:**
-- Bedrock_Report: Searches Confluence, Jira, wikis, runbooks, procedures
-- Wiki: Direct Confluence search
-
-**DATADOG MONITORING:**
-- DD_Red_Metrics: RED metrics, infrastructure, clusters, pods
-- DD_Search: Search Datadog dashboards
-- DD_Services: List all APM services
-- DD_Errors: Services with errors
-- DD_Failed_Pods: Kubernetes pod failures
-- DD_403_Errors: 403 authentication errors
-- DD_Red_ADT: ADT network metrics
-- DD_Red_Samsung: Samsung network metrics
-- DD_Red_Metrics_US: US region metrics
-- DD_Samsung_Errors: Samsung-specific errors
-
-**PAGERDUTY:**
-- PagerDuty: Active incidents
-- PagerDuty_Dashboards: Analytics and charts
-- PagerDuty_Insights: Incident trends
-
-**SPLUNK:**
-- P0_Streaming: P0 streaming dashboard
-- P0_CVR_Streaming: CVR streaming
-- P0_ADT_Streaming: ADT streaming
-
-**GRAFANA:**
-- Grafana_DNS_Mapper: DNS mapper monitoring
-- Grafana_Savant_z2: Savant infrastructure
-
-**VERSIONS & OWNERSHIP:**
-- Arlo_Versions: Service versions from versions.arlocloud.com
-- Deployed_FW_Versions: Deployed firmware / version matrix from deployed-fw-versions.arlocloud.com
-- Owners: Service ownership information
-
-**AI ASSISTANTS:**
-- Ask_Bedrock: General AI explanations (no data lookup)
-- Bedrock_Report: Intelligent MCP tool selection and execution
-
-🎯 SELECTION STRATEGY:
-
-For COMPREHENSIVE SERVICE INFO (cluster, owner, metrics, errors):
-→ Consider: Bedrock_Report, DD_Red_Metrics, DD_Search, DD_Services, DD_Errors, DD_Failed_Pods, Arlo_Versions, Deployed_FW_Versions, Owners
-
-For DEPLOYMENT/CALENDAR questions:
-→ Use: Bedrock_Report (handles GRM calendar internally)
-
-For GENERAL HEALTH/STATUS (all services):
-→ Consider: DD_Errors, DD_Failed_Pods, PagerDuty, DD_Services
-
-For SPECIFIC SERVICE ERRORS:
-→ Consider: DD_Errors, DD_Failed_Pods, DD_403_Errors, PagerDuty
-
-For JIRA/TICKETS:
-→ Must include: Bedrock_Report
-
-For CONFLUENCE/DOCS:
-→ Must include: Bedrock_Report, can add Wiki
-
-For METRICS ONLY:
-→ Consider: DD_Red_Metrics, DD_Red_ADT, DD_Red_Samsung, DD_Red_Metrics_US
-
-For INCIDENTS/ALERTS:
-→ Consider: PagerDuty, PagerDuty_Insights, PagerDuty_Dashboards
-
-🚨 CRITICAL RULES:
-
-1. **ALWAYS INCLUDE Bedrock_Report** for ANY data query (service info, errors, metrics, incidents, etc.)
-   - Bedrock_Report provides context from Confluence, wikis, Jira, and MCP tools
-   - Exception: ONLY exclude for pure explanations (e.g., "what is kubernetes?")
-
-2. **SELECT MULTIPLE DD TOOLS** for service-specific queries:
-   - Combine DD_Red_Metrics + DD_Search + DD_Services + DD_Errors for comprehensive data
-   - Include DD_Failed_Pods if relevant to infrastructure/health
-
-3. **MORE TOOLS = BETTER ANSWER**:
-   - Don't limit yourself to 2-3 tools
-   - Select ALL tools that could contribute useful information
-   - Better to have extra context than miss important data
-
-4. **SERVICE-SPECIFIC QUERIES** (e.g., "hmspayment cluster"):
-   → Must include: Bedrock_Report + multiple DD tools (DD_Red_Metrics, DD_Search, DD_Services, DD_Errors)
-   → Can include: Arlo_Versions, Deployed_FW_Versions, Owners, DD_Failed_Pods, PagerDuty
-
-5. **EXECUTION ORDER** (handled automatically):
-   - Data tools execute FIRST (DD_*, PagerDuty, etc.)
-   - Bedrock_Report executes LAST with context from all data tools
-   - Bedrock_Report synthesizes everything into complete response
-
-ANALYZE "{user_query}":
-- What type of information is being requested?
-- Which data sources would have this information?
-- Select ALL relevant tools (err on the side of including more)
-- MUST include Bedrock_Report unless it's a pure explanation query
-
-Return ONLY a JSON array with ALL relevant tools: ["Tool1", "Tool2", "Tool3", ..., "Bedrock_Report"]
-NO markdown, NO explanation, ONLY the JSON array."""
+Return ONLY a JSON array: ["MCP:datadog_services", "MCP:datadog_errors", "Bedrock_Report"]
+NO markdown, NO explanation."""
 
         # Call Bedrock to get tool suggestions
         logging.info("🤖 Calling Bedrock for tool recommendations...")
@@ -1237,8 +1163,17 @@ NO markdown, NO explanation, ONLY the JSON array."""
             logging.error(f"❌ Could not parse Bedrock response: {suggested_tools_response}")
             return jsonify({'error': 'Could not parse AI response', 'raw_response': suggested_tools_response}), 500
         
-        # Validate that suggested tools exist
-        valid_tools = [tool for tool in suggested_tools if tool in TOOLS]
+        # Validate and map to UI checkbox values (MCP + synthesis)
+        valid_tools = normalize_and_validate_suggested_tools(suggested_tools)
+        valid_tools = augment_suggested_tools_for_query(user_query, valid_tools)
+
+        if is_service_health_question(user_query) and not any(
+            t.startswith("MCP:datadog_") for t in valid_tools
+        ):
+            for cb in service_health_mcp_checkboxes():
+                if cb not in valid_tools:
+                    valid_tools.append(cb)
+            logging.info("➕ Heuristic: added Datadog MCP tools for service health query")
         
         # 🔥 ALWAYS ADD Bedrock_Report for comprehensive context (unless it's pure explanation)
         # Bedrock_Report executes LAST but displays FIRST (for better UX)
@@ -1273,9 +1208,23 @@ NO markdown, NO explanation, ONLY the JSON array."""
 def api_run():
     data = request.json
     input_text = data.get('input', '')
-    selected_tools = data.get('tools', []) or ['Suggestions']
+    selected_tools = list(data.get('tools', []) or ['Suggestions'])
     timerange = data.get('timerange', 4)  # Default to 4 hours
     start = time.time()
+
+    from tools.mcp_tool_suggest import augment_suggested_tools_for_query, is_service_health_question
+
+    synthesis_tools_set = frozenset({'Bedrock_Report', 'Ask_Bedrock'})
+    if input_text.strip() and is_service_health_question(input_text):
+        data_only = [t for t in selected_tools if t not in synthesis_tools_set]
+        if not data_only:
+            augmented = augment_suggested_tools_for_query(input_text, selected_tools)
+            if augmented != selected_tools:
+                logging.info(
+                    "➕ Auto-injecting MCP data tools (only synthesis was selected): %s",
+                    [t for t in augmented if t not in selected_tools],
+                )
+                selected_tools = augmented
     
     # Execute tools in parallel using threading
     import concurrent.futures

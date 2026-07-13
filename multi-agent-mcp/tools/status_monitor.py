@@ -2121,6 +2121,15 @@ HUB_ENV_ROWS = [
     {"slug": "redmetrics-us", "label": "RED Metrics US", "href": "/statusmonitor/redmetrics-us", "mode": "redmetrics-us"},
 ]
 
+# Home + hub cards for Production/Samsung/ADT use the same APM Status Wall pipeline
+# (service scope, idle→green normalization, overall rollup) so colors match /apm-services.
+HUB_WALL_ALIGNED_SLUGS = frozenset({"production", "samsung", "adt"})
+HUB_SLUG_TO_WALL_DD_ENV = {
+    "production": "production",
+    "samsung": "samsung_prod",
+    "adt": "adt_prod",
+}
+
 # Full-screen wall: fixed section order (not the same as hub card order).
 WALL_DISPLAY_GROUPS = [
     {"mode": "production", "slug": "production", "label": "Production"},
@@ -3074,6 +3083,165 @@ def _fetch_datadog_statuses_for_mode(
     )
 
 
+def _hub_service_alert_count(s: dict) -> int:
+    """DD monitors in alert (+ PagerDuty incident as +1)."""
+    n_dd = int(s.get("dd_monitor_open_count") or 0)
+    if not n_dd:
+        n_dd = int(s.get("dd_monitor_alert_count") or 0) + int(
+            s.get("dd_monitor_alert_suffix_count") or 0
+        )
+    if not n_dd:
+        n_dd = len(s.get("dd_monitor_alerts") or []) + len(
+            s.get("dd_monitor_alerts_suffix_ab") or []
+        )
+    pd = 1 if s.get("pd_incident") else 0
+    return int(n_dd) + int(pd)
+
+
+def _hub_service_issue_href(s: dict, env_href: str = "") -> str:
+    for key in ("dd_monitors_url_all_alerts", "dd_monitors_url", "apm_url", "pd_incident_url"):
+        u = (s.get(key) or "").strip()
+        if u:
+            return u
+    svc = (s.get("service") or "").strip()
+    env = (s.get("environment") or "").strip()
+    if svc and env:
+        dd_site = os.getenv("DD_SITE", "arlo.datadoghq.com")
+        alerts = _hub_service_alert_count(s)
+        if alerts > 0:
+            u = _dd_monitors_manage_url_all_alerts(svc, env, dd_site)
+            if u:
+                return u
+        return (
+            f"{datadog_ui_origin(dd_site)}/apm/service/"
+            f"{quote(svc, safe='')}/overview?env={quote(env, safe='')}"
+        )
+    return (env_href or "").strip()
+
+
+def _hub_display_service_name(service: str) -> str:
+    svc = (service or "").strip()
+    if svc.startswith("backend-"):
+        return "bknd-" + svc[len("backend-") :]
+    return svc
+
+
+def _hub_build_issue_services(
+    statuses: list,
+    env_href: str = "",
+    max_items: int = 12,
+) -> tuple[list[dict], int]:
+    """
+    Services degraded (warning/critical) or with DD/PD alerts — for hub card links.
+    Returns (items, truncated_count).
+    """
+    issues: list[dict] = []
+    for s in statuses or []:
+        st = (s.get("status") or "unknown").strip().lower()
+        alerts = _hub_service_alert_count(s)
+        degraded = st in ("warning", "critical")
+        if not degraded and alerts <= 0:
+            continue
+        svc = (s.get("service") or "").strip()
+        if not svc:
+            continue
+        href = _hub_service_issue_href(s, env_href)
+        if not href:
+            href = env_href
+        issues.append(
+            {
+                "service": svc,
+                "display": _hub_display_service_name(svc),
+                "status": st if degraded else "alert",
+                "alert_count": alerts,
+                "href": href,
+            }
+        )
+
+    def _sort_key(x: dict) -> tuple:
+        st = x.get("status") or ""
+        rank = 0 if st == "critical" else 1 if st == "warning" else 2
+        return (rank, -int(x.get("alert_count") or 0), x.get("display") or "")
+
+    issues.sort(key=_sort_key)
+    if len(issues) <= max_items:
+        return issues, 0
+    return issues[:max_items], len(issues) - max_items
+
+
+def _hub_entry_from_wall_payload(row: dict, wall_payload: dict) -> dict:
+    """Build hub card fields from an APM Status Wall single-env payload."""
+    group = (wall_payload.get("groups") or [{}])[0]
+    counts = group.get("counts") or {}
+    overall = group.get("overall") or "healthy"
+    ser = list(group.get("services") or [])
+    h = int(counts.get("healthy") or 0)
+    w = int(counts.get("warning") or 0)
+    c = int(counts.get("critical") or 0)
+    dd_atot, dd_asvcs = _hub_dd_alerts_rollup(ser)
+    bad = [s for s in ser if s.get("status") in ("warning", "critical")]
+    issue_services, issue_truncated = _hub_build_issue_services(ser, row.get("href") or "")
+    return {
+        "slug": row["slug"],
+        "label": row["label"],
+        "href": row["href"],
+        "healthy": h,
+        "warning": w,
+        "critical": c,
+        "unknown": 0,
+        "inactive": 0,
+        "operational": h + w + c,
+        "configured": int(counts.get("total") or len(ser)),
+        "monitored": int(counts.get("total") or len(ser)),
+        "overall": overall,
+        "dd_monitor_alerts_total": dd_atot,
+        "dd_monitor_alerts_services": dd_asvcs,
+        "status_reason_lines": _hub_build_status_reason_lines(bad, overall),
+        "issue_services": issue_services,
+        "issue_services_truncated": issue_truncated,
+        "aligned_with_status_wall": True,
+    }
+
+
+def _hub_build_entry_from_legacy_statuses(row: dict, statuses_for_card: list) -> dict:
+    """Hub card for environments not aligned with the APM Status Wall."""
+    h = sum(1 for s in statuses_for_card if s.get("status") == "healthy")
+    w = sum(1 for s in statuses_for_card if s.get("status") == "warning")
+    c = sum(1 for s in statuses_for_card if s.get("status") == "critical")
+    unk = sum(1 for s in statuses_for_card if s.get("status") == "unknown")
+    inn = sum(1 for s in statuses_for_card if s.get("status") == "inactive")
+    if c > 0:
+        overall = "critical"
+    elif w > 0:
+        overall = "warning"
+    else:
+        overall = "healthy"
+    dd_atot, dd_asvcs = _hub_dd_alerts_rollup(statuses_for_card)
+    issue_services, issue_truncated = _hub_build_issue_services(
+        statuses_for_card, row.get("href") or ""
+    )
+    return {
+        "slug": row["slug"],
+        "label": row["label"],
+        "href": row["href"],
+        "healthy": h,
+        "warning": w,
+        "critical": c,
+        "unknown": unk,
+        "inactive": inn,
+        "operational": h + w + c,
+        "configured": len(statuses_for_card),
+        "monitored": len(statuses_for_card),
+        "overall": overall,
+        "dd_monitor_alerts_total": dd_atot,
+        "dd_monitor_alerts_services": dd_asvcs,
+        "status_reason_lines": _hub_build_status_reason_lines(statuses_for_card, overall),
+        "issue_services": issue_services,
+        "issue_services_truncated": issue_truncated,
+        "aligned_with_status_wall": False,
+    }
+
+
 def _hub_build_status_reason_lines(statuses_for_card: list, overall: str, max_lines: int = 2) -> list:
     """
     Compact English reason lines for Environment status cards when overall is warning/critical.
@@ -3083,13 +3251,12 @@ def _hub_build_status_reason_lines(statuses_for_card: list, overall: str, max_li
     if not statuses_for_card:
         return ["No service data available for this environment."]
 
-    h = sum(1 for s in statuses_for_card if s.get("status") == "healthy")
-    w = sum(1 for s in statuses_for_card if s.get("status") == "warning")
-    c = sum(1 for s in statuses_for_card if s.get("status") == "critical")
-    if c == 0 and w == 0:
-        return ["No operational services (healthy/warning/critical). Check inactive/unknown."]
-
     bad = [s for s in statuses_for_card if s.get("status") in ("warning", "critical")]
+    h = sum(1 for s in statuses_for_card if s.get("status") == "healthy")
+    w = sum(1 for s in bad if s.get("status") == "warning")
+    c = sum(1 for s in bad if s.get("status") == "critical")
+    if c == 0 and w == 0:
+        return []
     lines = []
 
     pd_count = sum(1 for s in bad if s.get("pd_incident"))
@@ -4740,20 +4907,54 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
     """
     JSON summary for the /statusmonitor hub: one card per environment.
 
-    Same per-service Datadog APM checks and PagerDuty rules as /statusmonitor/<env>
-    (Summary panel), for the same timerange — not aggregate-only queries.
+    Production, Samsung, and ADT cards reuse the APM Status Wall pipeline so overall
+    colors match /apm-services. Other environments use the legacy hub resolver.
     """
     global _hub_summary_cache
-    cache_version = "hub_v20_all_env_cards"
+    cache_version = "hub_v22_issue_services"
     cache_key = f"{cache_version}_{timerange}_{int(time.time() // _cache_ttl)}"
     hit = _read_sm_mem_cache(_hub_summary_cache, cache_key, force_refresh)
     if hit is not None:
         return dict(hit)
 
+    pre_pd: tuple[dict, list] | None = None
+    pd_api_key = os.getenv("PAGERDUTY_API_TOKEN")
+    if pd_api_key:
+        try:
+            pre_pd = get_pagerduty_status_counts(pd_api_key, force_refresh)
+        except Exception as e:
+            print(f"⚠️ Hub summary: PagerDuty fetch failed: {e}")
+
+    wall_by_slug: dict[str, dict] = {}
+    wall_rows = [r for r in HUB_ENV_ROWS if r["slug"] in HUB_WALL_ALIGNED_SLUGS]
+    if wall_rows:
+        with ThreadPoolExecutor(max_workers=max(1, len(wall_rows))) as ex:
+            futs = {
+                row["slug"]: ex.submit(
+                    _software_catalog_wall_payload_for_single_env,
+                    HUB_SLUG_TO_WALL_DD_ENV[row["slug"]],
+                    timerange,
+                    force_refresh,
+                    pre_pd,
+                )
+                for row in wall_rows
+            }
+            for slug, fut in futs.items():
+                try:
+                    wall_by_slug[slug] = fut.result()
+                except Exception as e:
+                    print(f"❌ Hub wall-aligned fetch error for {slug}: {e}")
+                    wall_by_slug[slug] = {"success": False, "error": str(e)}
+
     statuses_by_mode = _hub_collect_statuses_by_mode(timerange, "Hub summary", force_refresh)
 
     env_payload = []
     for row in HUB_ENV_ROWS:
+        if row["slug"] in HUB_WALL_ALIGNED_SLUGS:
+            wall_payload = wall_by_slug.get(row["slug"]) or {}
+            if wall_payload.get("success") is not False and wall_payload.get("groups"):
+                env_payload.append(_hub_entry_from_wall_payload(row, wall_payload))
+                continue
         statuses = statuses_by_mode.get(row["mode"], [])
         if row["slug"] == "samsung":
             _bl = _sm_bundled_status_monitor_service_list("samsung")
@@ -4761,40 +4962,7 @@ def status_monitor_hub_summary(timerange: int = 1, force_refresh: bool = False) 
             statuses_for_card = [s for s in statuses if s.get("service") in canon]
         else:
             statuses_for_card = statuses
-        h = sum(1 for s in statuses_for_card if s.get("status") == "healthy")
-        w = sum(1 for s in statuses_for_card if s.get("status") == "warning")
-        c = sum(1 for s in statuses_for_card if s.get("status") == "critical")
-        unk = sum(1 for s in statuses_for_card if s.get("status") == "unknown")
-        inn = sum(1 for s in statuses_for_card if s.get("status") == "inactive")
-        if c > 0:
-            overall = "critical"
-        elif w > 0:
-            overall = "warning"
-        elif len(statuses_for_card) > 0 and h == 0 and w == 0 and c == 0:
-            overall = "warning"
-        else:
-            overall = "healthy"
-        operational = h + w + c
-        configured = len(statuses_for_card)
-        dd_atot, dd_asvcs = _hub_dd_alerts_rollup(statuses_for_card)
-        entry = {
-            "slug": row["slug"],
-            "label": row["label"],
-            "href": row["href"],
-            "healthy": h,
-            "warning": w,
-            "critical": c,
-            "unknown": unk,
-            "inactive": inn,
-            "operational": operational,
-            "configured": configured,
-            "monitored": configured,
-            "overall": overall,
-            "dd_monitor_alerts_total": dd_atot,
-            "dd_monitor_alerts_services": dd_asvcs,
-            "status_reason_lines": _hub_build_status_reason_lines(statuses_for_card, overall),
-        }
-        env_payload.append(entry)
+        env_payload.append(_hub_build_entry_from_legacy_statuses(row, statuses_for_card))
 
     order = {row["slug"]: i for i, row in enumerate(HUB_ENV_ROWS)}
     env_payload.sort(key=lambda r: order.get(r["slug"], 99))

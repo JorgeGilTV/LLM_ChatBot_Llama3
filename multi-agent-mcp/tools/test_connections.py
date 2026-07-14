@@ -530,6 +530,157 @@ def run_connection_checks() -> dict[str, Any]:
                 )
             )
 
+    # --- Amplitude (SHM chart CSV) ---
+    amp_key = (os.getenv("AMPLITUDE_API_KEY") or "").strip()
+    amp_secret = (os.getenv("AMPLITUDE_SECRET_KEY") or "").strip()
+    amp_chart_url = (
+        (os.getenv("AMPLITUDE_CHART_URL") or "").strip()
+        or "https://app.amplitude.com/analytics/arlo/chart/thy5dan3/edit/dxa32pza?sharingId=0GNQ827B"
+    )
+    amp_base = (os.getenv("AMPLITUDE_API_BASE") or "https://amplitude.com").strip().rstrip("/")
+    amp_k_ok = bool(amp_key and amp_secret)
+    if not amp_k_ok:
+        items.append(
+            _row(
+                id="amplitude",
+                name="Amplitude",
+                key_ok=False,
+                user_ok=None,
+                connection_ok=None,
+                detail="Faltan AMPLITUDE_API_KEY y/o AMPLITUDE_SECRET_KEY",
+                error=None,
+            )
+        )
+    else:
+        import re
+
+        cid = None
+        m = re.search(r"/chart/([^/?#]+)", amp_chart_url)
+        if m:
+            cid = m.group(1)
+        if not cid:
+            items.append(
+                _row(
+                    id="amplitude",
+                    name="Amplitude",
+                    key_ok=True,
+                    user_ok=None,
+                    connection_ok=False,
+                    detail="AMPLITUDE_CHART_URL sin chart id reconocible",
+                    error=None,
+                )
+            )
+        else:
+            try:
+                url = f"{amp_base}/api/3/chart/{cid}/csv"
+                r = requests.get(url, auth=(amp_key, amp_secret), timeout=(10, 45))
+                ok = r.status_code == 200 and bool((r.text or "").strip())
+                items.append(
+                    _row(
+                        id="amplitude",
+                        name="Amplitude",
+                        key_ok=True,
+                        user_ok=None,
+                        connection_ok=ok,
+                        detail=f"Chart CSV → HTTP {r.status_code}",
+                        error=None if ok else (r.text[:200] if r.text else "HTTP error"),
+                    )
+                )
+            except Exception as e:
+                items.append(
+                    _row(
+                        id="amplitude",
+                        name="Amplitude",
+                        key_ok=True,
+                        user_ok=None,
+                        connection_ok=False,
+                        detail="",
+                        error=f"{type(e).__name__}: {e}",
+                    )
+                )
+
+    # --- Tableau / Firebase (HTTPS probe) ---
+    for probe_id, probe_name, env_key, default_url in (
+        ("tableau", "Tableau", "TABLEAU_PROBE_URL", "https://www.tableau.com"),
+        ("firebase", "Firebase", "FIREBASE_PROBE_URL", "https://console.firebase.google.com"),
+    ):
+        probe_url = (os.getenv(env_key) or "").strip() or default_url
+        try:
+            r = requests.get(probe_url, timeout=(10, 20), allow_redirects=True)
+            ok = r.status_code < 500
+            items.append(
+                _row(
+                    id=probe_id,
+                    name=probe_name,
+                    key_ok=True,
+                    user_ok=None,
+                    connection_ok=ok,
+                    detail=f"{probe_url} → HTTP {r.status_code}",
+                    error=None if ok else f"HTTP {r.status_code}",
+                )
+            )
+        except Exception as e:
+            items.append(
+                _row(
+                    id=probe_id,
+                    name=probe_name,
+                    key_ok=True,
+                    user_ok=None,
+                    connection_ok=False,
+                    detail=probe_url,
+                    error=f"{type(e).__name__}: {e}",
+                )
+            )
+
+    # --- Databricks (workspace REST) ---
+    db_host = (os.getenv("DATABRICKS_HOST") or "").strip().rstrip("/")
+    db_token = (os.getenv("DATABRICKS_TOKEN") or "").strip()
+    db_k_ok = bool(db_host and db_token)
+    if not db_k_ok:
+        items.append(
+            _row(
+                id="databricks",
+                name="Databricks",
+                key_ok=False,
+                user_ok=None,
+                connection_ok=None,
+                detail="Faltan DATABRICKS_HOST y/o DATABRICKS_TOKEN",
+                error=None,
+            )
+        )
+    else:
+        try:
+            url = f"{db_host}/api/2.0/clusters/list"
+            r = requests.get(
+                url,
+                headers={"Authorization": f"Bearer {db_token}"},
+                timeout=(10, 25),
+            )
+            ok = r.status_code == 200
+            items.append(
+                _row(
+                    id="databricks",
+                    name="Databricks",
+                    key_ok=True,
+                    user_ok=None,
+                    connection_ok=ok,
+                    detail=f"{db_host} → HTTP {r.status_code}",
+                    error=None if ok else (r.text[:200] if r.text else "HTTP error"),
+                )
+            )
+        except Exception as e:
+            items.append(
+                _row(
+                    id="databricks",
+                    name="Databricks",
+                    key_ok=True,
+                    user_ok=None,
+                    connection_ok=False,
+                    detail=db_host,
+                    error=f"{type(e).__name__}: {e}",
+                )
+            )
+
     # --- Gemini / Anthropic (solo presencia) ---
     gem = bool((os.getenv("GEMINI_API_KEY") or "").strip())
     ant = bool((os.getenv("ANTHROPIC_API_KEY") or "").strip())
@@ -556,7 +707,7 @@ def run_connection_checks() -> dict[str, Any]:
         )
     )
 
-    OPTIONAL_INCOMPLETE = frozenset({"grafana", "aws_sts"})
+    OPTIONAL_INCOMPLETE = frozenset({"grafana", "aws_sts", "amplitude", "databricks", "tableau", "firebase"})
 
     def _item_all_ok(it: dict[str, Any]) -> bool:
         oid = it.get("id")

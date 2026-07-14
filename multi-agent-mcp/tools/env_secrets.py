@@ -91,6 +91,69 @@ SECRET_FIELD_GROUPS: list[dict[str, Any]] = [
         ],
     },
     {
+        "id": "amplitude",
+        "title": "Amplitude (SHM / analytics)",
+        "fields": [
+            {"key": "AMPLITUDE_API_KEY", "label": "API Key", "type": "password"},
+            {"key": "AMPLITUDE_SECRET_KEY", "label": "Secret Key", "type": "password"},
+            {
+                "key": "AMPLITUDE_CHART_URL",
+                "label": "Chart URL (Time Spent)",
+                "type": "text",
+                "hint": "URL del chart Average Time Spent on App",
+            },
+            {
+                "key": "AMPLITUDE_APP_LAUNCH_CHART_URL",
+                "label": "Chart URL (App Launch)",
+                "type": "text",
+                "hint": "Opcional — App Launch Time chart",
+            },
+            {
+                "key": "AMPLITUDE_API_BASE",
+                "label": "API Base URL",
+                "type": "text",
+                "hint": "https://amplitude.com (o EU: https://analytics.eu.amplitude.com)",
+            },
+        ],
+    },
+    {
+        "id": "tableau",
+        "title": "Tableau / Firebase (SHM probes)",
+        "fields": [
+            {
+                "key": "TABLEAU_PROBE_URL",
+                "label": "Tableau probe URL",
+                "type": "text",
+                "hint": "https://tableau.arlo.com (VPN/DNS interno)",
+            },
+            {
+                "key": "FIREBASE_PROBE_URL",
+                "label": "Firebase probe URL",
+                "type": "text",
+                "hint": "https://console.firebase.google.com",
+            },
+        ],
+    },
+    {
+        "id": "databricks",
+        "title": "Databricks (SHM KPIs)",
+        "fields": [
+            {
+                "key": "DATABRICKS_HOST",
+                "label": "Workspace host",
+                "type": "text",
+                "hint": "https://dbc-xxxx.cloud.databricks.com",
+            },
+            {"key": "DATABRICKS_TOKEN", "label": "Personal access token", "type": "password"},
+            {
+                "key": "DATABRICKS_HTTP_PATH",
+                "label": "SQL warehouse HTTP path",
+                "type": "text",
+                "hint": "/sql/1.0/warehouses/… (opcional)",
+            },
+        ],
+    },
+    {
         "id": "other",
         "title": "Otros",
         "fields": [

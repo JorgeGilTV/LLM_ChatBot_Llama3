@@ -1,6 +1,7 @@
 """MCP local tool catalog — categories for UI checkboxes and API."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from tools.mcp_phase3_tools import parse_shift_mode_from_question
@@ -101,6 +102,15 @@ MCP_TOOL_CATEGORIES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
             "aws_connect_monitor",
         ),
     ),
+    (
+        "shm",
+        "SHM / Service Health",
+        "#0891b2",
+        (
+            "shm_metrics",
+            "shm_daily",
+        ),
+    ),
 )
 
 MCP_TOOL_NAMES: frozenset[str] = frozenset(
@@ -129,6 +139,7 @@ MCP_TIMERANGE_TOOLS: frozenset[str] = frozenset(
         "grafana_dns_mapper",
         "grafana_savant_z2",
         "status_monitor_summary",
+        "shm_daily",
     }
 )
 
@@ -218,6 +229,14 @@ def build_mcp_tool_arguments(
         return {"question": q, "mode": parse_shift_mode_from_question(q)}
     if tool_name == "status_monitor_summary":
         return {"question": q, "timerange": tr}
+    if tool_name == "shm_metrics":
+        return {
+            "question": q,
+            "force_live": bool(re.search(r"\b(?:live|refresh|latest|tableau)\b", q, re.I)),
+        }
+    if tool_name == "shm_daily":
+        daily_tr = 720 if tr <= 24 else max(tr, 168)
+        return {"question": q, "timerange": daily_tr}
     if tool_name == "noc_kt_search":
         return {"question": q, "query": extract_noc_kt_query(q) or svc or q}
     if tool_name in MCP_SPLUNK_P0_TOOLS:

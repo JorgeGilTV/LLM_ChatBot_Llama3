@@ -157,6 +157,25 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
             force_refresh=bool(args.get("force_refresh")),
         )
 
+    if name == "shm_metrics":
+        return func(
+            question=text_arg(args, "question"),
+            query=text_arg(args, "query"),
+            force_live=bool(args.get("force_live")),
+        )
+
+    if name == "shm_daily":
+        timerange = args.get("timerange")
+        if timerange is None and args.get("timerange_hours") is not None:
+            timerange = args.get("timerange_hours")
+        return func(
+            question=text_arg(args, "question"),
+            query=text_arg(args, "query"),
+            timerange=timerange,
+            earliest=text_arg(args, "earliest"),
+            latest=text_arg(args, "latest"),
+        )
+
     if name == "aws_cloudtrail_search":
         return func(
             resource_name=text_arg(args, "resource_name", "query"),

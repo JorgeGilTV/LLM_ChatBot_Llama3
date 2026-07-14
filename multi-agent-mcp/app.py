@@ -1140,10 +1140,11 @@ AVAILABLE TOOLS (use exact checkbox values):
 RULES:
 1. Return checkbox values exactly as listed (e.g. MCP:datadog_services, Bedrock_Report).
 2. For a SPECIFIC SERVICE (errors, status, what is wrong, inappayments, backend-hmsfoo): include MCP:datadog_services, MCP:datadog_search, MCP:datadog_errors, MCP:datadog_red_metrics, MCP:service_owners, and Bedrock_Report.
-3. For incidents/alerts: add MCP:pagerduty_incidents.
-4. For Confluence/docs only: MCP:wiki_search + Bedrock_Report.
-5. Bedrock_Report synthesizes all data — include it for any data lookup (not pure definitions).
-6. Select ALL relevant tools; err on the side of more Datadog tools for service questions.
+3. For SHM / Service Health Management, customer satisfaction, pillar scores, iOS/Android app metrics: MCP:shm_metrics and/or MCP:shm_daily + Bedrock_Report.
+4. For incidents/alerts: add MCP:pagerduty_incidents.
+5. For Confluence/docs only: MCP:wiki_search + Bedrock_Report.
+6. Bedrock_Report synthesizes all data — include it for any data lookup (not pure definitions).
+7. Select ALL relevant tools; err on the side of more Datadog tools for service questions.
 
 Return ONLY a JSON array: ["MCP:datadog_services", "MCP:datadog_errors", "Bedrock_Report"]
 NO markdown, NO explanation."""

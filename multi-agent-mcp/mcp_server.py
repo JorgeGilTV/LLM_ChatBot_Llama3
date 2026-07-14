@@ -67,6 +67,7 @@ from tools.mcp_phase3_tools import (
     get_shift_report_mcp,
     get_status_monitor_summary_mcp,
 )
+from tools.shm_tools import get_shm_daily_mcp, get_shm_metrics_mcp
 from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.splunk_tool import (
     read_splunk_p0_dashboard,
@@ -676,6 +677,59 @@ TOOL_REGISTRY = {
                 "instance_id": {"type": "string"},
                 "region": {"type": "string"},
                 "force_refresh": {"type": "boolean", "default": False},
+            },
+        },
+    },
+    "shm_metrics": {
+        "description": (
+            "SHM pillar scores and KPI metrics from shmview.arlocloud.com — Customer Engagement, "
+            "Protect & Connect, Customer Satisfaction, Smart AI, Onboarding. Includes iOS/Android "
+            "app ratings, crash-free sessions, livestream per user, DAU/MAU, stickiness, CSAT."
+        ),
+        "function": get_shm_metrics_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Natural language, e.g. 'SHM customer satisfaction iOS ratings'",
+                },
+                "query": {"type": "string", "description": "Alias for question"},
+                "force_live": {
+                    "type": "boolean",
+                    "description": "Refresh live Tableau app ratings (slower)",
+                    "default": False,
+                },
+            },
+        },
+    },
+    "shm_daily": {
+        "description": (
+            "SHM daily active users by OS (iOS, Android, Web) from shmdaily.arlocloud.com — "
+            "Splunk active_user_count_v2 averages and platform split."
+        ),
+        "function": get_shm_daily_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Natural language, e.g. 'DAU by OS last 30 days'",
+                },
+                "query": {"type": "string", "description": "Alias for question"},
+                "timerange": {
+                    "type": "integer",
+                    "description": "Lookback in hours (default 720 = 30d)",
+                    "default": 720,
+                },
+                "earliest": {
+                    "type": "string",
+                    "description": "Splunk earliest override, e.g. -30d@d",
+                },
+                "latest": {
+                    "type": "string",
+                    "description": "Splunk latest override, e.g. now",
+                },
             },
         },
     },

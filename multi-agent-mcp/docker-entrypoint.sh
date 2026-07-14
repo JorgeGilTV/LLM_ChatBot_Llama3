@@ -35,6 +35,9 @@ _read_secret SPLUNK_TOKEN splunk_token
 _read_secret PAGERDUTY_API_TOKEN pagerduty_api_token
 _read_secret ATLASSIAN_EMAIL atlassian_email
 _read_secret CONFLUENCE_TOKEN confluence_token
+_read_secret AMPLITUDE_API_KEY amplitude_api_key
+_read_secret AMPLITUDE_SECRET_KEY amplitude_secret_key
+_read_secret DATABRICKS_TOKEN databricks_token
 
 # /app/.env mounted as a volume is read by app.py (load_dotenv); do not source here to avoid
 # overwriting injected secrets or breaking values with special characters.

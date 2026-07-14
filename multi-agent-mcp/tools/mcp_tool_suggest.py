@@ -63,6 +63,21 @@ _SPLUNK_INTENT_RE = re.compile(
     re.I,
 )
 
+_SHM_INTENT_RE = re.compile(
+    r"\b(?:shm|service\s+health\s+management|customer\s+(?:engagement|satisfaction)|"
+    r"pillar\s+score|livestream\s+per\s+user|stickiness|care\s+volume|"
+    r"app\s+(?:store|rating)|shmview|shmview\.arlocloud)\b",
+    re.I,
+)
+
+_SHM_DAILY_INTENT_RE = re.compile(
+    r"\b(?:shmdaily|active\s+users?\s+(?:daily|by\s+os)|dau\s+(?:trend|daily|by\s+os)|"
+    r"daily\s+active\s+users?|users?\s+by\s+os|platform\s+split|ios\s+(?:vs|and)\s+android)\b",
+    re.I,
+)
+
+_IOS_ANDROID_RE = re.compile(r"\b(?:ios|android|iphone|play\s+store|app\s+store)\b", re.I)
+
 
 def mcp_checkbox_values_for(*tool_names: str) -> list[str]:
     return [mcp_checkbox_value(n) for n in tool_names if n in MCP_TOOL_NAMES]
@@ -137,6 +152,28 @@ def augment_suggested_tools_for_query(query: str, tools: list[str]) -> list[str]
             if cb not in seen:
                 out.append(cb)
                 seen.add(cb)
+
+    if _SHM_DAILY_INTENT_RE.search(q):
+        for cb in mcp_checkbox_values_for("shm_daily"):
+            if cb not in seen:
+                out.append(cb)
+                seen.add(cb)
+
+    if _SHM_INTENT_RE.search(q) or (
+        _IOS_ANDROID_RE.search(q)
+        and re.search(r"\b(?:metric|metrics|rating|crash|dau|mau|users?)\b", q, re.I)
+    ):
+        for cb in mcp_checkbox_values_for("shm_metrics"):
+            if cb not in seen:
+                out.append(cb)
+                seen.add(cb)
+        if _SHM_DAILY_INTENT_RE.search(q) is None and re.search(
+            r"\b(?:dau|daily\s+active|active\s+users?|by\s+os)\b", q, re.I
+        ):
+            for cb in mcp_checkbox_values_for("shm_daily"):
+                if cb not in seen:
+                    out.append(cb)
+                    seen.add(cb)
 
     return out
 

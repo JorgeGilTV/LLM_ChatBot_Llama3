@@ -755,6 +755,7 @@ const MCP_TIMERANGE_TOOLS = new Set([
     'MCP:grafana_dns_mapper',
     'MCP:grafana_savant_z2',
     'MCP:status_monitor_summary',
+    'MCP:shm_daily',
 ]);
 
 const MCP_SPLUNK_P0_TOOLS = new Set([
@@ -805,6 +806,7 @@ function getToolSectionLogo(sectionKey) {
         services: '🧩',
         noc_ops: '🛡️',
         aws: '☁️',
+        shm: '📊',
         other: '🔧',
     };
     return logos[sectionKey] || '🔧';

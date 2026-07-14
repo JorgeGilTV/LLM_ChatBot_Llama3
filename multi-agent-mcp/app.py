@@ -1119,6 +1119,7 @@ def suggest_tools():
             service_health_mcp_checkboxes,
         )
         from tools.service_query import extract_service_name_from_query
+        from tools.shm_tools import is_shm_metrics_question
 
         available_tools = build_suggest_tools_catalog_text(TOOL_REGISTRY)
         service_hint = ""
@@ -1128,6 +1129,12 @@ def suggest_tools():
                 f'\nDetected service-specific health query for "{svc}" — MUST include '
                 "MCP:datadog_services, MCP:datadog_search, MCP:datadog_errors, MCP:datadog_red_metrics, "
                 "MCP:service_owners, and Bedrock_Report.\n"
+            )
+        elif is_shm_metrics_question(user_query):
+            service_hint = (
+                "\nDetected SHM / customer satisfaction query — MUST include MCP:shm_metrics "
+                "(iOS/Android app ratings, CSAT pillar from shmview.arlocloud.com). "
+                "Do NOT use MintMCP Amplitude tools for this. Include Bedrock_Report.\n"
             )
 
         analysis_prompt = f"""Analyze this question and select the appropriate tools.
@@ -1214,9 +1221,15 @@ def api_run():
     start = time.time()
 
     from tools.mcp_tool_suggest import augment_suggested_tools_for_query, is_service_health_question
+    from tools.shm_tools import is_shm_daily_question, is_shm_metrics_question
 
     synthesis_tools_set = frozenset({'Bedrock_Report', 'Ask_Bedrock'})
-    if input_text.strip() and is_service_health_question(input_text):
+    needs_auto_data_tools = (
+        is_service_health_question(input_text)
+        or is_shm_metrics_question(input_text)
+        or is_shm_daily_question(input_text)
+    )
+    if input_text.strip() and needs_auto_data_tools:
         data_only = [t for t in selected_tools if t not in synthesis_tools_set]
         if not data_only:
             augmented = augment_suggested_tools_for_query(input_text, selected_tools)

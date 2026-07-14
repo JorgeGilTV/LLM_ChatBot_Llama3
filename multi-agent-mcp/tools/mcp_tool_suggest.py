@@ -5,6 +5,7 @@ import re
 
 from tools.mcp_tool_catalog import MCP_TOOL_CATEGORIES, MCP_CHECKBOX_PREFIX, MCP_TOOL_NAMES, mcp_checkbox_value
 from tools.service_query import extract_service_name_from_query
+from tools.shm_tools import is_shm_daily_question, is_shm_metrics_question
 
 # Legacy GocView checkbox / Bedrock names → MCP UI values.
 LEGACY_TO_MCP_CHECKBOX: dict[str, str] = {
@@ -65,14 +66,16 @@ _SPLUNK_INTENT_RE = re.compile(
 
 _SHM_INTENT_RE = re.compile(
     r"\b(?:shm|service\s+health\s+management|customer\s+(?:engagement|satisfaction)|"
+    r"satisfacción|satisfaccion|nivel\s+de\s+satisfacción|nivel\s+de\s+satisfaccion|"
+    r"satisfacción\s+del\s+cliente|satisfaccion\s+del\s+cliente|"
     r"pillar\s+score|livestream\s+per\s+user|stickiness|care\s+volume|"
-    r"app\s+(?:store|rating)|shmview|shmview\.arlocloud)\b",
+    r"app\s+(?:store|rating|ratings)|event\s+captions|onboarding\s+vitals|shmview|csat|nps)\b",
     re.I,
 )
 
 _SHM_DAILY_INTENT_RE = re.compile(
     r"\b(?:shmdaily|active\s+users?\s+(?:daily|by\s+os)|dau\s+(?:trend|daily|by\s+os)|"
-    r"daily\s+active\s+users?|users?\s+by\s+os|platform\s+split|ios\s+(?:vs|and)\s+android)\b",
+    r"daily\s+active\s+users?|users?\s+by\s+os|platform\s+split|ios\s+(?:vs|and|e)\s+android)\b",
     re.I,
 )
 
@@ -153,21 +156,21 @@ def augment_suggested_tools_for_query(query: str, tools: list[str]) -> list[str]
                 out.append(cb)
                 seen.add(cb)
 
-    if _SHM_DAILY_INTENT_RE.search(q):
+    if _SHM_DAILY_INTENT_RE.search(q) or is_shm_daily_question(q):
         for cb in mcp_checkbox_values_for("shm_daily"):
             if cb not in seen:
                 out.append(cb)
                 seen.add(cb)
 
-    if _SHM_INTENT_RE.search(q) or (
+    if is_shm_metrics_question(q) or (
         _IOS_ANDROID_RE.search(q)
-        and re.search(r"\b(?:metric|metrics|rating|crash|dau|mau|users?)\b", q, re.I)
+        and re.search(r"\b(?:metric|metrics|rating|ratings|crash|dau|mau|users?|satisfac|csat|nps)\b", q, re.I)
     ):
         for cb in mcp_checkbox_values_for("shm_metrics"):
             if cb not in seen:
                 out.append(cb)
                 seen.add(cb)
-        if _SHM_DAILY_INTENT_RE.search(q) is None and re.search(
+        if not is_shm_daily_question(q) and re.search(
             r"\b(?:dau|daily\s+active|active\s+users?|by\s+os)\b", q, re.I
         ):
             for cb in mcp_checkbox_values_for("shm_daily"):

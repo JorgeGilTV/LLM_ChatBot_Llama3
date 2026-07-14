@@ -94,8 +94,10 @@ _ANDROID_METRICS = frozenset(
 
 _SHM_INTENT_RE = re.compile(
     r"\b(?:shm|service\s+health\s+management|customer\s+(?:engagement|satisfaction)|"
+    r"satisfacción|satisfaccion|nivel\s+de\s+satisfacción|nivel\s+de\s+satisfaccion|"
+    r"satisfacción\s+del\s+cliente|satisfaccion\s+del\s+cliente|"
     r"pillar\s+score|livestream\s+per\s+user|stickiness|care\s+volume|"
-    r"app\s+(?:store|rating)|event\s+captions|onboarding\s+vitals|shmview)\b",
+    r"app\s+(?:store|rating|ratings)|event\s+captions|onboarding\s+vitals|shmview|csat|nps)\b",
     re.I,
 )
 
@@ -116,7 +118,16 @@ def is_shm_metrics_question(question: str) -> bool:
         return False
     if _SHM_DAILY_INTENT_RE.search(q) and not _SHM_INTENT_RE.search(q):
         return False
-    return bool(_SHM_INTENT_RE.search(q))
+    if _SHM_INTENT_RE.search(q):
+        return True
+    # Spanish/English: satisfaction + platform (Android/iOS)
+    if re.search(r"satisfac", q, re.I) and (_IOS_RE.search(q) or _ANDROID_RE.search(q)):
+        return True
+    if re.search(r"\b(?:rating|ratings|csat|nps)\b", q, re.I) and (
+        _IOS_RE.search(q) or _ANDROID_RE.search(q)
+    ):
+        return True
+    return False
 
 
 def is_shm_daily_question(question: str) -> bool:

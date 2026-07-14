@@ -2091,6 +2091,11 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
                     is_service_health_question,
                 )
                 from tools.service_query import extract_service_name_from_query
+                from tools.shm_tools import (
+                    get_shm_metrics_mcp,
+                    is_shm_daily_question,
+                    is_shm_metrics_question,
+                )
 
                 fast_route = resolve_mcp_fast_route(question)
                 if fast_route:
@@ -2111,6 +2116,30 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
                     )
 
                 tool_results = []
+                if is_shm_metrics_question(question):
+                    print("📊 SHM customer satisfaction query — prefetching shm_metrics (shmview API)...")
+                    try:
+                        shm_html = get_shm_metrics_mcp(
+                            question=question,
+                            force_live=bool(
+                                re.search(
+                                    r"\b(?:rating|ratings|satisfac|csat|android|ios)\b",
+                                    question,
+                                    re.I,
+                                )
+                            ),
+                        )
+                        if (shm_html or "").strip():
+                            tool_results.append({
+                                "tool": "shm_metrics",
+                                "result": shm_html,
+                                "description": "SHM KPIs from shmview.arlocloud.com (Tableau app ratings, CSAT pillar)",
+                                "reason": "Customer satisfaction / iOS Android ratings — local SHM API (not MintMCP Amplitude)",
+                            })
+                            print("   ✅ Prefetch shm_metrics")
+                    except Exception as shm_err:
+                        print(f"   ⚠️ Prefetch shm_metrics failed: {shm_err}")
+
                 if is_jira_question(question):
                     print("🎫 Jira query detected — running MintMCP Jira search...")
                     jira_hit = await run_jira_mcp_search(session, question)
@@ -2210,6 +2239,8 @@ Guidelines:
 - For Samsung PagerDuty external status board: use pagerduty_samsung_board
 - For shift handoff report: use shift_report with mode shift1|shift2|shift3 (slow, several minutes)
 - For status monitor hub / all environments health: use status_monitor_summary
+- For SHM / customer satisfaction / iOS Android app ratings / CSAT / NPS: use shm_metrics (NOT MintMCP amplitude__* tools). Data comes from shmview.arlocloud.com KPI history + Tableau.
+- For daily active users by OS (iOS/Android/Web): use shm_daily (shmdaily.arlocloud.com)
 - For AWS CloudTrail lookup (admin): use aws_cloudtrail_search with resource_name + account_id
 - For AWS Connect health (admin): use aws_connect_monitor
 - If question asks what is wrong / status / errors for a named service, ALWAYS use Datadog tools (not only Confluence)
@@ -2218,10 +2249,12 @@ Guidelines:
 
 Return ONLY the JSON object."""
 
-                # Skip redundant Bedrock tool-pick if Jira search already succeeded
-                if tool_results and is_jira_question(question):
+                # Skip redundant Bedrock tool-pick if Jira or SHM prefetch already succeeded
+                if tool_results and (
+                    is_jira_question(question) or is_shm_metrics_question(question)
+                ):
                     analysis = {"needs_tools": False, "direct_answer": ""}
-                    print("📊 Skipping Bedrock tool selection — Jira results already fetched")
+                    print("📊 Skipping Bedrock tool selection — prefetched results already available")
                 else:
                     # Call Bedrock
                     analysis_response = ask_bedrock(analysis_prompt, selected_tools=None)

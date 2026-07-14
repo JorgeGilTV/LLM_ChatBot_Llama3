@@ -534,10 +534,14 @@ def run_connection_checks() -> dict[str, Any]:
     amp_key = (os.getenv("AMPLITUDE_API_KEY") or "").strip()
     amp_secret = (os.getenv("AMPLITUDE_SECRET_KEY") or "").strip()
     amp_chart_url = (
-        (os.getenv("AMPLITUDE_CHART_URL") or "").strip()
-        or "https://app.amplitude.com/analytics/arlo/chart/thy5dan3/edit/dxa32pza?sharingId=0GNQ827B"
+        (os.getenv("AMPLITUDE_DASHBOARD_URL") or os.getenv("AMPLITUDE_CHART_URL") or "").strip()
+        or "https://app.amplitude.com/analytics/arlo/chart/thy5dan3/edit/dxa32pza"
     )
-    amp_base = (os.getenv("AMPLITUDE_API_BASE") or "https://amplitude.com").strip().rstrip("/")
+    amp_base = (
+        (os.getenv("AMPLITUDE_API_BASE_URL") or os.getenv("AMPLITUDE_API_BASE") or "https://amplitude.com")
+        .strip()
+        .rstrip("/")
+    )
     amp_k_ok = bool(amp_key and amp_secret)
     if not amp_k_ok:
         items.append(
@@ -566,7 +570,7 @@ def run_connection_checks() -> dict[str, Any]:
                     key_ok=True,
                     user_ok=None,
                     connection_ok=False,
-                    detail="AMPLITUDE_CHART_URL sin chart id reconocible",
+                    detail="AMPLITUDE_DASHBOARD_URL sin chart id reconocible",
                     error=None,
                 )
             )
@@ -598,6 +602,59 @@ def run_connection_checks() -> dict[str, Any]:
                         error=f"{type(e).__name__}: {e}",
                     )
                 )
+
+    # --- Tableau Cloud PAT (SHM) ---
+    tb_url = (os.getenv("TABLEAU_SERVER_URL") or "").strip().rstrip("/")
+    tb_site = (os.getenv("TABLEAU_SITE_CONTENT_URL") or "").strip()
+    tb_pat = (os.getenv("TABLEAU_PAT_SECRET") or "").strip()
+    tb_name = (os.getenv("TABLEAU_PAT_NAME") or "").strip()
+    if tb_url and tb_pat and tb_name:
+        try:
+            signin_url = f"{tb_url}/api/3.19/auth/signin"
+            payload = {
+                "credentials": {
+                    "personalAccessTokenName": tb_name,
+                    "personalAccessTokenSecret": tb_pat,
+                    "site": {"contentUrl": tb_site or ""},
+                }
+            }
+            r = requests.post(signin_url, json=payload, timeout=(10, 25))
+            ok = r.status_code == 200
+            items.append(
+                _row(
+                    id="tableau_pat",
+                    name="Tableau Cloud (PAT)",
+                    key_ok=True,
+                    user_ok=None,
+                    connection_ok=ok,
+                    detail=f"{tb_url} site={tb_site or '(default)'} → HTTP {r.status_code}",
+                    error=None if ok else (r.text[:200] if r.text else "HTTP error"),
+                )
+            )
+        except Exception as e:
+            items.append(
+                _row(
+                    id="tableau_pat",
+                    name="Tableau Cloud (PAT)",
+                    key_ok=True,
+                    user_ok=None,
+                    connection_ok=False,
+                    detail=tb_url,
+                    error=f"{type(e).__name__}: {e}",
+                )
+            )
+    else:
+        items.append(
+            _row(
+                id="tableau_pat",
+                name="Tableau Cloud (PAT)",
+                key_ok=bool(tb_pat and tb_name),
+                user_ok=None,
+                connection_ok=None,
+                detail="Faltan TABLEAU_SERVER_URL / TABLEAU_PAT_NAME / TABLEAU_PAT_SECRET",
+                error=None,
+            )
+        )
 
     # --- Tableau / Firebase (HTTPS probe) ---
     for probe_id, probe_name, env_key, default_url in (
@@ -632,54 +689,7 @@ def run_connection_checks() -> dict[str, Any]:
                 )
             )
 
-    # --- Databricks (workspace REST) ---
-    db_host = (os.getenv("DATABRICKS_HOST") or "").strip().rstrip("/")
-    db_token = (os.getenv("DATABRICKS_TOKEN") or "").strip()
-    db_k_ok = bool(db_host and db_token)
-    if not db_k_ok:
-        items.append(
-            _row(
-                id="databricks",
-                name="Databricks",
-                key_ok=False,
-                user_ok=None,
-                connection_ok=None,
-                detail="Faltan DATABRICKS_HOST y/o DATABRICKS_TOKEN",
-                error=None,
-            )
-        )
-    else:
-        try:
-            url = f"{db_host}/api/2.0/clusters/list"
-            r = requests.get(
-                url,
-                headers={"Authorization": f"Bearer {db_token}"},
-                timeout=(10, 25),
-            )
-            ok = r.status_code == 200
-            items.append(
-                _row(
-                    id="databricks",
-                    name="Databricks",
-                    key_ok=True,
-                    user_ok=None,
-                    connection_ok=ok,
-                    detail=f"{db_host} → HTTP {r.status_code}",
-                    error=None if ok else (r.text[:200] if r.text else "HTTP error"),
-                )
-            )
-        except Exception as e:
-            items.append(
-                _row(
-                    id="databricks",
-                    name="Databricks",
-                    key_ok=True,
-                    user_ok=None,
-                    connection_ok=False,
-                    detail=db_host,
-                    error=f"{type(e).__name__}: {e}",
-                )
-            )
+    OPTIONAL_INCOMPLETE = frozenset({"grafana", "aws_sts", "amplitude", "tableau", "tableau_pat", "firebase"})
 
     # --- Gemini / Anthropic (solo presencia) ---
     gem = bool((os.getenv("GEMINI_API_KEY") or "").strip())
@@ -706,8 +716,6 @@ def run_connection_checks() -> dict[str, Any]:
             error=None,
         )
     )
-
-    OPTIONAL_INCOMPLETE = frozenset({"grafana", "aws_sts", "amplitude", "databricks", "tableau", "firebase"})
 
     def _item_all_ok(it: dict[str, Any]) -> bool:
         oid = it.get("id")

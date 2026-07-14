@@ -84,3 +84,7 @@ old/
 recovered/
 recovered-from-docker-tar/
 config_secure.py
+
+# SHM Firebase / GA4 service accounts (copied from SHM1; never commit)
+config/shm/*.json
+config/shm/*.plist

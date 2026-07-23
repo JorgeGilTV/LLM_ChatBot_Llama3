@@ -6,8 +6,11 @@ daily active users (iOS/Android/Web) from shmdaily.arlocloud.com.
 from __future__ import annotations
 
 import html
+import json
 import os
 import re
+import uuid
+from dataclasses import dataclass
 from typing import Any
 
 import requests
@@ -92,12 +95,57 @@ _ANDROID_METRICS = frozenset(
     if "android" in k or k in ("app-launch-android", "app-rating-android", "firebase-crash-android")
 )
 
+PILLAR_KEYS: tuple[str, ...] = tuple(PILLAR_LABELS.keys())
+PILLAR_WEIGHTS: tuple[int, ...] = (20, 30, 30, 10, 10)
+PILLAR_COLORS: tuple[str, ...] = ("#2563eb", "#16a34a", "#ea580c", "#9333ea", "#0d9488")
+
+_MONTH_NAME_TO_NUM: dict[str, int] = {
+    "january": 1,
+    "jan": 1,
+    "enero": 1,
+    "february": 2,
+    "feb": 2,
+    "febrero": 2,
+    "march": 3,
+    "mar": 3,
+    "marzo": 3,
+    "april": 4,
+    "apr": 4,
+    "abril": 4,
+    "may": 5,
+    "mayo": 5,
+    "june": 6,
+    "jun": 6,
+    "junio": 6,
+    "july": 7,
+    "jul": 7,
+    "julio": 7,
+    "august": 8,
+    "aug": 8,
+    "agosto": 8,
+    "september": 9,
+    "sep": 9,
+    "sept": 9,
+    "septiembre": 9,
+    "october": 10,
+    "oct": 10,
+    "octubre": 10,
+    "november": 11,
+    "nov": 11,
+    "noviembre": 11,
+    "december": 12,
+    "dec": 12,
+    "diciembre": 12,
+}
+
 _SHM_INTENT_RE = re.compile(
-    r"\b(?:shm|service\s+health\s+management|customer\s+(?:engagement|satisfaction)|"
+    r"\b(?:shm|service\s+health\s+management|customer\s+(?:engagement|satisfaction|service)|"
     r"satisfacción|satisfaccion|nivel\s+de\s+satisfacción|nivel\s+de\s+satisfaccion|"
     r"satisfacción\s+del\s+cliente|satisfaccion\s+del\s+cliente|"
-    r"pillar\s+score|livestream\s+per\s+user|stickiness|care\s+volume|"
-    r"app\s+(?:store|rating|ratings)|event\s+captions|onboarding\s+vitals|shmview|csat|nps)\b",
+    r"pillar\s+score|shm\s+score|overall\s+score|puntaje|livestream\s+per\s+user|stickiness|"
+    r"care\s+volume|app\s+(?:store|rating|ratings)|play\s+store|event\s+captions|"
+    r"onboarding\s+vitals|shmview|csat|nps|gráfica|grafica|chart|graph|"
+    r"últimos?|ultimos?|meses|months?)\b",
     re.I,
 )
 
@@ -125,6 +173,13 @@ def is_shm_metrics_question(question: str) -> bool:
         return True
     if re.search(r"\b(?:rating|ratings|csat|nps)\b", q, re.I) and (
         _IOS_RE.search(q) or _ANDROID_RE.search(q)
+    ):
+        return True
+    month, _year = _parse_month_from_question(q)
+    if month and re.search(
+        r"\b(?:shm|pillar|rating|satisf|score|customer|app\s+store|play\s+store)\b",
+        q,
+        re.I,
     ):
         return True
     return False
@@ -185,19 +240,498 @@ def _latest_period(periods: list[str]) -> str | None:
     return s[-1] if s else None
 
 
+def _period_month_year(period: str) -> tuple[int, int] | None:
+    m = re.match(r"(\d{2})/(\d{2})/(\d{2})", (period or "").strip())
+    if not m:
+        return None
+    mm, yy = int(m.group(1)), int(m.group(3))
+    return mm, 2000 + yy
+
+
+def _period_display(period: str) -> str:
+    my = _period_month_year(period)
+    if not my:
+        return period
+    mm, yy = my
+    names = (
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    )
+    if 1 <= mm <= 12:
+        return f"{names[mm - 1]} {yy}"
+    return period
+
+
+def _parse_numeric(val: str | None) -> float | None:
+    if val is None:
+        return None
+    s = str(val).strip().replace(",", "").replace("%", "")
+    if not s or s in ("—", "-", "N/A", "n/a"):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_month_from_question(q: str) -> tuple[int | None, int | None]:
+    """Return (month 1–12, optional year) parsed from the question."""
+    ql = (q or "").lower()
+    m = re.search(r"\b(\d{1,2})[/\-](\d{4})\b", ql)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    for name, num in sorted(_MONTH_NAME_TO_NUM.items(), key=lambda x: -len(x[0])):
+        if re.search(rf"\b{re.escape(name)}\b", ql):
+            ym = re.search(rf"\b{re.escape(name)}\b[^\d]{{0,24}}(\d{{4}})", ql)
+            year = int(ym.group(1)) if ym else None
+            return num, year
+    return None, None
+
+
+def _parse_last_n_months(q: str) -> int | None:
+    m = re.search(
+        r"(?:last|past|últimos?|ultimos?)\s+(\d+)\s+(?:months?|meses)",
+        q or "",
+        re.I,
+    )
+    if m:
+        return max(1, min(24, int(m.group(1))))
+    return None
+
+
+def _wants_chart(q: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:graph|chart|gráfica|grafica|plot|trend|evolución|evolucion|"
+            r"linea|línea|line\s+chart|time\s+series)\b",
+            q or "",
+            re.I,
+        )
+    )
+
+
+def _match_period(periods: list[str], month: int, year: int | None) -> str | None:
+    matches: list[str] = []
+    for p in periods:
+        my = _period_month_year(p)
+        if not my or my[0] != month:
+            continue
+        if year is None or my[1] == year:
+            matches.append(p)
+    return matches[-1] if matches else None
+
+
+@dataclass
+class ShmQueryIntent:
+    target_period: str | None = None
+    chart_periods: list[str] | None = None
+    want_chart: bool = False
+    focus_overall: bool = False
+    metrics_filter: set[str] | None = None
+    pillars_filter: set[str] | None = None
+    focused: bool = False
+
+
+def _parse_shm_query(question: str, periods: list[str]) -> ShmQueryIntent:
+    q = (question or "").strip()
+    metrics_filter, pillars_filter = _resolve_metric_filter(q)
+    want_chart = _wants_chart(q)
+    last_n = _parse_last_n_months(q)
+    month, year = _parse_month_from_question(q)
+    target = _match_period(periods, month, year) if month else None
+
+    focus_overall = bool(
+        re.search(
+            r"\b(?:shm\s+score|overall\s+(?:shm\s+)?score|overall\s+score|"
+            r"puntaje\s+shm|score\s+general|overall\s+shm)\b",
+            q,
+            re.I,
+        )
+    )
+
+    chart_periods: list[str] | None = None
+    focused = False
+
+    if last_n and periods:
+        chart_periods = periods[-last_n:]
+        want_chart = True
+        focused = True
+    elif target:
+        idx = periods.index(target)
+        if want_chart or last_n:
+            chart_periods = periods[max(0, idx - 5) : idx + 1]
+        else:
+            chart_periods = [target]
+        focused = True
+    elif want_chart and periods:
+        chart_periods = periods[-6:]
+        focused = bool(metrics_filter or pillars_filter or focus_overall)
+
+    if not focused:
+        focused = bool(
+            target
+            or last_n
+            or want_chart
+            or metrics_filter
+            or pillars_filter
+            or focus_overall
+            or month
+        )
+
+    return ShmQueryIntent(
+        target_period=target,
+        chart_periods=chart_periods,
+        want_chart=want_chart,
+        focus_overall=focus_overall,
+        metrics_filter=metrics_filter,
+        pillars_filter=pillars_filter,
+        focused=focused,
+    )
+
+
+def _overall_shm_value(pillars: dict[str, Any], period: str) -> float | None:
+    num = den = 0.0
+    for i, key in enumerate(PILLAR_KEYS):
+        raw = (pillars.get(key) or {}).get(period)
+        val = _parse_numeric(str(raw) if raw is not None else None)
+        if val is None:
+            continue
+        w = PILLAR_WEIGHTS[i]
+        num += val * w
+        den += w
+    return round(num / den, 2) if den else None
+
+
+def _overall_shm_series(pillars: dict[str, Any], periods: list[str]) -> list[float | None]:
+    return [_overall_shm_value(pillars, p) for p in periods]
+
+
+def _pillar_series(pillars: dict[str, Any], key: str, periods: list[str]) -> list[float | None]:
+    pdata = pillars.get(key) or {}
+    return [_parse_numeric(str(pdata.get(p)) if pdata.get(p) is not None else None) for p in periods]
+
+
+def _metric_hist_series(metrics: dict[str, Any], key: str, periods: list[str]) -> list[float | None]:
+    mdata = metrics.get(key) or {}
+    out: list[float | None] = []
+    for p in periods:
+        cell = mdata.get(p) or {}
+        if isinstance(cell, dict):
+            out.append(_parse_numeric(cell.get("hist")))
+        else:
+            out.append(_parse_numeric(str(cell)))
+    return out
+
+
+def _chart_panel(canvas_id: str, title: str, height: int = 260) -> str:
+    return (
+        f"<div style='background:#fff;padding:14px;border-radius:8px;border:1px solid #e2e8f0;"
+        f"margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06);'>"
+        f"<div style='font-size:14px;font-weight:600;color:#0f172a;margin-bottom:8px;'>"
+        f"{html.escape(title)}</div>"
+        f"<div style='position:relative;height:{height}px;'>"
+        f"<canvas id='{html.escape(canvas_id)}'></canvas></div></div>"
+    )
+
+
+def _chartjs_line_script(charts: dict[str, Any]) -> str:
+    data_json = json.dumps(charts)
+    return f"""<script>
+(function() {{
+  const specs = {data_json};
+  function yRange(arrays, fallback) {{
+    const flat = arrays.flat().filter(v => v != null && Number.isFinite(Number(v))).map(Number);
+    if (!flat.length) return fallback || {{min: 0, max: 100}};
+    let mn = Math.min(...flat), mx = Math.max(...flat);
+    if (mn === mx) {{ mn -= 1; mx += 1; }}
+    const pad = (mx - mn) * 0.08 || 1;
+    return {{min: mn - pad, max: mx + pad}};
+  }}
+  function render() {{
+    if (typeof Chart === 'undefined') return false;
+    Object.entries(specs).forEach(([id, spec]) => {{
+      const canvas = document.getElementById(id);
+      if (!canvas) return;
+      const existing = Chart.getChart(canvas);
+      if (existing) existing.destroy();
+      const ds = (spec.datasets || []).map(d => ({{
+        label: d.label,
+        data: d.data,
+        borderColor: d.color,
+        backgroundColor: (d.color || '#0891b2') + '22',
+        tension: 0.25,
+        fill: false,
+        pointRadius: 3,
+        spanGaps: false,
+      }}));
+      const y = spec.yAxis || yRange(ds.map(d => d.data), spec.yFallback);
+      const suffix = spec.ySuffix || '';
+      new Chart(canvas, {{
+        type: 'line',
+        data: {{ labels: spec.labels || [], datasets: ds }},
+        options: {{
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {{
+            legend: {{ display: (spec.datasets || []).length > 1, position: 'bottom' }},
+            tooltip: {{ mode: 'index', intersect: false }},
+          }},
+          scales: {{
+            y: {{
+              min: y.min,
+              max: y.max,
+              ticks: {{ callback: v => suffix ? v + suffix : v }},
+            }},
+            x: {{ ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+          }},
+        }},
+      }});
+    }});
+    return true;
+  }}
+  if (!render()) {{
+    const iv = setInterval(() => {{ if (render()) clearInterval(iv); }}, 250);
+    setTimeout(() => clearInterval(iv), 12000);
+  }}
+}})();
+</script>"""
+
+
+def _build_shm_charts(
+    intent: ShmQueryIntent,
+    *,
+    pillars: dict[str, Any],
+    metrics: dict[str, Any],
+    periods: list[str],
+) -> tuple[list[str], str]:
+    """Return HTML panels + Chart.js script for the query intent."""
+    if not intent.want_chart or not periods:
+        return [], ""
+
+    labels = [_period_display(p) for p in periods]
+    charts: dict[str, Any] = {}
+    html_parts: list[str] = []
+    uid = uuid.uuid4().hex[:8]
+
+    if intent.focus_overall or (
+        not intent.pillars_filter and not intent.metrics_filter and intent.want_chart
+    ):
+        cid = f"shm_overall_{uid}"
+        series = _overall_shm_series(pillars, periods)
+        if any(v is not None for v in series):
+            html_parts.append(_chart_panel(cid, "Overall SHM Score"))
+            charts[cid] = {
+                "labels": labels,
+                "datasets": [
+                    {
+                        "label": "SHM Score",
+                        "data": series,
+                        "color": "#f87171",
+                    }
+                ],
+                "ySuffix": "%",
+                "yFallback": {"min": 80, "max": 95},
+            }
+
+    pillar_keys = (
+        [k for k in PILLAR_KEYS if k in intent.pillars_filter]
+        if intent.pillars_filter
+        else []
+    )
+    if pillar_keys and not intent.metrics_filter:
+        cid = f"shm_pillars_{uid}"
+        datasets = []
+        for i, key in enumerate(pillar_keys):
+            datasets.append(
+                {
+                    "label": PILLAR_LABELS.get(key, key),
+                    "data": _pillar_series(pillars, key, periods),
+                    "color": PILLAR_COLORS[PILLAR_KEYS.index(key)],
+                }
+            )
+        title = PILLAR_LABELS.get(pillar_keys[0], "Pillar") if len(pillar_keys) == 1 else "Pillar scores"
+        html_parts.append(_chart_panel(cid, title))
+        charts[cid] = {"labels": labels, "datasets": datasets, "ySuffix": "%"}
+
+    metric_keys: list[str] = []
+    if intent.metrics_filter:
+        metric_keys = sorted(intent.metrics_filter)
+
+    rating_keys = [k for k in metric_keys if k in ("app-rating-ios", "app-rating-android")]
+    other_keys = [k for k in metric_keys if k not in rating_keys]
+
+    if rating_keys:
+        cid = f"shm_ratings_{uid}"
+        datasets = []
+        colors = {"app-rating-ios": "#2563eb", "app-rating-android": "#16a34a"}
+        for key in rating_keys:
+            datasets.append(
+                {
+                    "label": METRIC_LABELS.get(key, key),
+                    "data": _metric_hist_series(metrics, key, periods),
+                    "color": colors.get(key, "#0891b2"),
+                }
+            )
+        html_parts.append(_chart_panel(cid, "App Store Ratings"))
+        charts[cid] = {
+            "labels": labels,
+            "datasets": datasets,
+            "yFallback": {"min": 3.0, "max": 5.0},
+        }
+
+    for key in other_keys[:4]:
+        cid = f"shm_metric_{key.replace('-', '_')}_{uid}"
+        html_parts.append(_chart_panel(cid, METRIC_LABELS.get(key, key)))
+        charts[cid] = {
+            "labels": labels,
+            "datasets": [
+                {
+                    "label": METRIC_LABELS.get(key, key),
+                    "data": _metric_hist_series(metrics, key, periods),
+                    "color": "#0891b2",
+                }
+            ],
+        }
+
+    if not charts and intent.pillars_filter:
+        key = next(iter(intent.pillars_filter))
+        cid = f"shm_pillar_{uid}"
+        html_parts.append(_chart_panel(cid, PILLAR_LABELS.get(key, key)))
+        charts[cid] = {
+            "labels": labels,
+            "datasets": [
+                {
+                    "label": PILLAR_LABELS.get(key, key),
+                    "data": _pillar_series(pillars, key, periods),
+                    "color": PILLAR_COLORS[PILLAR_KEYS.index(key)],
+                }
+            ],
+            "ySuffix": "%",
+        }
+
+    script = _chartjs_line_script(charts) if charts else ""
+    return html_parts, script
+
+
+def _build_direct_answer(
+    intent: ShmQueryIntent,
+    *,
+    pillars: dict[str, Any],
+    metrics: dict[str, Any],
+    periods: list[str],
+    latest: str | None,
+    live_ratings: dict[str, Any] | None,
+) -> str:
+    period = intent.target_period or latest
+    if not period:
+        return ""
+
+    lines: list[str] = []
+
+    if intent.focus_overall:
+        val = _overall_shm_value(pillars, period)
+        if val is not None:
+            lines.append(
+                f"<strong>Overall SHM Score</strong> ({_period_display(period)}): "
+                f"<span style='font-size:22px;color:#0891b2;'>{val}%</span>"
+            )
+
+    if intent.pillars_filter:
+        for key in intent.pillars_filter:
+            raw = (pillars.get(key) or {}).get(period)
+            if raw is not None:
+                lines.append(
+                    f"<strong>{html.escape(PILLAR_LABELS.get(key, key))}</strong> "
+                    f"({_period_display(period)}): "
+                    f"<span style='font-size:20px;color:#ea580c;'>{html.escape(str(raw))}%</span>"
+                )
+
+    if intent.metrics_filter:
+        for key in sorted(intent.metrics_filter):
+            cell = (metrics.get(key) or {}).get(period) or {}
+            hist = score = None
+            if isinstance(cell, dict):
+                hist = cell.get("hist")
+                score = cell.get("score")
+            else:
+                hist = str(cell)
+            label = METRIC_LABELS.get(key, key)
+            if hist is not None:
+                detail = html.escape(str(hist))
+                if score:
+                    detail += f" <span style='color:#64748b;font-size:13px;'>(score {html.escape(str(score))})</span>"
+                lines.append(
+                    f"<strong>{html.escape(label)}</strong> ({_period_display(period)}): "
+                    f"<span style='font-size:20px;color:#2563eb;'>{detail}</span>"
+                )
+
+    if (
+        live_ratings
+        and live_ratings.get("ok")
+        and period == latest
+        and (not intent.metrics_filter or intent.metrics_filter & {"app-rating-ios", "app-rating-android"})
+    ):
+        m = live_ratings.get("metrics") or {}
+        for plat_key, plat_label, metric_key in (
+            ("app_rating_ios", "iOS App Store", "app-rating-ios"),
+            ("app_rating_android", "Android Play Store", "app-rating-android"),
+        ):
+            if intent.metrics_filter and metric_key not in intent.metrics_filter:
+                continue
+            block = m.get(plat_key) or {}
+            val = block.get("value")
+            if val is not None:
+                lines.append(
+                    f"<strong>{html.escape(plat_label)} rating</strong> (live Tableau, "
+                    f"{html.escape(str(live_ratings.get('calendar_month', '')))}): "
+                    f"<span style='font-size:20px;color:#2563eb;'>{html.escape(str(val))}</span>"
+                )
+
+    if not lines and intent.target_period:
+        return (
+            f"<p style='margin:0;'>Period <strong>{html.escape(_period_display(period))}</strong> "
+            f"(<code>{html.escape(period)}</code>) selected from shmview KPI history.</p>"
+        )
+    if not lines:
+        return ""
+
+    return (
+        "<div style='background:linear-gradient(135deg,#ecfeff,#f0fdfa);border:1px solid #a5f3fc;"
+        "border-radius:10px;padding:16px 18px;margin:0 0 16px;'>"
+        "<div style='font-size:12px;font-weight:600;color:#0e7490;margin-bottom:8px;"
+        "text-transform:uppercase;letter-spacing:0.04em;'>Answer</div>"
+        + "".join(f"<p style='margin:6px 0;'>{ln}</p>" for ln in lines)
+        + "</div>"
+    )
+
+
 def _resolve_metric_filter(question: str) -> tuple[set[str] | None, set[str] | None]:
     """Return (metric_keys or None=all, pillar_keys or None=all)."""
     q = (question or "").lower()
     metrics: set[str] = set()
     pillars: set[str] = set()
 
-    if re.search(r"\b(?:customer\s+engagement|engagement\s+pillar)\b", q):
+    if re.search(r"\b(?:customer\s+engagement|engagement\s+pillar|compromiso)\b", q):
         pillars.add("customer_engagement")
         metrics.update(METRIC_GROUPS["engagement"])
     if re.search(r"\b(?:protect\s+and\s+connect|protect\s*&\s*connect|crash[\s-]?free)\b", q):
         pillars.add("protect_and_connect")
         metrics.update(METRIC_GROUPS["protect"])
-    if re.search(r"\b(?:customer\s+satisfaction|csat|app\s+ratings?|care\s+volume)\b", q):
+    if re.search(
+        r"\b(?:customer\s+satisfaction|customer\s+service|csat|app\s+ratings?|"
+        r"care\s+volume|satisfacción|satisfaccion)\b",
+        q,
+    ):
         pillars.add("customer_satisfaction")
         metrics.update(METRIC_GROUPS["satisfaction"])
     if re.search(r"\b(?:smart\s+ai|ai\s+adoption|ai\s+enablement)\b", q):
@@ -207,12 +741,28 @@ def _resolve_metric_filter(question: str) -> tuple[set[str] | None, set[str] | N
         pillars.add("onboarding")
         metrics.update(METRIC_GROUPS["onboarding"])
 
-    if _IOS_RE.search(q) and not _ANDROID_RE.search(q):
-        metrics.update(_IOS_METRICS)
-    elif _ANDROID_RE.search(q) and not _IOS_RE.search(q):
-        metrics.update(_ANDROID_METRICS)
-    elif _IOS_RE.search(q) and _ANDROID_RE.search(q):
-        metrics.update(_IOS_METRICS | _ANDROID_METRICS)
+    if re.search(r"\bapp\s+store\b", q) and not re.search(r"\bplay\s+store\b", q):
+        metrics.add("app-rating-ios")
+    if re.search(r"\b(?:play\s+store|google\s+play)\b", q) and not re.search(r"\bapp\s+store\b", q):
+        metrics.add("app-rating-android")
+
+    explicit_rating = bool(
+        re.search(r"\b(?:app\s+store\s+rating|app\s+rating|play\s+store\s+rating|rating)\b", q)
+    )
+    if explicit_rating and (_IOS_RE.search(q) or re.search(r"\bapp\s+store\b", q)):
+        metrics.add("app-rating-ios")
+        metrics -= _IOS_METRICS - {"app-rating-ios", "firebase-crash-ios"}
+    if explicit_rating and (_ANDROID_RE.search(q) or re.search(r"\b(?:play\s+store|google\s+play)\b", q)):
+        metrics.add("app-rating-android")
+        metrics -= _ANDROID_METRICS - {"app-rating-android", "firebase-crash-android"}
+
+    if not explicit_rating:
+        if _IOS_RE.search(q) and not _ANDROID_RE.search(q):
+            metrics.update(_IOS_METRICS)
+        elif _ANDROID_RE.search(q) and not _IOS_RE.search(q):
+            metrics.update(_ANDROID_METRICS)
+        elif _IOS_RE.search(q) and _ANDROID_RE.search(q):
+            metrics.update(_IOS_METRICS | _ANDROID_METRICS)
 
     if not metrics and not pillars:
         return None, None
@@ -270,7 +820,6 @@ def _format_shm_metrics_html(
             f"<p>Source: <a href='{html.escape(base_url)}' target='_blank'>{html.escape(base_url)}</a></p>"
         )
 
-    metrics_filter, pillars_filter = _resolve_metric_filter(question)
     all_metrics: dict[str, Any] = history.get("metrics") or {}
     all_pillars: dict[str, Any] = history.get("pillars") or {}
     periods = _sorted_periods(history.get("periods") or [])
@@ -280,7 +829,11 @@ def _format_shm_metrics_html(
                 periods = _sorted_periods(list(mdata.keys()))
                 break
     latest = _latest_period(periods)
-    show_periods = periods[-6:] if len(periods) > 6 else periods
+    intent = _parse_shm_query(question, periods)
+
+    metrics_filter = intent.metrics_filter
+    pillars_filter = intent.pillars_filter
+    show_periods = intent.chart_periods or (periods[-6:] if len(periods) > 6 else periods)
 
     parts: list[str] = [
         "<div class='shm-metrics-report'>",
@@ -288,11 +841,33 @@ def _format_shm_metrics_html(
         f"<p style='font-size:13px;color:#64748b;margin:0 0 14px;'>"
         f"Source: <a href='{html.escape(base_url)}' target='_blank'>{html.escape(base_url)}</a>"
         f" · KPI history ({len(periods)} periods)"
-        + (f" · latest <strong>{html.escape(latest)}</strong>" if latest else "")
+        + (f" · latest <strong>{html.escape(_period_display(latest))}</strong> ({html.escape(latest)})" if latest else "")
         + "</p>",
     ]
 
-    if all_pillars:
+    answer = _build_direct_answer(
+        intent,
+        pillars=all_pillars,
+        metrics=all_metrics,
+        periods=periods,
+        latest=latest,
+        live_ratings=live_ratings,
+    )
+    if answer:
+        parts.append(answer)
+
+    chart_html, chart_script = _build_shm_charts(
+        intent,
+        pillars=all_pillars,
+        metrics=all_metrics,
+        periods=show_periods,
+    )
+    parts.extend(chart_html)
+
+    compact = intent.focused and (intent.target_period or intent.want_chart)
+    table_periods = show_periods if compact else (periods[-6:] if len(periods) > 6 else periods)
+
+    if all_pillars and (not compact or pillars_filter or not metrics_filter):
         parts.append("<h3 style='margin:16px 0 8px;'>Pillar scores</h3>")
         pillar_rows: list[list[str]] = []
         for key, label in PILLAR_LABELS.items():
@@ -302,13 +877,15 @@ def _format_shm_metrics_html(
             if not isinstance(pdata, dict):
                 continue
             row = [label]
-            for p in show_periods:
+            for p in table_periods:
                 row.append(str(pdata.get(p, "—")))
-            if latest:
+            if latest and not compact:
                 row.append(str(pdata.get(latest, "—")))
             pillar_rows.append(row)
         if pillar_rows:
-            hdr = ["Pillar"] + show_periods + (["Latest"] if latest else [])
+            hdr = ["Pillar"] + [_period_display(p) for p in table_periods]
+            if latest and not compact:
+                hdr.append("Latest")
             parts.append(_render_table(hdr, pillar_rows))
 
     metric_keys = sorted(all_metrics.keys())
@@ -324,7 +901,7 @@ def _format_shm_metrics_html(
                 continue
             label = METRIC_LABELS.get(key, key)
             row = [label]
-            for p in show_periods:
+            for p in table_periods:
                 cell = mdata.get(p) or {}
                 if isinstance(cell, dict):
                     hist = cell.get("hist", "—")
@@ -332,7 +909,7 @@ def _format_shm_metrics_html(
                     row.append(f"{hist}" + (f" ({score})" if score else ""))
                 else:
                     row.append(str(cell))
-            if latest:
+            if latest and not compact:
                 cell = mdata.get(latest) or {}
                 if isinstance(cell, dict):
                     hist = cell.get("hist", "—")
@@ -341,15 +918,17 @@ def _format_shm_metrics_html(
                 else:
                     row.append(str(cell))
             mrows.append(row)
-        hdr = ["Metric"] + show_periods + (["Latest"] if latest else [])
+        hdr = ["Metric"] + [_period_display(p) for p in table_periods]
+        if latest and not compact:
+            hdr.append("Latest")
         parts.append(_render_table(hdr, mrows))
 
     if live_ratings and live_ratings.get("ok"):
         m = live_ratings.get("metrics") or {}
         show_live = metrics_filter is None or bool(
-            metrics_filter & METRIC_GROUPS["satisfaction"]
+            metrics_filter & set(METRIC_GROUPS["satisfaction"])
         )
-        if show_live:
+        if show_live and not compact:
             parts.append("<h3 style='margin:16px 0 8px;'>Live App Ratings (Tableau)</h3>")
             lr_rows: list[list[str]] = []
             for plat_key, plat_label in (
@@ -379,11 +958,14 @@ def _format_shm_metrics_html(
         )
 
     weights = history.get("weights") or {}
-    if weights and not metrics_filter:
+    if weights and not metrics_filter and not compact:
         top_w = sorted(weights.items(), key=lambda x: -float(x[1] or 0))[:8]
         wtxt = ", ".join(f"{METRIC_LABELS.get(k, k)}={v}%" for k, v in top_w if v)
         if wtxt:
             parts.append(f"<p style='font-size:12px;color:#64748b;margin-top:12px;'>Top weights: {html.escape(wtxt)}</p>")
+
+    if chart_script:
+        parts.append(chart_script)
 
     parts.append("</div>")
     return "\n".join(parts)
@@ -408,14 +990,23 @@ def get_shm_metrics_mcp(
             error=err or "Empty KPI history response",
         )
 
+    periods = _sorted_periods(data.get("periods") or [])
+    latest = _latest_period(periods)
+    intent = _parse_shm_query(q, periods)
+
     live_ratings = None
     want_ratings = force_live or bool(
-        re.search(r"\b(?:app\s+ratings?|customer\s+satisfaction|play\s+store|app\s+store)\b", q, re.I)
+        re.search(
+            r"\b(?:app\s+ratings?|customer\s+satisfaction|customer\s+service|"
+            r"play\s+store|app\s+store|satisfacción|satisfaccion)\b",
+            q,
+            re.I,
+        )
     )
-    if want_ratings:
-        periods = _sorted_periods(data.get("periods") or [])
-        period = _latest_period(periods) or "03/31/26"
-        live_ratings = _fetch_live_app_ratings(period)
+    if want_ratings and latest:
+        rating_period = intent.target_period or latest
+        if rating_period == latest or force_live:
+            live_ratings = _fetch_live_app_ratings(rating_period)
 
     return _format_shm_metrics_html(
         history=data,

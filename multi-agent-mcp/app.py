@@ -1133,7 +1133,7 @@ def suggest_tools():
         elif is_shm_metrics_question(user_query):
             service_hint = (
                 "\nDetected SHM / customer satisfaction query — MUST include MCP:shm_metrics "
-                "(iOS/Android app ratings, CSAT pillar from shmview.arlocloud.com). "
+                "(iOS/Android app ratings, CSAT pillar, Chart.js graphs from shmview.arlocloud.com). "
                 "Do NOT use MintMCP Amplitude tools for this. Include Bedrock_Report.\n"
             )
 

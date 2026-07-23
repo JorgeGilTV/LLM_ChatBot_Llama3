@@ -683,8 +683,9 @@ TOOL_REGISTRY = {
     "shm_metrics": {
         "description": (
             "SHM pillar scores and KPI metrics from shmview.arlocloud.com — Customer Engagement, "
-            "Protect & Connect, Customer Satisfaction, Smart AI, Onboarding. Includes iOS/Android "
-            "app ratings, crash-free sessions, livestream per user, DAU/MAU, stickiness, CSAT."
+            "Protect & Connect, Customer Satisfaction, Smart AI, Onboarding. Parses month names "
+            "(e.g. July/julio), last N months, and renders Chart.js trend graphs like shmview. "
+            "Includes iOS/Android app store ratings, CSAT, crash-free sessions, DAU/MAU."
         ),
         "function": get_shm_metrics_mcp,
         "schema": {

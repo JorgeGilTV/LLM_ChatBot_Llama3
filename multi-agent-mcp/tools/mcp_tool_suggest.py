@@ -65,11 +65,13 @@ _SPLUNK_INTENT_RE = re.compile(
 )
 
 _SHM_INTENT_RE = re.compile(
-    r"\b(?:shm|service\s+health\s+management|customer\s+(?:engagement|satisfaction)|"
+    r"\b(?:shm|service\s+health\s+management|customer\s+(?:engagement|satisfaction|service)|"
     r"satisfacción|satisfaccion|nivel\s+de\s+satisfacción|nivel\s+de\s+satisfaccion|"
     r"satisfacción\s+del\s+cliente|satisfaccion\s+del\s+cliente|"
-    r"pillar\s+score|livestream\s+per\s+user|stickiness|care\s+volume|"
-    r"app\s+(?:store|rating|ratings)|event\s+captions|onboarding\s+vitals|shmview|csat|nps)\b",
+    r"pillar\s+score|shm\s+score|overall\s+score|puntaje|livestream\s+per\s+user|stickiness|"
+    r"care\s+volume|app\s+(?:store|rating|ratings)|play\s+store|event\s+captions|"
+    r"onboarding\s+vitals|shmview|csat|nps|gráfica|grafica|chart|graph|"
+    r"últimos?|ultimos?|meses|months?)\b",
     re.I,
 )
 

@@ -398,11 +398,14 @@ def _parse_shm_query(question: str, periods: list[str]) -> ShmQueryIntent:
 
     focus_overall = bool(
         re.search(
-            r"\b(?:shm\s+score|overall\s+(?:shm\s+)?score|overall\s+score|"
-            r"puntaje\s+shm|score\s+general|overall\s+shm)\b",
+            r"\b(?:shm\s+score|overall|overview|dashboard|pantalla\s+principal|main\s+screen|"
+            r"overall\s+(?:shm\s+)?score|overall\s+score|"
+            r"puntaje\s+shm|score\s+general|show\s+(?:me\s+)?(?:the\s+)?shm|"
+            r"home\s+screen|pantalla\s+shm)\b",
             q,
             re.I,
         )
+        and not pillars_filter
     )
 
     chart_periods: list[str] | None = None
@@ -734,6 +737,165 @@ def _build_shm_pillar_dashboard(
         "ySuffix": "%",
         "yFallback": {"min": 60, "max": 105},
     }
+
+    html_parts.append("</div>")
+    return html_parts, _chartjs_bundle_script(charts)
+
+
+def _shm_score_color(val: float | None) -> str:
+    if val is None:
+        return "#fafafa"
+    if val >= 90:
+        return "#86efac"
+    if val >= 75:
+        return "#fcd34d"
+    return "#fca5a5"
+
+
+def _build_shm_overview_dashboard(
+    *,
+    pillars: dict[str, Any],
+    metrics: dict[str, Any],
+    periods: list[str],
+    focus_period: str | None,
+) -> tuple[list[str], str]:
+    """shmview main screen: overall SHM score, 5 pillars, multi-line chart, KPI grid."""
+    if not periods:
+        return [], ""
+
+    fp = focus_period or periods[-1]
+    uid = uuid.uuid4().hex[:8]
+    labels = [_period_short_label(p) for p in periods]
+    charts: dict[str, Any] = {}
+    html_parts: list[str] = []
+
+    overall_val = _overall_shm_value(pillars, fp)
+    overall_series = _overall_shm_series(pillars, periods)
+    overall_spark = f"shm_ov_spark_{uid}"
+    charts[overall_spark] = {
+        "chartType": "line",
+        "mini": True,
+        "labels": labels,
+        "datasets": [
+            {
+                "label": "SHM Score",
+                "data": overall_series,
+                "color": "#a1a1aa",
+                "fillColor": "#3f3f4644",
+            }
+        ],
+        "yFallback": {"min": 80, "max": 95},
+    }
+
+    pillars_multi = f"shm_ov_pillars_{uid}"
+    pillar_datasets = []
+    pillar_rows: list[str] = []
+    for i, key in enumerate(PILLAR_KEYS):
+        pdef = PILLAR_DASHBOARD_DEFS.get(key, {})
+        score_raw = (pillars.get(key) or {}).get(fp)
+        score_num = _parse_numeric(str(score_raw) if score_raw is not None else None)
+        n_metrics = len(pdef.get("metrics") or ())
+        pillar_rows.append(
+            f"<div style='display:flex;justify-content:space-between;align-items:center;"
+            f"padding:8px 0;border-bottom:1px solid #3f3f46;'>"
+            f"<div>"
+            f"<div style='font-size:13px;font-weight:600;color:#e4e4e7;'>"
+            f"{html.escape(PILLAR_LABELS.get(key, key))}</div>"
+            f"<div style='font-size:10px;color:#71717a;'>Wt {PILLAR_WEIGHTS[i]}% · {n_metrics} metrics</div>"
+            f"</div>"
+            f"<span style='font-size:18px;font-weight:700;color:{_shm_score_color(score_num)};'>"
+            f"{html.escape(str(score_raw) if score_raw is not None else '—')}</span>"
+            f"</div>"
+        )
+        pillar_datasets.append(
+            {
+                "label": pdef.get("short_name") or PILLAR_LABELS.get(key, key),
+                "data": _pillar_series(pillars, key, periods),
+                "color": PILLAR_COLORS[i],
+                "fillColor": PILLAR_FILL_COLORS[i] + "44",
+            }
+        )
+
+    charts[pillars_multi] = {
+        "chartType": "line",
+        "labels": labels,
+        "datasets": pillar_datasets,
+        "ySuffix": "%",
+        "yFallback": {"min": 60, "max": 105},
+    }
+
+    ov_txt = f"{overall_val:.1f}" if overall_val is not None else "—"
+    html_parts.append(
+        f"<div class='shm-vitals-dash' style='background:#1a1b1e;border-radius:16px;"
+        f"padding:20px;margin:16px 0;border:1px solid #3f3f46;color:#e4e4e7;'>"
+        f"<div style='margin-bottom:16px;'>"
+        f"<div style='font-size:11px;font-weight:600;color:#a1a1aa;text-transform:uppercase;"
+        f"letter-spacing:0.06em;'>SHM Dashboard — Everyday Experience v1</div>"
+        f"<h3 style='margin:6px 0 0;font-size:20px;color:#fafafa;'>"
+        f"Overall SHM · {_period_display(fp)}</h3>"
+        f"<div style='font-size:12px;color:#71717a;margin-top:4px;'>"
+        f"Weighted pillar scores (20/30/30/10/10) · source shmview KPI history</div>"
+        f"</div>"
+        f"<div style='display:grid;grid-template-columns:minmax(200px,1fr) minmax(280px,1.5fr);"
+        f"gap:16px;margin-bottom:20px;'>"
+        f"<div style='background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:16px;'>"
+        f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin-bottom:4px;'>Overall SHM Score</div>"
+        f"<div style='font-size:11px;color:#71717a;margin-bottom:8px;'>{_period_display(fp)}</div>"
+        f"<div style='font-size:42px;font-weight:700;color:{_shm_score_color(overall_val)};"
+        f"line-height:1;'>{html.escape(ov_txt)}</div>"
+        f"<div style='position:relative;height:56px;margin-top:12px;'>"
+        f"<canvas id='{overall_spark}'></canvas></div>"
+        f"</div>"
+        f"<div style='background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:16px;'>"
+        f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin-bottom:8px;'>Pillars</div>"
+        f"{''.join(pillar_rows)}"
+        f"<div style='position:relative;height:200px;margin-top:12px;'>"
+        f"<canvas id='{pillars_multi}'></canvas></div>"
+        f"</div>"
+        f"</div>"
+    )
+
+    metric_keys = [k for k in METRIC_LABELS if k in metrics]
+    if metric_keys:
+        html_parts.append(
+            f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin:8px 0 12px;'>"
+            f"Key metrics ({_period_display(fp)}) · {len(metric_keys)} KPIs</div>"
+            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));"
+            f"gap:10px;margin-bottom:8px;'>"
+        )
+        for mi, mkey in enumerate(metric_keys):
+            hist, score = _metric_at_period(metrics, mkey, fp)
+            if hist is None and score is None:
+                continue
+            pidx = next(
+                (i for i, pk in enumerate(PILLAR_KEYS) if mkey in PILLAR_DASHBOARD_DEFS.get(pk, {}).get("metrics", ())),
+                0,
+            )
+            color = PILLAR_COLORS[pidx]
+            fill = PILLAR_FILL_COLORS[pidx]
+            cid = f"shm_ov_kpi_{uid}_{mi}"
+            score_series = _metric_score_series(metrics, mkey, periods)
+            charts[cid] = {
+                "chartType": "line",
+                "mini": True,
+                "labels": labels,
+                "datasets": [{"label": METRIC_LABELS.get(mkey, mkey), "data": score_series, "color": color, "fillColor": fill + "88"}],
+                "yFallback": {"min": 0, "max": 100},
+            }
+            html_parts.append(
+                f"<article style='background:#27272a;border:1px solid #3f3f46;border-radius:10px;"
+                f"padding:12px;'>"
+                f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:6px;'>"
+                f"<span style='font-size:11px;font-weight:600;color:#d4d4d8;line-height:1.25;'>"
+                f"{html.escape(METRIC_LABELS.get(mkey, mkey))}</span>"
+                f"{_score_badge_html(score)}"
+                f"</div>"
+                f"<div style='font-size:22px;font-weight:700;color:#fafafa;margin:8px 0 4px;'>"
+                f"{html.escape(hist or '—')}</div>"
+                f"<div style='position:relative;height:44px;'><canvas id='{cid}'></canvas></div>"
+                f"</article>"
+            )
+        html_parts.append("</div>")
 
     html_parts.append("</div>")
     return html_parts, _chartjs_bundle_script(charts)
@@ -1098,7 +1260,17 @@ def _format_shm_metrics_html(
     chart_script = ""
     show_dashboard = False
 
-    if dashboard_pillar and intent.focused:
+    if intent.focus_overall:
+        dash_html, chart_script = _build_shm_overview_dashboard(
+            pillars=all_pillars,
+            metrics=all_metrics,
+            periods=trend_periods,
+            focus_period=focus_period,
+        )
+        if dash_html:
+            parts.extend(dash_html)
+            show_dashboard = True
+    elif dashboard_pillar and intent.focused:
         dash_html, chart_script = _build_shm_pillar_dashboard(
             dashboard_pillar,
             intent=intent,

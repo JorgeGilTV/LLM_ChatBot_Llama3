@@ -2042,6 +2042,66 @@ async def ask_arlo_async(question: str = "") -> str:
             """
 
 
+def _shm_html_from_context(context_from_other_tools: Optional[Dict[str, str]]) -> str | None:
+    if not context_from_other_tools:
+        return None
+    for key, html in context_from_other_tools.items():
+        if "shm_metrics" not in str(key).lower():
+            continue
+        body = str(html or "").strip()
+        if body and "SHM metrics error" not in body[:400]:
+            return body
+    return None
+
+
+def _try_shm_direct_response(
+    question: str,
+    context_from_other_tools: Optional[Dict[str, str]] = None,
+) -> str | None:
+    """
+    SHM / customer satisfaction queries are KPI lookups from shmview — not infra triage.
+    Return formatted HTML directly instead of running Bedrock issues-only synthesis.
+    """
+    from tools.mcp_tool_suggest import is_service_health_question
+    from tools.service_query import extract_service_name_from_query
+    from tools.shm_tools import (
+        get_shm_metrics_mcp,
+        is_shm_daily_question,
+        is_shm_metrics_question,
+    )
+
+    if not is_shm_metrics_question(question) or is_shm_daily_question(question):
+        return None
+    if is_service_health_question(question) and extract_service_name_from_query(question):
+        return None
+
+    shm_html = _shm_html_from_context(context_from_other_tools)
+    if not shm_html:
+        try:
+            shm_html = get_shm_metrics_mcp(
+                question=question,
+                force_live=bool(
+                    re.search(
+                        r"\b(?:rating|ratings|satisfac|csat|android|ios|live|refresh)\b",
+                        question,
+                        re.I,
+                    )
+                ),
+            )
+        except Exception as err:
+            print(f"   ⚠️ SHM direct route failed: {err}")
+            return None
+
+    if not shm_html or "SHM metrics error" in shm_html[:400]:
+        return None
+
+    return _mcp_direct_response_html(
+        "🤖 GocBedrock Response (SHM — Service Health Management)",
+        shm_html,
+        "linear-gradient(135deg, #0891b2 0%, #0e7490 100%)",
+    )
+
+
 async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_from_other_tools: Optional[Dict[str, str]] = None) -> str:
     """
     Ask GocBedrock via MCP using Bedrock intelligence (async version with official SDK).
@@ -2068,6 +2128,11 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
             </p>
         </div>
         """
+
+    shm_direct = _try_shm_direct_response(question, context_from_other_tools)
+    if shm_direct:
+        print("📊 SHM KPI query → returning shmview data directly (skip MintMCP triage)")
+        return shm_direct
     
     try:
         from tools.bedrock_tool import ask_bedrock
@@ -2091,11 +2156,6 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
                     is_service_health_question,
                 )
                 from tools.service_query import extract_service_name_from_query
-                from tools.shm_tools import (
-                    get_shm_metrics_mcp,
-                    is_shm_daily_question,
-                    is_shm_metrics_question,
-                )
 
                 fast_route = resolve_mcp_fast_route(question)
                 if fast_route:
@@ -2116,30 +2176,6 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
                     )
 
                 tool_results = []
-                if is_shm_metrics_question(question):
-                    print("📊 SHM customer satisfaction query — prefetching shm_metrics (shmview API)...")
-                    try:
-                        shm_html = get_shm_metrics_mcp(
-                            question=question,
-                            force_live=bool(
-                                re.search(
-                                    r"\b(?:rating|ratings|satisfac|csat|android|ios)\b",
-                                    question,
-                                    re.I,
-                                )
-                            ),
-                        )
-                        if (shm_html or "").strip():
-                            tool_results.append({
-                                "tool": "shm_metrics",
-                                "result": shm_html,
-                                "description": "SHM KPIs from shmview.arlocloud.com (Tableau app ratings, CSAT pillar)",
-                                "reason": "Customer satisfaction / iOS Android ratings — local SHM API (not MintMCP Amplitude)",
-                            })
-                            print("   ✅ Prefetch shm_metrics")
-                    except Exception as shm_err:
-                        print(f"   ⚠️ Prefetch shm_metrics failed: {shm_err}")
-
                 if is_jira_question(question):
                     print("🎫 Jira query detected — running MintMCP Jira search...")
                     jira_hit = await run_jira_mcp_search(session, question)
@@ -2249,10 +2285,8 @@ Guidelines:
 
 Return ONLY the JSON object."""
 
-                # Skip redundant Bedrock tool-pick if Jira or SHM prefetch already succeeded
-                if tool_results and (
-                    is_jira_question(question) or is_shm_metrics_question(question)
-                ):
+                # Skip redundant Bedrock tool-pick if Jira prefetch already succeeded
+                if tool_results and is_jira_question(question):
                     analysis = {"needs_tools": False, "direct_answer": ""}
                     print("📊 Skipping Bedrock tool selection — prefetched results already available")
                 else:

@@ -98,6 +98,52 @@ _ANDROID_METRICS = frozenset(
 PILLAR_KEYS: tuple[str, ...] = tuple(PILLAR_LABELS.keys())
 PILLAR_WEIGHTS: tuple[int, ...] = (20, 30, 30, 10, 10)
 PILLAR_COLORS: tuple[str, ...] = ("#2563eb", "#16a34a", "#ea580c", "#9333ea", "#0d9488")
+PILLAR_FILL_COLORS: tuple[str, ...] = ("#dbeafe", "#dcfce7", "#ffedd5", "#f3e8ff", "#ccfbf1")
+
+PILLAR_DASHBOARD_DEFS: dict[str, dict[str, Any]] = {
+    "customer_engagement": {
+        "name": "Customer Engagement",
+        "short_name": "Engagement",
+        "metrics": ("livestream", "dau", "mau", "stickiness", "amplitude-avg-time"),
+    },
+    "protect_and_connect": {
+        "name": "Protect and Connect",
+        "short_name": "Protect & Connect",
+        "metrics": (
+            "firebase-crash-ios",
+            "firebase-crash-android",
+            "time-to-livestream",
+            "livestream-reliability",
+            "app-launch-ios",
+            "app-launch-android",
+        ),
+    },
+    "customer_satisfaction": {
+        "name": "Customer Satisfaction",
+        "short_name": "Customer Sat",
+        "metrics": ("app-rating-ios", "app-rating-android", "care-volume", "event-csat"),
+    },
+    "smart_ai_adoption": {
+        "name": "Smart AI Adoption",
+        "short_name": "Smart AI",
+        "metrics": ("ai-enablement", "ai-default-on", "ai-default-off", "ai-audio-ai"),
+    },
+    "onboarding": {
+        "name": "Onboarding",
+        "short_name": "Onboarding",
+        "metrics": ("claimed-vs-located", "median-onboarding", "needed-help"),
+    },
+}
+
+METRIC_SOURCES: dict[str, str] = {
+    "app-rating-ios": "Tableau",
+    "app-rating-android": "App30dayAveRating",
+    "care-volume": "CaseData",
+    "event-csat": "Harlem feedback (thumbs)",
+    "livestream": "Splunk",
+    "dau": "Amplitude",
+    "mau": "Amplitude",
+}
 
 _MONTH_NAME_TO_NUM: dict[str, int] = {
     "january": 1,
@@ -367,11 +413,7 @@ def _parse_shm_query(question: str, periods: list[str]) -> ShmQueryIntent:
         want_chart = True
         focused = True
     elif target:
-        idx = periods.index(target)
-        if want_chart or last_n:
-            chart_periods = periods[max(0, idx - 5) : idx + 1]
-        else:
-            chart_periods = [target]
+        chart_periods = list(periods)
         focused = True
     elif want_chart and periods:
         chart_periods = periods[-6:]
@@ -433,18 +475,69 @@ def _metric_hist_series(metrics: dict[str, Any], key: str, periods: list[str]) -
     return out
 
 
-def _chart_panel(canvas_id: str, title: str, height: int = 260) -> str:
+def _period_short_label(period: str) -> str:
+    my = _period_month_year(period)
+    if not my:
+        return period[:3]
+    names = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    mm, _yy = my
+    return names[mm - 1] if 1 <= mm <= 12 else period[:3]
+
+
+def _metric_at_period(
+    metrics: dict[str, Any], key: str, period: str
+) -> tuple[str | None, float | None]:
+    cell = (metrics.get(key) or {}).get(period) or {}
+    if isinstance(cell, dict):
+        hist = cell.get("hist")
+        return (
+            str(hist) if hist is not None else None,
+            _parse_numeric(cell.get("score")),
+        )
+    return (str(cell) if cell else None), None
+
+
+def _metric_score_series(metrics: dict[str, Any], key: str, periods: list[str]) -> list[float | None]:
+    mdata = metrics.get(key) or {}
+    out: list[float | None] = []
+    for p in periods:
+        cell = mdata.get(p) or {}
+        if isinstance(cell, dict):
+            out.append(_parse_numeric(cell.get("score")))
+        else:
+            out.append(None)
+    return out
+
+
+def _score_badge_html(score: float | None) -> str:
+    if score is None:
+        return "<span style='color:#71717a;font-size:11px;'>—</span>"
+    if score >= 90:
+        fg, bg = "#86efac", "#166534"
+    elif score >= 75:
+        fg, bg = "#fcd34d", "#854d0e"
+    else:
+        fg, bg = "#fca5a5", "#991b1b"
+    txt = f"{score:.2f}".rstrip("0").rstrip(".")
     return (
-        f"<div style='background:#fff;padding:14px;border-radius:8px;border:1px solid #e2e8f0;"
-        f"margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06);'>"
-        f"<div style='font-size:14px;font-weight:600;color:#0f172a;margin-bottom:8px;'>"
-        f"{html.escape(title)}</div>"
-        f"<div style='position:relative;height:{height}px;'>"
-        f"<canvas id='{html.escape(canvas_id)}'></canvas></div></div>"
+        f"<span style='background:{bg};color:{fg};padding:2px 8px;border-radius:999px;"
+        f"font-size:11px;font-weight:600;'>{html.escape(txt)}</span>"
     )
 
 
-def _chartjs_line_script(charts: dict[str, Any]) -> str:
+def _resolve_dashboard_pillar(intent: ShmQueryIntent) -> str | None:
+    if intent.pillars_filter:
+        if len(intent.pillars_filter) == 1:
+            return next(iter(intent.pillars_filter))
+        if "customer_satisfaction" in intent.pillars_filter:
+            return "customer_satisfaction"
+        return next(iter(intent.pillars_filter))
+    if intent.focus_overall:
+        return None
+    return None
+
+
+def _chartjs_bundle_script(charts: dict[str, Any]) -> str:
     data_json = json.dumps(charts)
     return f"""<script>
 (function() {{
@@ -464,35 +557,60 @@ def _chartjs_line_script(charts: dict[str, Any]) -> str:
       if (!canvas) return;
       const existing = Chart.getChart(canvas);
       if (existing) existing.destroy();
-      const ds = (spec.datasets || []).map(d => ({{
-        label: d.label,
-        data: d.data,
-        borderColor: d.color,
-        backgroundColor: (d.color || '#0891b2') + '22',
-        tension: 0.25,
-        fill: false,
-        pointRadius: 3,
-        spanGaps: false,
-      }}));
+      const ctype = spec.chartType || 'line';
+      const mini = !!spec.mini;
+      const ds = (spec.datasets || []).map(d => {{
+        const color = d.color || '#0891b2';
+        const fill = d.fillColor || color + '55';
+        if (ctype === 'bar') {{
+          return {{
+            label: d.label,
+            data: d.data,
+            backgroundColor: fill,
+            borderColor: color,
+            borderWidth: 1.5,
+            borderRadius: 3,
+          }};
+        }}
+        return {{
+          label: d.label,
+          data: d.data,
+          borderColor: color,
+          backgroundColor: fill,
+          tension: 0.35,
+          fill: true,
+          pointRadius: mini ? 0 : 3,
+          borderWidth: mini ? 1.5 : 2,
+          spanGaps: false,
+        }};
+      }});
       const y = spec.yAxis || yRange(ds.map(d => d.data), spec.yFallback);
       const suffix = spec.ySuffix || '';
       new Chart(canvas, {{
-        type: 'line',
+        type: ctype,
         data: {{ labels: spec.labels || [], datasets: ds }},
         options: {{
           responsive: true,
           maintainAspectRatio: false,
           plugins: {{
-            legend: {{ display: (spec.datasets || []).length > 1, position: 'bottom' }},
+            legend: {{ display: !mini && (spec.datasets || []).length > 1, position: 'bottom' }},
             tooltip: {{ mode: 'index', intersect: false }},
           }},
           scales: {{
             y: {{
+              display: !mini,
               min: y.min,
               max: y.max,
-              ticks: {{ callback: v => suffix ? v + suffix : v }},
+              ticks: {{ color: '#a1a1aa', font: {{ size: mini ? 8 : 10 }}, callback: v => suffix ? v + suffix : v }},
+              grid: {{ color: 'rgba(255,255,255,0.06)' }},
+              border: {{ display: false }},
             }},
-            x: {{ ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+            x: {{
+              display: !mini,
+              ticks: {{ color: '#a1a1aa', font: {{ size: 9 }}, maxRotation: 45, minRotation: mini ? 0 : 45 }},
+              grid: {{ display: false }},
+              border: {{ display: false }},
+            }},
           }},
         }},
       }});
@@ -505,6 +623,135 @@ def _chartjs_line_script(charts: dict[str, Any]) -> str:
   }}
 }})();
 </script>"""
+
+
+def _build_shm_pillar_dashboard(
+    pillar_key: str,
+    *,
+    intent: ShmQueryIntent,
+    pillars: dict[str, Any],
+    metrics: dict[str, Any],
+    periods: list[str],
+    focus_period: str | None,
+) -> tuple[list[str], str]:
+    """shmview-style pillar dashboard: KPI cards + sparklines + monthly bar chart."""
+    if not periods or pillar_key not in PILLAR_DASHBOARD_DEFS:
+        return [], ""
+
+    pdef = PILLAR_DASHBOARD_DEFS[pillar_key]
+    pidx = PILLAR_KEYS.index(pillar_key)
+    color = PILLAR_COLORS[pidx]
+    fill = PILLAR_FILL_COLORS[pidx]
+    fp = focus_period or periods[-1]
+    uid = uuid.uuid4().hex[:8]
+    labels = [_period_short_label(p) for p in periods]
+    charts: dict[str, Any] = {}
+    html_parts: list[str] = []
+
+    pillar_val = (pillars.get(pillar_key) or {}).get(fp)
+    header_score = (
+        f"<span style='font-size:32px;font-weight:700;color:{color};'>"
+        f"{html.escape(str(pillar_val))}%</span>"
+        if pillar_val is not None
+        else ""
+    )
+
+    html_parts.append(
+        f"<div class='shm-vitals-dash' style='background:#1a1b1e;border-radius:16px;"
+        f"padding:20px;margin:16px 0;border:1px solid #3f3f46;color:#e4e4e7;'>"
+        f"<div style='display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;"
+        f"gap:12px;margin-bottom:16px;'>"
+        f"<div>"
+        f"<div style='font-size:11px;font-weight:600;color:#a1a1aa;text-transform:uppercase;"
+        f"letter-spacing:0.06em;'>SHM Dashboard — Everyday Experience</div>"
+        f"<h3 style='margin:6px 0 0;font-size:20px;color:#fafafa;'>{html.escape(pdef['name'])}"
+        f" · {_period_display(fp)}</h3>"
+        f"</div>"
+        f"{header_score}"
+        f"</div>"
+    )
+
+    metric_keys = list(pdef["metrics"])
+    if intent.metrics_filter:
+        metric_keys = [k for k in metric_keys if k in intent.metrics_filter]
+
+    cards: list[str] = []
+    for mi, mkey in enumerate(metric_keys):
+        hist, score = _metric_at_period(metrics, mkey, fp)
+        if hist is None and score is None:
+            continue
+        cid = f"shm_spark_{uid}_{mi}"
+        score_series = _metric_score_series(metrics, mkey, periods)
+        charts[cid] = {
+            "chartType": "line",
+            "mini": True,
+            "labels": labels,
+            "datasets": [{"label": METRIC_LABELS.get(mkey, mkey), "data": score_series, "color": color, "fillColor": fill + "88"}],
+            "yFallback": {"min": 0, "max": 100},
+        }
+        cards.append(
+            f"<article style='background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:14px;'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:8px;'>"
+            f"<span style='font-size:12px;font-weight:600;color:#e4e4e7;line-height:1.3;'>"
+            f"{html.escape(METRIC_LABELS.get(mkey, mkey))}</span>"
+            f"{_score_badge_html(score)}"
+            f"</div>"
+            f"<div style='font-size:26px;font-weight:700;color:#fafafa;margin:10px 0 6px;'>"
+            f"{html.escape(hist or '—')}</div>"
+            f"<div style='position:relative;height:52px;'><canvas id='{cid}'></canvas></div>"
+            f"<div style='font-size:10px;color:#71717a;margin-top:8px;'>"
+            f"{html.escape(METRIC_SOURCES.get(mkey, 'shmview KPI history'))}</div>"
+            f"</article>"
+        )
+
+    if cards:
+        html_parts.append(
+            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));"
+            f"gap:12px;margin-bottom:20px;'>{''.join(cards)}</div>"
+        )
+
+    bar_id = f"shm_pillar_bar_{uid}"
+    pillar_scores = _pillar_series(pillars, pillar_key, periods)
+    html_parts.append(
+        f"<div style='margin-top:8px;'>"
+        f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin-bottom:8px;'>"
+        f"Monthly trend — {html.escape(pdef['short_name'])} score (%)</div>"
+        f"<div style='position:relative;height:280px;background:#27272a;border-radius:12px;"
+        f"padding:12px;border:1px solid #3f3f46;'>"
+        f"<canvas id='{bar_id}'></canvas></div></div>"
+    )
+    charts[bar_id] = {
+        "chartType": "bar",
+        "labels": labels,
+        "datasets": [
+            {
+                "label": pdef["short_name"],
+                "data": pillar_scores,
+                "color": color,
+                "fillColor": fill,
+            }
+        ],
+        "ySuffix": "%",
+        "yFallback": {"min": 60, "max": 105},
+    }
+
+    html_parts.append("</div>")
+    return html_parts, _chartjs_bundle_script(charts)
+
+
+def _chart_panel(canvas_id: str, title: str, height: int = 260) -> str:
+    return (
+        f"<div style='background:#fff;padding:14px;border-radius:8px;border:1px solid #e2e8f0;"
+        f"margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06);'>"
+        f"<div style='font-size:14px;font-weight:600;color:#0f172a;margin-bottom:8px;'>"
+        f"{html.escape(title)}</div>"
+        f"<div style='position:relative;height:{height}px;'>"
+        f"<canvas id='{html.escape(canvas_id)}'></canvas></div></div>"
+    )
+
+
+def _chartjs_line_script(charts: dict[str, Any]) -> str:
+    return _chartjs_bundle_script(charts)
 
 
 def _build_shm_charts(
@@ -619,7 +866,7 @@ def _build_shm_charts(
             "ySuffix": "%",
         }
 
-    script = _chartjs_line_script(charts) if charts else ""
+    script = _chartjs_bundle_script(charts) if charts else ""
     return html_parts, script
 
 
@@ -845,29 +1092,51 @@ def _format_shm_metrics_html(
         + "</p>",
     ]
 
-    answer = _build_direct_answer(
-        intent,
-        pillars=all_pillars,
-        metrics=all_metrics,
-        periods=periods,
-        latest=latest,
-        live_ratings=live_ratings,
-    )
-    if answer:
-        parts.append(answer)
+    focus_period = intent.target_period or latest
+    trend_periods = list(periods)
+    dashboard_pillar = _resolve_dashboard_pillar(intent)
+    chart_script = ""
+    show_dashboard = False
 
-    chart_html, chart_script = _build_shm_charts(
-        intent,
-        pillars=all_pillars,
-        metrics=all_metrics,
-        periods=show_periods,
-    )
-    parts.extend(chart_html)
+    if dashboard_pillar and intent.focused:
+        dash_html, chart_script = _build_shm_pillar_dashboard(
+            dashboard_pillar,
+            intent=intent,
+            pillars=all_pillars,
+            metrics=all_metrics,
+            periods=trend_periods,
+            focus_period=focus_period,
+        )
+        if dash_html:
+            parts.extend(dash_html)
+            show_dashboard = True
 
-    compact = intent.focused and (intent.target_period or intent.want_chart)
+    if not show_dashboard:
+        answer = _build_direct_answer(
+            intent,
+            pillars=all_pillars,
+            metrics=all_metrics,
+            periods=periods,
+            latest=latest,
+            live_ratings=live_ratings,
+        )
+        if answer:
+            parts.append(answer)
+
+        chart_html, chart_script = _build_shm_charts(
+            intent,
+            pillars=all_pillars,
+            metrics=all_metrics,
+            periods=show_periods,
+        )
+        parts.extend(chart_html)
+
+    compact = show_dashboard or (intent.focused and (intent.target_period or intent.want_chart))
     table_periods = show_periods if compact else (periods[-6:] if len(periods) > 6 else periods)
 
-    if all_pillars and (not compact or pillars_filter or not metrics_filter):
+    if show_dashboard:
+        pass  # tables omitted — dashboard cards + bar chart are the primary view
+    elif all_pillars and (not compact or pillars_filter or not metrics_filter):
         parts.append("<h3 style='margin:16px 0 8px;'>Pillar scores</h3>")
         pillar_rows: list[list[str]] = []
         for key, label in PILLAR_LABELS.items():
@@ -888,42 +1157,43 @@ def _format_shm_metrics_html(
                 hdr.append("Latest")
             parts.append(_render_table(hdr, pillar_rows))
 
-    metric_keys = sorted(all_metrics.keys())
-    if metrics_filter:
-        metric_keys = [k for k in metric_keys if k in metrics_filter]
+    if not show_dashboard:
+        metric_keys = sorted(all_metrics.keys())
+        if metrics_filter:
+            metric_keys = [k for k in metric_keys if k in metrics_filter]
 
-    if metric_keys:
-        parts.append("<h3 style='margin:16px 0 8px;'>KPI metrics</h3>")
-        mrows: list[list[str]] = []
-        for key in metric_keys:
-            mdata = all_metrics.get(key) or {}
-            if not isinstance(mdata, dict):
-                continue
-            label = METRIC_LABELS.get(key, key)
-            row = [label]
-            for p in table_periods:
-                cell = mdata.get(p) or {}
-                if isinstance(cell, dict):
-                    hist = cell.get("hist", "—")
-                    score = cell.get("score")
-                    row.append(f"{hist}" + (f" ({score})" if score else ""))
-                else:
-                    row.append(str(cell))
+        if metric_keys:
+            parts.append("<h3 style='margin:16px 0 8px;'>KPI metrics</h3>")
+            mrows: list[list[str]] = []
+            for key in metric_keys:
+                mdata = all_metrics.get(key) or {}
+                if not isinstance(mdata, dict):
+                    continue
+                label = METRIC_LABELS.get(key, key)
+                row = [label]
+                for p in table_periods:
+                    cell = mdata.get(p) or {}
+                    if isinstance(cell, dict):
+                        hist = cell.get("hist", "—")
+                        score = cell.get("score")
+                        row.append(f"{hist}" + (f" ({score})" if score else ""))
+                    else:
+                        row.append(str(cell))
+                if latest and not compact:
+                    cell = mdata.get(latest) or {}
+                    if isinstance(cell, dict):
+                        hist = cell.get("hist", "—")
+                        score = cell.get("score")
+                        row.append(f"{hist}" + (f" ({score})" if score else ""))
+                    else:
+                        row.append(str(cell))
+                mrows.append(row)
+            hdr = ["Metric"] + [_period_display(p) for p in table_periods]
             if latest and not compact:
-                cell = mdata.get(latest) or {}
-                if isinstance(cell, dict):
-                    hist = cell.get("hist", "—")
-                    score = cell.get("score")
-                    row.append(f"{hist}" + (f" ({score})" if score else ""))
-                else:
-                    row.append(str(cell))
-            mrows.append(row)
-        hdr = ["Metric"] + [_period_display(p) for p in table_periods]
-        if latest and not compact:
-            hdr.append("Latest")
-        parts.append(_render_table(hdr, mrows))
+                hdr.append("Latest")
+            parts.append(_render_table(hdr, mrows))
 
-    if live_ratings and live_ratings.get("ok"):
+    if live_ratings and live_ratings.get("ok") and not show_dashboard:
         m = live_ratings.get("metrics") or {}
         show_live = metrics_filter is None or bool(
             metrics_filter & set(METRIC_GROUPS["satisfaction"])

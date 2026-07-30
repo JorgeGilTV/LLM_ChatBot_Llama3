@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -16,8 +18,51 @@ _log = logging.getLogger(__name__)
 
 DEFAULT_SNOW_INSTANCE = "https://arlo.service-now.com"
 _CONNECT_LOCK = threading.Lock()
-_CONNECT_RESULTS: dict[str, dict[str, Any]] = {}
 _ACTIVE_CONNECTS: set[str] = set()
+
+
+def _connect_store_dir() -> Path:
+    root = Path(os.getenv("SNOW_CONNECT_DIR") or os.path.join(os.getcwd(), "data", "snow_connect"))
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _save_connect_result(connect_id: str, result: dict[str, Any]) -> None:
+    path = _connect_store_dir() / f"{connect_id}.json"
+    path.write_text(json.dumps(result), encoding="utf-8")
+
+
+def _load_connect_result(connect_id: str) -> dict[str, Any] | None:
+    path = _connect_store_dir() / f"{connect_id}.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _delete_connect_result(connect_id: str) -> None:
+    try:
+        (_connect_store_dir() / f"{connect_id}.json").unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def auto_connect_available() -> bool:
+    """Playwright auto-connect only works on a developer machine (not ECS/production)."""
+    flag = (os.getenv("SNOW_AUTO_CONNECT") or "").strip().lower()
+    if flag in ("0", "false", "no", "off"):
+        return False
+    if flag in ("1", "true", "yes", "on"):
+        return playwright_available()
+    public = (os.getenv("GOCVIEW_PUBLIC_URL") or "").lower()
+    if public and ("arlocloud.com" in public or "gocview." in public):
+        return False
+    if os.getenv("FLASK_ENV") == "production" and not flag:
+        return False
+    return playwright_available()
 
 _GCK_JS = """
 () => {
@@ -155,11 +200,19 @@ def _run_browser_connect(connect_id: str, instance: str) -> None:
             except Exception:
                 pass
         with _CONNECT_LOCK:
-            _CONNECT_RESULTS[connect_id] = result
+            _save_connect_result(connect_id, result)
             _ACTIVE_CONNECTS.discard(connect_id)
 
 
 def start_auto_connect() -> dict[str, Any]:
+    if not auto_connect_available():
+        return {
+            "success": False,
+            "error": (
+                "La conexión automática solo está disponible en desarrollo local. "
+                "En gocview.arlocloud.com usa el modo manual (pegar cookies) abajo."
+            ),
+        }
     if not playwright_available():
         return {
             "success": False,
@@ -172,7 +225,7 @@ def start_auto_connect() -> dict[str, Any]:
     connect_id = uuid.uuid4().hex
     instance = _snow_instance()
     with _CONNECT_LOCK:
-        _CONNECT_RESULTS[connect_id] = {"ok": None, "pending": True}
+        _save_connect_result(connect_id, {"ok": None, "pending": True})
         _ACTIVE_CONNECTS.add(connect_id)
 
     thread = threading.Thread(
@@ -192,7 +245,7 @@ def start_auto_connect() -> dict[str, Any]:
 
 def poll_auto_connect(connect_id: str, flask_session: dict[str, Any]) -> dict[str, Any]:
     with _CONNECT_LOCK:
-        result = _CONNECT_RESULTS.get(connect_id)
+        result = _load_connect_result(connect_id)
 
     if result is None:
         return {"status": "unknown", "error": "Sesión de conexión no encontrada. Pulsa Conectar de nuevo."}
@@ -202,7 +255,7 @@ def poll_auto_connect(connect_id: str, flask_session: dict[str, Any]) -> dict[st
     if not result.get("ok"):
         err = result.get("error") or "Conexión fallida."
         with _CONNECT_LOCK:
-            _CONNECT_RESULTS.pop(connect_id, None)
+            _delete_connect_result(connect_id)
         return {"status": "error", "error": err}
 
     cookies = result.get("cookies") or {}
@@ -210,7 +263,7 @@ def poll_auto_connect(connect_id: str, flask_session: dict[str, Any]) -> dict[st
     save_session_auth(flask_session, cookies, user_token=user_token)
     ok, err = validate_session(flask_session)
     with _CONNECT_LOCK:
-        _CONNECT_RESULTS.pop(connect_id, None)
+        _delete_connect_result(connect_id)
 
     if not ok:
         from tools.servicenow_session import clear_cookies
@@ -223,5 +276,5 @@ def poll_auto_connect(connect_id: str, flask_session: dict[str, Any]) -> dict[st
 
 def cancel_auto_connect(connect_id: str) -> None:
     with _CONNECT_LOCK:
-        _CONNECT_RESULTS.pop(connect_id, None)
+        _delete_connect_result(connect_id)
         _ACTIVE_CONNECTS.discard(connect_id)

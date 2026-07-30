@@ -200,6 +200,7 @@ def api_requests_session(flask_session: dict[str, Any]) -> requests.Session | No
 
 
 def auth_status(flask_session: dict[str, Any]) -> dict[str, Any]:
+    from tools.servicenow_browser_connect import auto_connect_available
     from tools.servicenow_session import cookie_session_connected
 
     oauth_connected = get_token_bundle(flask_session) is not None
@@ -213,6 +214,7 @@ def auth_status(flask_session: dict[str, Any]) -> dict[str, Any]:
         "instance": _snow_instance(),
         "method": "oauth" if oauth_connected else ("cookie" if cookie_connected else None),
         "manual_login": not oauth_ready,
+        "auto_connect": auto_connect_available(),
     }
     if connected:
         return out

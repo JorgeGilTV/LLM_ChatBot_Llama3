@@ -1997,13 +1997,16 @@ function showSnowAuthPrompt(data) {
 
     authWrap.style.display = 'block';
 
-    if (auth.manual_login) {
+    if auth.manual_login) {
+        var autoBlock = auth.auto_connect
+            ? '<button type="button" id="snow-auto-connect" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-bottom:6px;">Conectar automático (Okta)</button>' +
+              '<p id="snow-auto-status" style="margin:0 0 6px;font-size:9px;color:#475569;display:none;line-height:1.35;"></p>'
+            : '<p style="margin:0 0 8px;font-size:9px;color:#64748b;line-height:1.4;">En producción: abre <a href="' + instance + '" target="_blank" rel="noopener">ServiceNow</a> en otra pestaña, inicia sesión con Okta y pega las cookies abajo.</p>';
         authWrap.innerHTML =
             '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;">' +
-            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">Conecta con Okta — capturamos cookies y token automáticamente.</p>' +
-            '<button type="button" id="snow-auto-connect" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-bottom:6px;">Conectar automático (Okta)</button>' +
-            '<p id="snow-auto-status" style="margin:0 0 6px;font-size:9px;color:#475569;display:none;line-height:1.35;"></p>' +
-            '<details style="font-size:9px;color:#64748b;"><summary style="cursor:pointer;color:#475569;">Modo manual (pegar cookies)</summary>' +
+            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">Conecta con Okta — cookies + token g_ck en tu sesión de navegador.</p>' +
+            autoBlock +
+            '<details style="font-size:9px;color:#64748b;"' + (auth.auto_connect ? '' : ' open') + '><summary style="cursor:pointer;color:#475569;">Modo manual (pegar cookies)</summary>' +
             '<ol style="margin:6px 0;padding-left:16px;line-height:1.45;">' +
             '<li>Application → Cookies → JSESSIONID + glide_session_store</li>' +
             '<li>Console → <code>window.g_ck</code></li></ol>' +

@@ -215,6 +215,7 @@ def auth_status(flask_session: dict[str, Any]) -> dict[str, Any]:
         "method": "oauth" if oauth_connected else ("cookie" if cookie_connected else None),
         "manual_login": not oauth_ready,
         "auto_connect": auto_connect_available(),
+        "browser_session_connect": True,
     }
     if connected:
         return out

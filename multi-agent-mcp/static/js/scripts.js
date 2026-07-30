@@ -1860,6 +1860,141 @@ function renderSnowPaDonut(canvas, key, items, total, legendEl) {
     }
 }
 
+var _gocviewSnowExtReady = false;
+
+window.addEventListener('message', function (e) {
+    if (e.data && e.data.type === 'GOCVIEW_EXTENSION_READY' && e.data.feature === 'snow_connect') {
+        _gocviewSnowExtReady = true;
+    }
+});
+
+function snowInstanceUrl(data) {
+    var auth = (data && data.auth) || {};
+    return auth.instance || 'https://arlo.service-now.com';
+}
+
+function captureSnowViaExtension(instance) {
+    return new Promise(function (resolve, reject) {
+        var requestId = 'snow_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        var timer = setTimeout(function () {
+            window.removeEventListener('message', onMsg);
+            reject(new Error('Tiempo agotado esperando la extensión GocView'));
+        }, 120000);
+
+        function onMsg(e) {
+            if (!e.data || e.data.type !== 'GOCVIEW_SNOW_CONNECT_RESPONSE') return;
+            if (e.data.requestId !== requestId) return;
+            clearTimeout(timer);
+            window.removeEventListener('message', onMsg);
+            if (e.data.success) {
+                resolve(e.data);
+            } else {
+                reject(new Error(e.data.error || 'No se pudo leer la sesión ServiceNow'));
+            }
+        }
+
+        window.addEventListener('message', onMsg);
+        window.postMessage(
+            {
+                type: 'GOCVIEW_SNOW_CONNECT_REQUEST',
+                requestId: requestId,
+                instance: instance,
+            },
+            '*'
+        );
+    });
+}
+
+function captureSnowViaPopup(instance) {
+    return new Promise(function (resolve, reject) {
+        var url = instance.replace(/\/+$/, '') + '/navpage.do?gocview_connect=1';
+        var popup = window.open(url, 'gocview_snow_connect', 'width=960,height=720');
+        if (!popup) {
+            reject(new Error('El navegador bloqueó la ventana emergente. Permite popups para gocview.arlocloud.com.'));
+            return;
+        }
+        var timer = setTimeout(function () {
+            window.removeEventListener('message', onMsg);
+            reject(new Error('Tiempo agotado. ¿Completaste login en ServiceNow?'));
+        }, 180000);
+
+        function onMsg(e) {
+            if (!e.data || e.data.type !== 'GOCVIEW_SNOW_POPUP_RESULT') return;
+            clearTimeout(timer);
+            window.removeEventListener('message', onMsg);
+            if (e.data.success) {
+                resolve(e.data);
+            } else {
+                reject(new Error(e.data.error || 'Conexión ServiceNow fallida'));
+            }
+        }
+
+        window.addEventListener('message', onMsg);
+    });
+}
+
+function startSnowBrowserConnect(btn, errEl, statusEl, instance) {
+    var snowUrl = instance || 'https://arlo.service-now.com';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Leyendo sesión…';
+    }
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#475569';
+        statusEl.textContent = 'Capturando cookies y token desde tu navegador…';
+    }
+    if (errEl) errEl.style.display = 'none';
+
+    var capture = _gocviewSnowExtReady
+        ? captureSnowViaExtension(snowUrl)
+        : captureSnowViaPopup(snowUrl);
+
+    capture
+        .then(function (payload) {
+            if (statusEl) statusEl.textContent = 'Guardando sesión en el servidor…';
+            return fetch('/api/servicenow/session', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cookies: payload.cookies || {},
+                    user_token: payload.user_token || payload.g_ck || '',
+                }),
+            }).then(function (res) {
+                return res.json().then(function (j) {
+                    return { ok: res.ok, j: j };
+                });
+            });
+        })
+        .then(function (r) {
+            if (!r.ok || !r.j.success) {
+                throw new Error((r.j && r.j.error) || 'No se pudo guardar la sesión');
+            }
+            if (statusEl) {
+                statusEl.style.color = '#16a34a';
+                statusEl.textContent = 'ServiceNow conectado';
+            }
+            loadServiceNowDashboard(true);
+        })
+        .catch(function (err) {
+            var msg = err.message || String(err);
+            if (!_gocviewSnowExtReady && msg.indexOf('extensión') < 0) {
+                msg += ' Instala o actualiza la extensión GocView Chatbot v2.4+ (carpeta chrome-extension).';
+            }
+            if (errEl) {
+                errEl.style.display = 'block';
+                errEl.textContent = msg;
+            }
+        })
+        .finally(function () {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Conectar con mi sesión ServiceNow';
+            }
+        });
+}
+
 function startSnowAutoConnect(btn, errEl, statusEl) {
     if (btn) {
         btn.disabled = true;
@@ -1998,15 +2133,20 @@ function showSnowAuthPrompt(data) {
     authWrap.style.display = 'block';
 
     if auth.manual_login) {
-        var autoBlock = auth.auto_connect
-            ? '<button type="button" id="snow-auto-connect" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-bottom:6px;">Conectar automático (Okta)</button>' +
-              '<p id="snow-auto-status" style="margin:0 0 6px;font-size:9px;color:#475569;display:none;line-height:1.35;"></p>'
-            : '<p style="margin:0 0 8px;font-size:9px;color:#64748b;line-height:1.4;">En producción: abre <a href="' + instance + '" target="_blank" rel="noopener">ServiceNow</a> en otra pestaña, inicia sesión con Okta y pega las cookies abajo.</p>';
+        var extHint = _gocviewSnowExtReady
+            ? ''
+            : '<p style="margin:0 0 8px;font-size:9px;color:#64748b;line-height:1.35;">Requiere extensión <strong>GocView Chatbot v2.4+</strong> (lee cookies HttpOnly de ServiceNow).</p>';
         authWrap.innerHTML =
             '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;">' +
-            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">Conecta con Okta — cookies + token g_ck en tu sesión de navegador.</p>' +
-            autoBlock +
-            '<details style="font-size:9px;color:#64748b;"' + (auth.auto_connect ? '' : ' open') + '><summary style="cursor:pointer;color:#475569;">Modo manual (pegar cookies)</summary>' +
+            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">Usa la sesión ServiceNow que ya tienes en este navegador (Okta/SSO).</p>' +
+            extHint +
+            '<button type="button" id="snow-browser-connect" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-bottom:6px;">Conectar con mi sesión ServiceNow</button>' +
+            '<p id="snow-auto-status" style="margin:0 0 6px;font-size:9px;color:#475569;display:none;line-height:1.35;"></p>' +
+            '<details style="font-size:9px;color:#64748b;"><summary style="cursor:pointer;color:#475569;">Opciones avanzadas</summary>' +
+            (auth.auto_connect
+                ? '<button type="button" id="snow-auto-connect" style="width:100%;padding:6px;margin-top:6px;background:#64748b;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer;">Playwright local (solo dev)</button>'
+                : '') +
+            '<p style="margin:8px 0 4px;font-size:9px;color:#64748b;">Modo manual (pegar cookies):</p>' +
             '<ol style="margin:6px 0;padding-left:16px;line-height:1.45;">' +
             '<li>Application → Cookies → JSESSIONID + glide_session_store</li>' +
             '<li>Console → <code>window.g_ck</code></li></ol>' +
@@ -2020,9 +2160,15 @@ function showSnowAuthPrompt(data) {
             '<p id="snow-cookie-err" style="margin:6px 0 0;font-size:9px;color:#dc2626;display:none;line-height:1.35;"></p>' +
             '</div>';
 
+        var browserBtn = document.getElementById('snow-browser-connect');
         var autoBtn = document.getElementById('snow-auto-connect');
         var statusEl = document.getElementById('snow-auto-status');
         var errEl = document.getElementById('snow-cookie-err');
+        if (browserBtn) {
+            browserBtn.onclick = function () {
+                startSnowBrowserConnect(browserBtn, errEl, statusEl, instance);
+            };
+        }
         if (autoBtn) {
             autoBtn.onclick = function () {
                 startSnowAutoConnect(autoBtn, errEl, statusEl);

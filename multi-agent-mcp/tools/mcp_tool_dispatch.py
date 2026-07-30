@@ -164,6 +164,13 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
             force_live=bool(args.get("force_live")),
         )
 
+    if name == "servicenow_servicedesk":
+        return func(
+            question=text_arg(args, "question"),
+            query=text_arg(args, "query"),
+            flask_session=args.get("_flask_session"),
+        )
+
     if name == "shm_daily":
         timerange = args.get("timerange")
         if timerange is None and args.get("timerange_hours") is not None:

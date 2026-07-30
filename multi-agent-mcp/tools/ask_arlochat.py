@@ -822,9 +822,24 @@ def format_mcp_result(tool_name: str, result_text: str) -> str:
     if 'jira' in tool_name.lower() or 'zephyr' in tool_name.lower():
         return format_jira_as_table(result_text)
     
-    # Datadog tools - use Datadog formatter
+    # Datadog: local dashboard tools return rich HTML (snapshots + Chart.js) — do not strip to URL table
     if 'datadog' in tool_name.lower() or 'dd_' in tool_name.lower():
+        stripped = result_text.strip()
+        lower = stripped.lower()
+        if stripped.startswith('<') and (
+            '<img' in lower
+            or '<canvas' in lower
+            or 'datadog-header' in lower
+            or '📊 datadog' in lower
+            or 'chart.js' in lower
+        ):
+            return result_text
         return format_datadog_metrics_as_table(result_text)
+
+    # ServiceNow dashboard MCP returns Chart.js HTML
+    if 'servicenow' in tool_name.lower() or 'servicedesk' in tool_name.lower():
+        if result_text.strip().startswith('<'):
+            return result_text
     
     # Try to detect JSON and format it nicely
     try:

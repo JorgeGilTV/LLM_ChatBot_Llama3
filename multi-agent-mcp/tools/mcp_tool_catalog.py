@@ -94,6 +94,14 @@ MCP_TOOL_CATEGORIES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "servicenow",
+        "ServiceNow",
+        "#81B5A1",
+        (
+            "servicenow_servicedesk",
+        ),
+    ),
+    (
         "aws",
         "AWS Admin",
         "#ff9900",
@@ -239,6 +247,8 @@ def build_mcp_tool_arguments(
         return {"question": q, "timerange": daily_tr}
     if tool_name == "noc_kt_search":
         return {"question": q, "query": extract_noc_kt_query(q) or svc or q}
+    if tool_name == "servicenow_servicedesk":
+        return {"question": q or "ServiceDesk dashboard", "query": q}
     if tool_name in MCP_SPLUNK_P0_TOOLS:
         return {"query": svc or q, "timerange": f"{tr}h"}
     if tool_name in MCP_TIMERANGE_TOOLS:

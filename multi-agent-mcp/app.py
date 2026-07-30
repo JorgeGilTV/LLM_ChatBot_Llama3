@@ -1,5 +1,5 @@
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, render_template, Response
+from flask import Flask, request, jsonify, send_from_directory, send_file, render_template, Response, session, redirect
 from flask_cors import CORS
 import time
 import sys
@@ -232,7 +232,12 @@ def _tool_input_for_request(user_query: str, tool_name: str, analysis: dict | No
 
 # ✅ Flask App
 flask_app = Flask(__name__, template_folder='templates')
-CORS(flask_app)
+flask_app.secret_key = (
+    os.getenv("FLASK_SECRET_KEY")
+    or os.getenv("ADMIN_TOKEN")
+    or os.urandom(32)
+)
+CORS(flask_app, supports_credentials=True)
 
 
 # Unified message: Docker image omits .env (.dockerignore); inject vars or mount .env on the host.
@@ -1353,6 +1358,7 @@ Examples:
                     timerange_hours=timerange,
                     service_filter=svc,
                 )
+                args["_flask_session"] = session
                 res = invoke_tool(mcp_name, args, info["function"])
                 display = f"MCP:{mcp_name}"
                 return idx, display, res, False
@@ -2412,6 +2418,212 @@ def api_splunk_monitor():
                 "tools": [],
             }
         )
+
+
+@flask_app.route("/api/servicenow/dashboard")
+def api_servicenow_dashboard():
+    """Sidebar: ServiceDesk KPIs + chart data from ServiceNow REST API."""
+    try:
+        from tools.servicenow_dashboard import servicedesk_dashboard_payload
+
+        return jsonify(servicedesk_dashboard_payload(session))
+    except Exception as e:
+        logging.error("Error in ServiceNow dashboard: %s", e)
+        return jsonify({"success": False, "error": str(e), "kpis": {}})
+
+
+@flask_app.route("/api/servicenow/auth")
+def api_servicenow_auth():
+    """OAuth connection status for ServiceDesk widget."""
+    try:
+        from tools.servicenow_oauth import auth_status
+
+        return jsonify(auth_status(session))
+    except Exception as e:
+        logging.error("Error in ServiceNow auth status: %s", e)
+        return jsonify({"configured": False, "connected": False, "error": str(e)})
+
+
+@flask_app.route("/oauth/snow/login")
+def oauth_snow_login():
+    """Start ServiceNow OAuth (Okta) login."""
+    from urllib.parse import quote
+
+    from tools.servicenow_oauth import build_authorize_url, oauth_redirect_uri
+
+    try:
+        return_to = (request.args.get("next") or "/").strip() or "/"
+        url = build_authorize_url(
+            session,
+            redirect_uri=oauth_redirect_uri(request.url_root),
+            return_to=return_to,
+        )
+        return redirect(url)
+    except Exception as e:
+        logging.error("ServiceNow OAuth login: %s", e)
+        return redirect("/?snow=error&msg=" + quote(str(e)[:200]))
+
+
+@flask_app.route("/oauth/snow/callback")
+def oauth_snow_callback():
+    """OAuth redirect from ServiceNow after Okta login."""
+    from urllib.parse import quote
+
+    from tools.servicenow_oauth import (
+        RETURN_KEY,
+        STATE_KEY,
+        exchange_code_for_tokens,
+        oauth_redirect_uri,
+    )
+
+    err = (request.args.get("error") or "").strip()
+    if err:
+        desc = (request.args.get("error_description") or err).strip()
+        return redirect("/?snow=error&msg=" + quote(desc[:200]))
+
+    state = (request.args.get("state") or "").strip()
+    expected = (session.get(STATE_KEY) or "").strip()
+    if not state or state != expected:
+        return redirect("/?snow=error&msg=" + quote("Estado OAuth inválido — intenta de nuevo."))
+
+    code = (request.args.get("code") or "").strip()
+    if not code:
+        return redirect("/?snow=error&msg=" + quote("Código OAuth faltante."))
+
+    try:
+        exchange_code_for_tokens(
+            session,
+            code=code,
+            redirect_uri=oauth_redirect_uri(request.url_root),
+        )
+    except Exception as e:
+        logging.error("ServiceNow OAuth callback: %s", e)
+        return redirect("/?snow=error&msg=" + quote(str(e)[:200]))
+
+    return_to = session.pop(RETURN_KEY, "/") or "/"
+    sep = "&" if "?" in return_to else "?"
+    return redirect(f"{return_to}{sep}snow=connected")
+
+
+@flask_app.route("/api/servicenow/connect/auto/start", methods=["POST"])
+def api_servicenow_auto_start():
+    """Open browser via Playwright; user logs in with Okta; cookies captured automatically."""
+    try:
+        from tools.servicenow_browser_connect import start_auto_connect
+
+        out = start_auto_connect()
+        if out.get("success") and out.get("connect_id"):
+            session["snow_connect_id"] = out["connect_id"]
+            session.modified = True
+        return jsonify(out), (200 if out.get("success") else 503)
+    except Exception as e:
+        logging.error("ServiceNow auto-connect start: %s", e)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@flask_app.route("/api/servicenow/connect/auto/status")
+def api_servicenow_auto_status():
+    """Poll Playwright auto-connect progress."""
+    try:
+        from tools.servicenow_browser_connect import poll_auto_connect
+
+        connect_id = (
+            (request.args.get("connect_id") or "").strip()
+            or (session.get("snow_connect_id") or "").strip()
+        )
+        if not connect_id:
+            return jsonify({"status": "unknown", "error": "No hay conexión en curso."})
+        out = poll_auto_connect(connect_id, session)
+        if out.get("status") == "connected":
+            session.pop("snow_connect_id", None)
+        return jsonify(out)
+    except Exception as e:
+        logging.error("ServiceNow auto-connect status: %s", e)
+        return jsonify({"status": "error", "error": str(e)})
+
+
+@flask_app.route("/api/servicenow/session", methods=["POST", "DELETE"])
+def api_servicenow_session():
+    """Save or clear ServiceNow browser session cookie (manual Okta login)."""
+    from tools.servicenow_oauth import auth_status
+    from tools.servicenow_session import (
+        clear_cookies,
+        cookie_header_from_dict,
+        parse_cookie_blob,
+        save_session_auth,
+        validate_session,
+    )
+
+    if request.method == "DELETE":
+        clear_cookies(session)
+        from tools.servicenow_oauth import clear_token_bundle
+
+        clear_token_bundle(session)
+        return jsonify({"success": True, "auth": auth_status(session)})
+
+    body = request.get_json(silent=True) or {}
+    cookies: dict[str, str] = {}
+    raw_header = ""
+    user_token = str(body.get("user_token") or body.get("g_ck") or body.get("gck") or "").strip()
+
+    if isinstance(body.get("cookies"), dict):
+        cookies = {str(k): str(v) for k, v in body["cookies"].items() if v}
+        raw_header = cookie_header_from_dict(cookies) if cookies else ""
+    else:
+        jsessionid = (body.get("jsessionid") or body.get("JSESSIONID") or "").strip()
+        glide = (body.get("glide_session_store") or body.get("glide") or "").strip()
+        route = (body.get("glide_user_route") or body.get("user_route") or "").strip()
+        if jsessionid:
+            cookies["JSESSIONID"] = jsessionid
+        if glide:
+            cookies["glide_session_store"] = glide
+        if route:
+            cookies["glide_user_route"] = route
+        if cookies:
+            raw_header = cookie_header_from_dict(cookies)
+        else:
+            raw = str(body.get("cookie") or body.get("cookies") or "").strip()
+            cookies = parse_cookie_blob(raw)
+            raw_header = raw
+
+    if not user_token:
+        parsed = parse_cookie_blob(raw_header) if raw_header else cookies
+        user_token = str(parsed.get("g_ck") or parsed.get("X-UserToken") or "").strip()
+
+    if not cookies and not raw_header:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Pega JSESSIONID, glide_session_store y el token g_ck.",
+            }
+        ), 400
+
+    if not user_token:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Falta el token g_ck. En ServiceNow: F12 → Console → window.g_ck",
+            }
+        ), 400
+
+    save_session_auth(session, cookies, raw_header=raw_header, user_token=user_token)
+    ok, err = validate_session(session)
+    if not ok:
+        clear_cookies(session)
+        return jsonify({"success": False, "error": err}), 401
+
+    return jsonify({"success": True, "auth": auth_status(session)})
+
+
+@flask_app.route("/oauth/snow/logout")
+def oauth_snow_logout():
+    """Clear ServiceNow OAuth tokens and session cookies."""
+    from tools.servicenow_oauth import clear_token_bundle
+    from tools.servicenow_session import clear_cookies
+
+    clear_token_bundle(session)
+    clear_cookies(session)
+    return redirect("/?snow=logged_out")
 
 
 @flask_app.route('/api/public-ip', methods=['GET'])

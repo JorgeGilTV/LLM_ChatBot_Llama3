@@ -528,15 +528,104 @@ def _score_badge_html(score: float | None) -> str:
     )
 
 
+def _wants_table(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:table|tabla|kpi\s+sheet|detailed?\s+table|spreadsheet|raw\s+data)\b",
+            question or "",
+            re.I,
+        )
+    )
+
+
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    h = (hex_color or "#71717a").lstrip("#")
+    if len(h) != 6:
+        return f"rgba(113,113,122,{alpha})"
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _shm_ee_css_block() -> str:
+    return """<style>
+.shm-ee-dash{--font-sans:"IBM Plex Sans",system-ui,sans-serif;--color-text-primary:#f4f4f5;--color-text-secondary:#a1a1aa;--color-text-tertiary:#71717a;--color-background-primary:#26262f;--color-background-secondary:#1f2023;--color-border-tertiary:rgba(255,255,255,0.08);--color-border-primary:rgba(255,255,255,0.14);--border-radius-md:8px;--border-radius-lg:12px;font-family:var(--font-sans);color:var(--color-text-primary);background:#1a1b1e;border:1px solid rgba(63,63,70,0.9);border-radius:16px;padding:20px 24px;margin:12px 0;box-shadow:0 4px 24px rgba(0,0,0,0.25)}
+.shm-ee-dash *{box-sizing:border-box}
+.shm-ee-dash .ee-top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px}
+.shm-ee-dash .ee-top-bar h2{font-size:20px;font-weight:500;color:var(--color-text-primary);margin:0}
+.shm-ee-dash .ee-top-bar p{font-size:13px;color:var(--color-text-secondary);margin:4px 0 0}
+.shm-ee-dash .ee-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500}
+.shm-ee-dash .ee-badge-info{background:rgba(59,130,246,0.22);color:#93c5fd}
+.shm-ee-dash .ee-section-title{font-size:12px;font-weight:500;color:var(--color-text-primary);margin-bottom:8px;padding-bottom:6px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.shm-ee-dash .ee-score-single{display:inline-flex;flex-direction:column;background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:8px 12px;margin-bottom:16px;min-width:112px;max-width:200px}
+.shm-ee-dash .ee-score-single .ee-label{font-size:10px;color:var(--color-text-secondary);margin-bottom:2px}
+.shm-ee-dash .ee-score-single .ee-val{font-size:22px;font-weight:500;line-height:1;color:var(--color-text-primary)}
+.shm-ee-dash .ee-score-single .ee-sub{font-size:9px;color:var(--color-text-secondary);margin-top:2px;line-height:1.25}
+.shm-ee-dash .ee-score-spark{height:26px;position:relative;margin-top:6px;width:96px}
+.shm-ee-dash .ee-overall-shm-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin-bottom:14px}
+.shm-ee-dash .ee-overall-shm-row .ee-score-single{margin-bottom:0}
+.shm-ee-dash .ee-hero-overall-chart,.shm-ee-dash .ee-all-pillars-chart{flex:1 1 520px;max-width:720px;min-width:0;min-height:240px;height:240px;position:relative;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);padding:6px 8px}
+.shm-ee-dash .ee-summary-box{border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);padding:12px 14px 14px;margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,0.18)}
+.shm-ee-dash .ee-summary-box--cols{display:flex;flex-wrap:wrap;align-items:stretch;gap:14px}
+.shm-ee-dash .ee-summary-col{flex:1 1 420px;min-width:0;display:flex;flex-direction:column}
+.shm-ee-dash .ee-summary-vdivider{flex:0 0 1px;background:var(--color-border-tertiary);align-self:stretch}
+.shm-ee-dash .ee-pillars-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin-bottom:14px}
+.shm-ee-dash .ee-pillars-row .ee-all-pillars-chart{margin-bottom:0;flex:1 1 640px;max-width:820px}
+.shm-ee-dash .ee-pillar-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px;margin-bottom:14px;flex:0 1 auto;min-width:0}
+.shm-ee-dash .ee-pillar-block{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px 10px}
+.shm-ee-dash .ee-pillar-block .ee-pname{font-size:11px;font-weight:500;color:var(--color-text-primary);margin-bottom:1px}
+.shm-ee-dash .ee-pillar-block .ee-pwt{font-size:9px;color:var(--color-text-secondary);margin-bottom:4px}
+.shm-ee-dash .ee-pillar-block .ee-pscore{font-size:20px;font-weight:500}
+.shm-ee-dash .ee-pillar-spark{height:24px;position:relative;margin-top:4px}
+.shm-ee-dash .ee-pillar-block .ee-pcount{font-size:9px;color:var(--color-text-secondary);margin-top:3px}
+.shm-ee-dash .ee-metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;margin-bottom:20px}
+.shm-ee-dash .ee-metric-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px}
+.shm-ee-dash .ee-metric-name{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px}
+.shm-ee-dash .ee-metric-row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.shm-ee-dash .ee-metric-current{font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.shm-ee-dash .ee-metric-spark{height:40px;position:relative;flex:1;min-width:80px}
+.shm-ee-dash .ee-metric-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.shm-ee-dash .ee-metric-source{font-size:11px;color:var(--color-text-tertiary)}
+.shm-ee-dash .ee-nav-row{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.shm-ee-dash .ee-nav-crumb{font-size:13px;color:var(--color-text-primary);font-weight:500}
+.shm-ee-dash .ee-detail-chart-wrap{position:relative;width:100%;height:200px;margin-bottom:20px}
+#vitals-compact-grid{display:grid;grid-template-columns:repeat(1,minmax(0,1fr));gap:0.35rem}
+@media(min-width:900px){#vitals-compact-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.vitals-pillar-section{display:flex;flex-direction:column;gap:0.2rem;min-width:0;border:1px solid rgba(255,255,255,0.06);border-radius:0.375rem;background:rgba(0,0,0,0.12);padding:0.2rem}
+.vitals-pillar-title{display:flex;align-items:center;justify-content:space-between;gap:0.35rem;margin:0;padding:0.15rem 0.35rem 0.15rem 0.4rem;border-left:3px solid var(--pillar-accent,#71717a);border-radius:0.2rem;background:var(--pillar-accent-bg,rgba(255,255,255,0.04))}
+.vitals-pillar-name{font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#e4e4e7;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vitals-pillar-meta{font-size:9px;font-weight:600;color:#a1a1aa;white-space:nowrap;flex-shrink:0}
+.vitals-pillar-grid{display:grid;gap:0.2rem;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(min-width:520px){.vitals-pillar-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.vitals-widget-card{display:flex;flex-direction:column;min-width:0;padding:0.35rem 0.4rem;border-radius:0.3rem;border:1px solid rgba(255,255,255,0.06);background:#26262f}
+.vitals-widget-head{display:flex;align-items:flex-start;justify-content:space-between;gap:0.25rem;min-height:1.5rem}
+.vitals-widget-title{font-size:10px;font-weight:600;line-height:1.2;letter-spacing:0.02em;color:#e4e4e7;text-transform:uppercase;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vitals-widget-badge{font-size:7px;line-height:1.1;padding:1px 3px;max-width:36%;border-radius:0.15rem;background:rgba(63,63,70,0.95);font-weight:600;text-transform:uppercase;color:#a1a1aa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.vitals-widget-body{display:flex;align-items:baseline;justify-content:space-between;gap:0.25rem;margin-top:0.15rem}
+.vitals-widget-hero{min-width:0;font-size:14px;line-height:1.1;font-weight:500;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums;margin:0}
+.vitals-widget-score{font-size:11px;line-height:1.1;font-weight:600;color:#6ee7b7;white-space:nowrap;font-variant-numeric:tabular-nums;margin:0}
+.vitals-widget-spark{height:1.5rem;margin-top:0.15rem;width:100%;position:relative}
+@media(max-width:900px){.shm-ee-dash .ee-summary-vdivider{display:none}}
+</style>"""
+
+
 def _resolve_dashboard_pillar(intent: ShmQueryIntent) -> str | None:
+    if intent.focus_overall:
+        return None
     if intent.pillars_filter:
         if len(intent.pillars_filter) == 1:
             return next(iter(intent.pillars_filter))
         if "customer_satisfaction" in intent.pillars_filter:
             return "customer_satisfaction"
         return next(iter(intent.pillars_filter))
-    if intent.focus_overall:
-        return None
+    if intent.metrics_filter:
+        for pk, pdef in PILLAR_DASHBOARD_DEFS.items():
+            pmetrics = set(pdef.get("metrics") or ())
+            if intent.metrics_filter <= pmetrics:
+                return pk
+        for pk, pdef in PILLAR_DASHBOARD_DEFS.items():
+            pmetrics = set(pdef.get("metrics") or ())
+            if intent.metrics_filter & pmetrics:
+                return pk
     return None
 
 
@@ -628,6 +717,119 @@ def _chartjs_bundle_script(charts: dict[str, Any]) -> str:
 </script>"""
 
 
+def _shm_score_color(val: float | None) -> str:
+    if val is None:
+        return "#fafafa"
+    if val >= 90:
+        return "#86efac"
+    if val >= 75:
+        return "#fcd34d"
+    return "#fca5a5"
+
+
+def _build_vitals_compact_grid(
+    *,
+    pillars_filter: set[str] | None,
+    metrics_filter: set[str] | None,
+    metrics: dict[str, Any],
+    periods: list[str],
+    focus_period: str,
+    uid: str,
+    charts: dict[str, Any],
+) -> str:
+    """shmview vitals-compact-grid: KPI widgets grouped by pillar."""
+    labels = [_period_short_label(p) for p in periods]
+    sections: list[str] = []
+    pillar_keys = (
+        [k for k in PILLAR_KEYS if k in pillars_filter]
+        if pillars_filter
+        else list(PILLAR_KEYS)
+    )
+
+    for pk in pillar_keys:
+        pidx = PILLAR_KEYS.index(pk)
+        pdef = PILLAR_DASHBOARD_DEFS.get(pk, {})
+        color = PILLAR_COLORS[pidx]
+        accent_bg = _hex_to_rgba(color, 0.12)
+        weight = PILLAR_WEIGHTS[pidx]
+        metric_keys = list(pdef.get("metrics") or ())
+        if metrics_filter:
+            metric_keys = [k for k in metric_keys if k in metrics_filter]
+        if not metric_keys:
+            continue
+
+        widgets: list[str] = []
+        for mi, mkey in enumerate(metric_keys):
+            hist, score = _metric_at_period(metrics, mkey, focus_period)
+            if hist is None and score is None:
+                continue
+            cid = f"vitals_mini_{uid}_{pk}_{mi}"
+            score_series = _metric_score_series(metrics, mkey, periods)
+            charts[cid] = {
+                "chartType": "line",
+                "mini": True,
+                "labels": labels,
+                "datasets": [
+                    {
+                        "label": METRIC_LABELS.get(mkey, mkey),
+                        "data": score_series,
+                        "color": color,
+                        "fillColor": _hex_to_rgba(color, 0.35),
+                    }
+                ],
+                "yFallback": {"min": 0, "max": 100},
+            }
+            badge = METRIC_SOURCES.get(mkey, "KPI")
+            badge_short = badge[:14] + "…" if len(badge) > 16 else badge
+            score_txt = f"{score:.2f}".rstrip("0").rstrip(".") if score is not None else "—"
+            widgets.append(
+                f"<article class='vitals-widget-card'>"
+                f"<div class='vitals-widget-head'>"
+                f"<span class='vitals-widget-title'>{html.escape(METRIC_LABELS.get(mkey, mkey))}</span>"
+                f"<span class='vitals-widget-badge' title='{html.escape(badge)}'>"
+                f"{html.escape(badge_short)}</span></div>"
+                f"<div class='vitals-widget-body'>"
+                f"<p class='vitals-widget-hero'>{html.escape(hist or '—')}</p>"
+                f"<p class='vitals-widget-score' title='Score'>{html.escape(score_txt)}</p>"
+                f"</div>"
+                f"<div class='vitals-widget-spark'><canvas id='{cid}' "
+                f"aria-label='{html.escape(METRIC_LABELS.get(mkey, mkey))} trend'></canvas></div>"
+                f"</article>"
+            )
+
+        if not widgets:
+            continue
+        sections.append(
+            f"<section class='vitals-pillar-section' style='--pillar-accent:{color};"
+            f"--pillar-accent-bg:{accent_bg}'>"
+            f"<h3 class='vitals-pillar-title'>"
+            f"<span class='vitals-pillar-name'>{html.escape(PILLAR_LABELS.get(pk, pk))}</span>"
+            f"<span class='vitals-pillar-meta'>{weight}%</span></h3>"
+            f"<div class='vitals-pillar-grid'>{''.join(widgets)}</div>"
+            f"</section>"
+        )
+
+    return f"<div id='vitals-compact-grid'>{''.join(sections)}</div>" if sections else ""
+
+
+def _shm_ee_top_bar(*, focus_period: str | None, n_metrics: int) -> str:
+    period_txt = _period_display(focus_period) if focus_period else "—"
+    return (
+        f"<div class='ee-top-bar'>"
+        f"<div>"
+        f"<h2>SHM Dashboard <span style='font-size:13px;font-weight:400;color:var(--color-text-secondary)'>"
+        f"— Everyday Experience v1</span></h2>"
+        f"<p>Column: <strong>{html.escape(period_txt)}</strong> · "
+        f"<a href='{html.escape(SHM_VIEW_BASE)}' target='_blank' rel='noopener' "
+        f"style='color:#93c5fd;text-decoration:none;'>shmview.arlocloud.com</a></p>"
+        f"</div>"
+        f"<div style='display:flex;flex-wrap:wrap;gap:8px;'>"
+        f"<span class='ee-badge ee-badge-info'>5 Pillars</span>"
+        f"<span class='ee-badge ee-badge-info'>{n_metrics} Metrics</span>"
+        f"</div></div>"
+    )
+
+
 def _build_shm_pillar_dashboard(
     pillar_key: str,
     *,
@@ -637,7 +839,7 @@ def _build_shm_pillar_dashboard(
     periods: list[str],
     focus_period: str | None,
 ) -> tuple[list[str], str]:
-    """shmview-style pillar dashboard: KPI cards + sparklines + monthly bar chart."""
+    """shmview pillar detail view: metric cards + trend chart."""
     if not periods or pillar_key not in PILLAR_DASHBOARD_DEFS:
         return [], ""
 
@@ -649,30 +851,9 @@ def _build_shm_pillar_dashboard(
     uid = uuid.uuid4().hex[:8]
     labels = [_period_short_label(p) for p in periods]
     charts: dict[str, Any] = {}
-    html_parts: list[str] = []
 
     pillar_val = (pillars.get(pillar_key) or {}).get(fp)
-    header_score = (
-        f"<span style='font-size:32px;font-weight:700;color:{color};'>"
-        f"{html.escape(str(pillar_val))}%</span>"
-        if pillar_val is not None
-        else ""
-    )
-
-    html_parts.append(
-        f"<div class='shm-vitals-dash' style='background:#1a1b1e;border-radius:16px;"
-        f"padding:20px;margin:16px 0;border:1px solid #3f3f46;color:#e4e4e7;'>"
-        f"<div style='display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;"
-        f"gap:12px;margin-bottom:16px;'>"
-        f"<div>"
-        f"<div style='font-size:11px;font-weight:600;color:#a1a1aa;text-transform:uppercase;"
-        f"letter-spacing:0.06em;'>SHM Dashboard — Everyday Experience</div>"
-        f"<h3 style='margin:6px 0 0;font-size:20px;color:#fafafa;'>{html.escape(pdef['name'])}"
-        f" · {_period_display(fp)}</h3>"
-        f"</div>"
-        f"{header_score}"
-        f"</div>"
-    )
+    score_color = _shm_score_color(_parse_numeric(str(pillar_val) if pillar_val is not None else None))
 
     metric_keys = list(pdef["metrics"])
     if intent.metrics_filter:
@@ -683,73 +864,68 @@ def _build_shm_pillar_dashboard(
         hist, score = _metric_at_period(metrics, mkey, fp)
         if hist is None and score is None:
             continue
-        cid = f"shm_spark_{uid}_{mi}"
+        cid = f"shm_detail_spark_{uid}_{mi}"
         score_series = _metric_score_series(metrics, mkey, periods)
         charts[cid] = {
             "chartType": "line",
             "mini": True,
             "labels": labels,
-            "datasets": [{"label": METRIC_LABELS.get(mkey, mkey), "data": score_series, "color": color, "fillColor": fill + "88"}],
+            "datasets": [
+                {
+                    "label": METRIC_LABELS.get(mkey, mkey),
+                    "data": score_series,
+                    "color": color,
+                    "fillColor": fill + "88",
+                }
+            ],
             "yFallback": {"min": 0, "max": 100},
         }
         cards.append(
-            f"<article style='background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:14px;'>"
-            f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:8px;'>"
-            f"<span style='font-size:12px;font-weight:600;color:#e4e4e7;line-height:1.3;'>"
-            f"{html.escape(METRIC_LABELS.get(mkey, mkey))}</span>"
-            f"{_score_badge_html(score)}"
+            f"<article class='ee-metric-card'>"
+            f"<div class='ee-metric-name'>{html.escape(METRIC_LABELS.get(mkey, mkey))}</div>"
+            f"<div class='ee-metric-row'>"
+            f"<div class='ee-metric-current'>{html.escape(hist or '—')}</div>"
+            f"<div class='ee-metric-spark'><canvas id='{cid}'></canvas></div>"
             f"</div>"
-            f"<div style='font-size:26px;font-weight:700;color:#fafafa;margin:10px 0 6px;'>"
-            f"{html.escape(hist or '—')}</div>"
-            f"<div style='position:relative;height:52px;'><canvas id='{cid}'></canvas></div>"
-            f"<div style='font-size:10px;color:#71717a;margin-top:8px;'>"
-            f"{html.escape(METRIC_SOURCES.get(mkey, 'shmview KPI history'))}</div>"
-            f"</article>"
-        )
-
-    if cards:
-        html_parts.append(
-            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));"
-            f"gap:12px;margin-bottom:20px;'>{''.join(cards)}</div>"
+            f"<div class='ee-metric-footer'>"
+            f"{_score_badge_html(score)}"
+            f"<span class='ee-metric-source'>"
+            f"{html.escape(METRIC_SOURCES.get(mkey, 'shmview KPI history'))}</span>"
+            f"</div></article>"
         )
 
     bar_id = f"shm_pillar_bar_{uid}"
     pillar_scores = _pillar_series(pillars, pillar_key, periods)
-    html_parts.append(
-        f"<div style='margin-top:8px;'>"
-        f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin-bottom:8px;'>"
-        f"Monthly trend — {html.escape(pdef['short_name'])} score (%)</div>"
-        f"<div style='position:relative;height:280px;background:#27272a;border-radius:12px;"
-        f"padding:12px;border:1px solid #3f3f46;'>"
-        f"<canvas id='{bar_id}'></canvas></div></div>"
-    )
     charts[bar_id] = {
-        "chartType": "bar",
+        "chartType": "line",
         "labels": labels,
         "datasets": [
             {
                 "label": pdef["short_name"],
                 "data": pillar_scores,
                 "color": color,
-                "fillColor": fill,
+                "fillColor": fill + "44",
             }
         ],
         "ySuffix": "%",
         "yFallback": {"min": 60, "max": 105},
     }
 
-    html_parts.append("</div>")
-    return html_parts, _chartjs_bundle_script(charts)
-
-
-def _shm_score_color(val: float | None) -> str:
-    if val is None:
-        return "#fafafa"
-    if val >= 90:
-        return "#86efac"
-    if val >= 75:
-        return "#fcd34d"
-    return "#fca5a5"
+    pillar_score_txt = html.escape(str(pillar_val) if pillar_val is not None else "—")
+    html_block = (
+        f"{_shm_ee_css_block()}"
+        f"<div class='shm-ee-dash'>"
+        f"{_shm_ee_top_bar(focus_period=fp, n_metrics=len(metric_keys))}"
+        f"<div class='ee-nav-row'>"
+        f"<span class='ee-nav-crumb'>{html.escape(pdef['name'])} · {_period_display(fp)}</span>"
+        f"<span style='margin-left:auto;font-size:20px;font-weight:500;color:{score_color};'>"
+        f"{pillar_score_txt}</span></div>"
+        f"<div class='ee-metrics-grid'>{''.join(cards)}</div>"
+        f"<div class='ee-detail-chart-wrap'><canvas id='{bar_id}' "
+        f"aria-label='{html.escape(pdef['name'])} score trend'></canvas></div>"
+        f"</div>"
+    )
+    return [html_block], _chartjs_bundle_script(charts)
 
 
 def _build_shm_overview_dashboard(
@@ -758,6 +934,8 @@ def _build_shm_overview_dashboard(
     metrics: dict[str, Any],
     periods: list[str],
     focus_period: str | None,
+    pillars_filter: set[str] | None = None,
+    metrics_filter: set[str] | None = None,
 ) -> tuple[list[str], str]:
     """shmview main screen: overall SHM score, 5 pillars, multi-line chart, KPI grid."""
     if not periods:
@@ -767,11 +945,10 @@ def _build_shm_overview_dashboard(
     uid = uuid.uuid4().hex[:8]
     labels = [_period_short_label(p) for p in periods]
     charts: dict[str, Any] = {}
-    html_parts: list[str] = []
 
     overall_val = _overall_shm_value(pillars, fp)
     overall_series = _overall_shm_series(pillars, periods)
-    overall_spark = f"shm_ov_spark_{uid}"
+    overall_spark = f"shm_ee_spark_{uid}"
     charts[overall_spark] = {
         "chartType": "line",
         "mini": True,
@@ -787,30 +964,61 @@ def _build_shm_overview_dashboard(
         "yFallback": {"min": 80, "max": 95},
     }
 
-    pillars_multi = f"shm_ov_pillars_{uid}"
+    hero_chart = f"chartOverall_{uid}"
+    charts[hero_chart] = {
+        "chartType": "line",
+        "labels": labels,
+        "datasets": [
+            {
+                "label": "SHM Score",
+                "data": overall_series,
+                "color": "#a1a1aa",
+                "fillColor": "#3f3f4644",
+            }
+        ],
+        "ySuffix": "%",
+        "yFallback": {"min": 80, "max": 95},
+    }
+
+    pillars_multi = f"shm_ee_score_{uid}"
     pillar_datasets = []
-    pillar_rows: list[str] = []
+    pillar_blocks: list[str] = []
     for i, key in enumerate(PILLAR_KEYS):
         pdef = PILLAR_DASHBOARD_DEFS.get(key, {})
         score_raw = (pillars.get(key) or {}).get(fp)
         score_num = _parse_numeric(str(score_raw) if score_raw is not None else None)
         n_metrics = len(pdef.get("metrics") or ())
-        pillar_rows.append(
-            f"<div style='display:flex;justify-content:space-between;align-items:center;"
-            f"padding:8px 0;border-bottom:1px solid #3f3f46;'>"
-            f"<div>"
-            f"<div style='font-size:13px;font-weight:600;color:#e4e4e7;'>"
-            f"{html.escape(PILLAR_LABELS.get(key, key))}</div>"
-            f"<div style='font-size:10px;color:#71717a;'>Wt {PILLAR_WEIGHTS[i]}% · {n_metrics} metrics</div>"
-            f"</div>"
-            f"<span style='font-size:18px;font-weight:700;color:{_shm_score_color(score_num)};'>"
-            f"{html.escape(str(score_raw) if score_raw is not None else '—')}</span>"
+        spark_id = f"shm_ee_psp_{uid}_{i}"
+        pillar_series = _pillar_series(pillars, key, periods)
+        charts[spark_id] = {
+            "chartType": "line",
+            "mini": True,
+            "labels": labels,
+            "datasets": [
+                {
+                    "label": pdef.get("short_name") or PILLAR_LABELS.get(key, key),
+                    "data": pillar_series,
+                    "color": PILLAR_COLORS[i],
+                    "fillColor": PILLAR_FILL_COLORS[i] + "88",
+                }
+            ],
+            "yFallback": {"min": 60, "max": 105},
+        }
+        pillar_blocks.append(
+            f"<div class='ee-pillar-block'>"
+            f"<div class='ee-pname'>{html.escape(PILLAR_LABELS.get(key, key))}</div>"
+            f"<div class='ee-pwt'>Weight {PILLAR_WEIGHTS[i]}% · {n_metrics} metrics "
+            f"({_period_display(fp)})</div>"
+            f"<div class='ee-pscore' style='color:{PILLAR_COLORS[i]}'>"
+            f"{html.escape(str(score_raw) if score_raw is not None else '—')}</div>"
+            f"<div class='ee-pillar-spark'><canvas id='{spark_id}' "
+            f"aria-label='{html.escape(PILLAR_LABELS.get(key, key))} trend'></canvas></div>"
             f"</div>"
         )
         pillar_datasets.append(
             {
                 "label": pdef.get("short_name") or PILLAR_LABELS.get(key, key),
-                "data": _pillar_series(pillars, key, periods),
+                "data": pillar_series,
                 "color": PILLAR_COLORS[i],
                 "fillColor": PILLAR_FILL_COLORS[i] + "44",
             }
@@ -825,80 +1033,57 @@ def _build_shm_overview_dashboard(
     }
 
     ov_txt = f"{overall_val:.1f}" if overall_val is not None else "—"
-    html_parts.append(
-        f"<div class='shm-vitals-dash' style='background:#1a1b1e;border-radius:16px;"
-        f"padding:20px;margin:16px 0;border:1px solid #3f3f46;color:#e4e4e7;'>"
-        f"<div style='margin-bottom:16px;'>"
-        f"<div style='font-size:11px;font-weight:600;color:#a1a1aa;text-transform:uppercase;"
-        f"letter-spacing:0.06em;'>SHM Dashboard — Everyday Experience v1</div>"
-        f"<h3 style='margin:6px 0 0;font-size:20px;color:#fafafa;'>"
-        f"Overall SHM · {_period_display(fp)}</h3>"
-        f"<div style='font-size:12px;color:#71717a;margin-top:4px;'>"
-        f"Weighted pillar scores (20/30/30/10/10) · source shmview KPI history</div>"
-        f"</div>"
-        f"<div style='display:grid;grid-template-columns:minmax(200px,1fr) minmax(280px,1.5fr);"
-        f"gap:16px;margin-bottom:20px;'>"
-        f"<div style='background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:16px;'>"
-        f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin-bottom:4px;'>Overall SHM Score</div>"
-        f"<div style='font-size:11px;color:#71717a;margin-bottom:8px;'>{_period_display(fp)}</div>"
-        f"<div style='font-size:42px;font-weight:700;color:{_shm_score_color(overall_val)};"
-        f"line-height:1;'>{html.escape(ov_txt)}</div>"
-        f"<div style='position:relative;height:56px;margin-top:12px;'>"
-        f"<canvas id='{overall_spark}'></canvas></div>"
-        f"</div>"
-        f"<div style='background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:16px;'>"
-        f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin-bottom:8px;'>Pillars</div>"
-        f"{''.join(pillar_rows)}"
-        f"<div style='position:relative;height:200px;margin-top:12px;'>"
-        f"<canvas id='{pillars_multi}'></canvas></div>"
-        f"</div>"
-        f"</div>"
+    ov_color = _shm_score_color(overall_val)
+    n_metrics = len([k for k in METRIC_LABELS if k in metrics])
+
+    compact_grid = _build_vitals_compact_grid(
+        pillars_filter=pillars_filter,
+        metrics_filter=metrics_filter,
+        metrics=metrics,
+        periods=periods,
+        focus_period=fp,
+        uid=uid,
+        charts=charts,
     )
 
-    metric_keys = [k for k in METRIC_LABELS if k in metrics]
-    if metric_keys:
-        html_parts.append(
-            f"<div style='font-size:12px;font-weight:600;color:#a1a1aa;margin:8px 0 12px;'>"
-            f"Key metrics ({_period_display(fp)}) · {len(metric_keys)} KPIs</div>"
-            f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));"
-            f"gap:10px;margin-bottom:8px;'>"
+    html_block = (
+        f"{_shm_ee_css_block()}"
+        f"<div class='shm-ee-dash'>"
+        f"{_shm_ee_top_bar(focus_period=fp, n_metrics=n_metrics)}"
+        f"<div class='ee-summary-box ee-summary-box--cols'>"
+        f"<div class='ee-summary-col'>"
+        f"<div class='ee-section-title'>Overall SHM Score</div>"
+        f"<div class='ee-overall-shm-row'>"
+        f"<div class='ee-score-single'>"
+        f"<div class='ee-label'>SHM Score</div>"
+        f"<div class='ee-val' style='color:{ov_color}'>{html.escape(ov_txt)}</div>"
+        f"<div class='ee-sub'>{html.escape(_period_display(fp))} · weighted from pillar scores "
+        f"(20/30/30/10/10)</div>"
+        f"<div class='ee-score-spark'><canvas id='{overall_spark}' "
+        f"aria-label='SHM overall score trend'></canvas></div>"
+        f"</div>"
+        f"<div class='ee-hero-overall-chart'>"
+        f"<canvas id='{hero_chart}' aria-label='Overall SHM score trend'></canvas>"
+        f"</div></div></div>"
+        f"<div class='ee-summary-vdivider' aria-hidden='true'></div>"
+        f"<div class='ee-summary-col'>"
+        f"<div class='ee-section-title'>Pillars</div>"
+        f"<div class='ee-pillars-row'>"
+        f"<div class='ee-all-pillars-chart'>"
+        f"<canvas id='{pillars_multi}' aria-label='All pillar scores trend'></canvas>"
+        f"</div>"
+        f"<div class='ee-pillar-overview'>{''.join(pillar_blocks)}</div>"
+        f"</div></div></div>"
+    )
+    if compact_grid:
+        html_block += (
+            f"<div class='ee-section-title' id='shm-ee-key-metrics-title'>"
+            f"Key metrics · {_period_display(fp)}</div>"
+            f"{compact_grid}"
         )
-        for mi, mkey in enumerate(metric_keys):
-            hist, score = _metric_at_period(metrics, mkey, fp)
-            if hist is None and score is None:
-                continue
-            pidx = next(
-                (i for i, pk in enumerate(PILLAR_KEYS) if mkey in PILLAR_DASHBOARD_DEFS.get(pk, {}).get("metrics", ())),
-                0,
-            )
-            color = PILLAR_COLORS[pidx]
-            fill = PILLAR_FILL_COLORS[pidx]
-            cid = f"shm_ov_kpi_{uid}_{mi}"
-            score_series = _metric_score_series(metrics, mkey, periods)
-            charts[cid] = {
-                "chartType": "line",
-                "mini": True,
-                "labels": labels,
-                "datasets": [{"label": METRIC_LABELS.get(mkey, mkey), "data": score_series, "color": color, "fillColor": fill + "88"}],
-                "yFallback": {"min": 0, "max": 100},
-            }
-            html_parts.append(
-                f"<article style='background:#27272a;border:1px solid #3f3f46;border-radius:10px;"
-                f"padding:12px;'>"
-                f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:6px;'>"
-                f"<span style='font-size:11px;font-weight:600;color:#d4d4d8;line-height:1.25;'>"
-                f"{html.escape(METRIC_LABELS.get(mkey, mkey))}</span>"
-                f"{_score_badge_html(score)}"
-                f"</div>"
-                f"<div style='font-size:22px;font-weight:700;color:#fafafa;margin:8px 0 4px;'>"
-                f"{html.escape(hist or '—')}</div>"
-                f"<div style='position:relative;height:44px;'><canvas id='{cid}'></canvas></div>"
-                f"</article>"
-            )
-        html_parts.append("</div>")
+    html_block += "</div>"
 
-    html_parts.append("</div>")
-    return html_parts, _chartjs_bundle_script(charts)
+    return [html_block], _chartjs_bundle_script(charts)
 
 
 def _chart_panel(canvas_id: str, title: str, height: int = 260) -> str:
@@ -1244,46 +1429,54 @@ def _format_shm_metrics_html(
     pillars_filter = intent.pillars_filter
     show_periods = intent.chart_periods or (periods[-6:] if len(periods) > 6 else periods)
 
-    parts: list[str] = [
-        "<div class='shm-metrics-report'>",
-        "<h2 style='color:#0891b2;margin:0 0 8px;'>SHM — Service Health Management</h2>",
-        f"<p style='font-size:13px;color:#64748b;margin:0 0 14px;'>"
-        f"Source: <a href='{html.escape(base_url)}' target='_blank'>{html.escape(base_url)}</a>"
-        f" · KPI history ({len(periods)} periods)"
-        + (f" · latest <strong>{html.escape(_period_display(latest))}</strong> ({html.escape(latest)})" if latest else "")
-        + "</p>",
-    ]
-
     focus_period = intent.target_period or latest
     trend_periods = list(periods)
     dashboard_pillar = _resolve_dashboard_pillar(intent)
+    wants_table = _wants_table(question)
     chart_script = ""
     show_dashboard = False
 
-    if intent.focus_overall:
-        dash_html, chart_script = _build_shm_overview_dashboard(
-            pillars=all_pillars,
-            metrics=all_metrics,
-            periods=trend_periods,
-            focus_period=focus_period,
-        )
-        if dash_html:
-            parts.extend(dash_html)
-            show_dashboard = True
-    elif dashboard_pillar and intent.focused:
-        dash_html, chart_script = _build_shm_pillar_dashboard(
-            dashboard_pillar,
-            intent=intent,
-            pillars=all_pillars,
-            metrics=all_metrics,
-            periods=trend_periods,
-            focus_period=focus_period,
-        )
+    parts: list[str] = ["<div class='shm-metrics-report'>"]
+
+    if not wants_table and periods:
+        if dashboard_pillar:
+            dash_html, chart_script = _build_shm_pillar_dashboard(
+                dashboard_pillar,
+                intent=intent,
+                pillars=all_pillars,
+                metrics=all_metrics,
+                periods=trend_periods,
+                focus_period=focus_period,
+            )
+        else:
+            dash_html, chart_script = _build_shm_overview_dashboard(
+                pillars=all_pillars,
+                metrics=all_metrics,
+                periods=trend_periods,
+                focus_period=focus_period,
+                pillars_filter=pillars_filter,
+                metrics_filter=metrics_filter,
+            )
         if dash_html:
             parts.extend(dash_html)
             show_dashboard = True
 
     if not show_dashboard:
+        parts.extend(
+            [
+                "<h2 style='color:#0891b2;margin:0 0 8px;'>SHM — Service Health Management</h2>",
+                f"<p style='font-size:13px;color:#64748b;margin:0 0 14px;'>"
+                f"Source: <a href='{html.escape(base_url)}' target='_blank'>{html.escape(base_url)}</a>"
+                f" · KPI history ({len(periods)} periods)"
+                + (
+                    f" · latest <strong>{html.escape(_period_display(latest))}</strong> "
+                    f"({html.escape(latest)})"
+                    if latest
+                    else ""
+                )
+                + "</p>",
+            ]
+        )
         answer = _build_direct_answer(
             intent,
             pillars=all_pillars,
@@ -1307,7 +1500,7 @@ def _format_shm_metrics_html(
     table_periods = show_periods if compact else (periods[-6:] if len(periods) > 6 else periods)
 
     if show_dashboard:
-        pass  # tables omitted — dashboard cards + bar chart are the primary view
+        pass
     elif all_pillars and (not compact or pillars_filter or not metrics_filter):
         parts.append("<h3 style='margin:16px 0 8px;'>Pillar scores</h3>")
         pillar_rows: list[list[str]] = []

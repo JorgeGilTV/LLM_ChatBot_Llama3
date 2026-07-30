@@ -68,6 +68,7 @@ from tools.mcp_phase3_tools import (
     get_status_monitor_summary_mcp,
 )
 from tools.shm_tools import get_shm_daily_mcp, get_shm_metrics_mcp
+from tools.servicenow_dashboard import get_servicedesk_dashboard_mcp
 from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.splunk_tool import (
     read_splunk_p0_dashboard,
@@ -731,6 +732,24 @@ TOOL_REGISTRY = {
                     "type": "string",
                     "description": "Splunk latest override, e.g. now",
                 },
+            },
+        },
+    },
+    "servicenow_servicedesk": {
+        "description": (
+            "ServiceNow ServiceDesk dashboard — unassigned/open P1–P3 incidents, open requests, "
+            "assignee breakdown, closed incidents last 7 days. Charts via Chart.js; "
+            "source: arlo.service-now.com PA dashboard."
+        ),
+        "function": get_servicedesk_dashboard_mcp,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Natural language, e.g. 'ServiceDesk dashboard' or 'open P2 incidents'",
+                },
+                "query": {"type": "string", "description": "Alias for question"},
             },
         },
     },

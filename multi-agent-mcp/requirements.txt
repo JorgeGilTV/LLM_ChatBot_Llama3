@@ -12,3 +12,4 @@ anthropic>=0.40.0
 starlette>=0.27.0
 sse-starlette>=1.6.5
 boto3>=1.35.0
+playwright>=1.49.0

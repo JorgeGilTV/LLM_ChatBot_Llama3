@@ -1725,6 +1725,523 @@ function loadSplunkOutliersMonitor(forceRefresh) {
         });
 }
 
+var _snowChartInstances = {};
+
+function destroySnowCharts() {
+    Object.keys(_snowChartInstances).forEach(function (id) {
+        if (_snowChartInstances[id]) {
+            _snowChartInstances[id].destroy();
+            delete _snowChartInstances[id];
+        }
+    });
+}
+
+function snowKpiCell(label, value, color) {
+    return (
+        '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:5px 4px;text-align:center;">' +
+        '<div style="font-size:15px;font-weight:700;color:' + color + ';">' + value + '</div>' +
+        '<div style="font-size:8px;color:#64748b;line-height:1.15;">' + label + '</div></div>'
+    );
+}
+
+var _SNOW_PA_COLORS = ['#36cfc9', '#f97316', '#a855f7', '#ec4899', '#22c55e', '#eab308', '#6366f1', '#64748b'];
+
+function snowPaGaugeMax(value, floor) {
+    var v = Number(value) || 0;
+    return Math.max(floor || 12, Math.ceil(v * 1.35) || 1);
+}
+
+function snowPaCenterTextPlugin(text) {
+    var label = String(text != null ? text : 0);
+    return {
+        id: 'snowPaCenterText',
+        afterDraw: function (chart) {
+            var area = chart.chartArea;
+            if (!area) return;
+            var cx = (area.left + area.right) / 2;
+            var isSemi = chart.config.options.circumference === 180;
+            var cy = isSemi
+                ? area.top + (area.bottom - area.top) * 0.72
+                : (area.top + area.bottom) / 2;
+            var ctx = chart.ctx;
+            ctx.save();
+            ctx.font = 'bold 14px system-ui,sans-serif';
+            ctx.fillStyle = '#1e293b';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, cx, cy);
+            ctx.restore();
+        },
+    };
+}
+
+function renderSnowPaGauge(canvas, key, value, max, color) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) n = 0;
+    var v = Math.min(n, max);
+    _snowChartInstances[key] = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [v, Math.max(0.001, max - v)],
+                backgroundColor: [color, '#e8ecf1'],
+                borderWidth: 0,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            circumference: 180,
+            rotation: 270,
+            cutout: '70%',
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        },
+    });
+}
+
+function snowPaPriorityHtml(k) {
+    function row(label, val) {
+        return (
+            '<div class="snow-pa-priority-row">' +
+            '<span class="snow-pa-priority-label">' + label + '</span>' +
+            '<span class="snow-pa-priority-val">' + val + '</span></div>'
+        );
+    }
+    return (
+        '<div class="snow-pa-title">Open Priority Incidents</div>' +
+        '<div class="snow-pa-priority-grid">' +
+        row('P1', k.open_p1 || 0) +
+        row('P2', k.open_p2 || 0) +
+        row('P3', k.open_p3 || 0) +
+        '</div>'
+    );
+}
+
+function renderSnowPaDonut(canvas, key, items, total, legendEl) {
+    var safe = (items || []).filter(function (x) { return x && (x.count || x.count === 0); });
+    if (!safe.length && total === 0) {
+        safe = [{ label: '(none)', count: 1 }];
+    } else if (!safe.length && total > 0) {
+        safe = [{ label: '(empty)', count: total }];
+    }
+    if (!safe.length) {
+        safe = [{ label: '—', count: 1 }];
+        total = total || 0;
+    }
+    var labels = safe.map(function (x) { return x.label; });
+    var values = safe.map(function (x) { return x.count; });
+    var colors = labels.map(function (_, i) { return _SNOW_PA_COLORS[i % _SNOW_PA_COLORS.length]; });
+    _snowChartInstances[key] = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{ data: values, backgroundColor: colors, borderWidth: 1, borderColor: '#fff' }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '56%',
+            plugins: {
+                legend: { display: false },
+                tooltip: { bodyFont: { size: 10 }, callbacks: { label: function (c) { return c.label + ': ' + c.raw; } } },
+            },
+        },
+        plugins: [snowPaCenterTextPlugin(total)],
+    });
+    if (legendEl) {
+        legendEl.innerHTML = safe.map(function (x, i) {
+            var short = x.label.length > 16 ? x.label.slice(0, 14) + '…' : x.label;
+            return (
+                '<div class="snow-pa-legend-item">' +
+                '<span class="snow-pa-legend-dot" style="background:' + _SNOW_PA_COLORS[i % _SNOW_PA_COLORS.length] + '"></span>' +
+                '<span>' + short + ' = ' + x.count + '</span></div>'
+            );
+        }).join('');
+    }
+}
+
+function startSnowAutoConnect(btn, errEl, statusEl) {
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Abriendo navegador…';
+    }
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#475569';
+        statusEl.textContent = 'Iniciando…';
+    }
+    fetch('/api/servicenow/connect/auto/start', {
+        method: 'POST',
+        credentials: 'same-origin',
+    })
+        .then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
+        .then(function (r) {
+            if (!r.ok || !r.j.success) {
+                throw new Error((r.j && r.j.error) || 'No se pudo iniciar conexión automática');
+            }
+            if (statusEl) {
+                statusEl.textContent = r.j.message || 'Inicia sesión con Okta en la ventana de Chromium…';
+            }
+            var connectId = r.j.connect_id || '';
+            if (connectId) {
+                try { sessionStorage.setItem('snow_connect_id', connectId); } catch (e) {}
+            }
+            var polls = 0;
+            var maxPolls = 150;
+            var timer = setInterval(function () {
+                polls += 1;
+                var statusUrl = '/api/servicenow/connect/auto/status';
+                if (connectId) statusUrl += '?connect_id=' + encodeURIComponent(connectId);
+                fetch(statusUrl, { credentials: 'same-origin' })
+                    .then(function (res) { return res.json(); })
+                    .then(function (st) {
+                        if (st.status === 'pending') {
+                            if (statusEl) statusEl.textContent = st.message || 'Esperando login…';
+                            return;
+                        }
+                        clearInterval(timer);
+                        if (st.status === 'connected') {
+                            if (statusEl) {
+                                statusEl.style.color = '#16a34a';
+                                statusEl.textContent = st.message || 'Conectado';
+                            }
+                            if (errEl) errEl.style.display = 'none';
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.textContent = 'Conectar automático (Okta)';
+                            }
+                            loadServiceNowDashboard(true);
+                            return;
+                        }
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = 'Conectar automático (Okta)';
+                        }
+                        throw new Error(st.error || 'Conexión automática fallida');
+                    })
+                    .catch(function (err) {
+                        clearInterval(timer);
+                        if (errEl) {
+                            errEl.style.display = 'block';
+                            errEl.textContent = err.message || String(err);
+                        }
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = 'Conectar automático (Okta)';
+                        }
+                    });
+                if (polls >= maxPolls) {
+                    clearInterval(timer);
+                    if (errEl) {
+                        errEl.style.display = 'block';
+                        errEl.textContent = 'Tiempo agotado. ¿Completaste el login en Chromium?';
+                    }
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Conectar automático (Okta)';
+                    }
+                }
+            }, 2000);
+        })
+        .catch(function (err) {
+            if (errEl) {
+                errEl.style.display = 'block';
+                errEl.textContent = err.message || String(err);
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Conectar automático (Okta)';
+            }
+        });
+}
+
+function submitSnowSession(payload, saveBtn, errEl) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Conectando…';
+    fetch('/api/servicenow/session', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+        .then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
+        .then(function (r) {
+            if (!r.ok || !r.j.success) {
+                throw new Error((r.j && r.j.error) || 'No se pudo conectar');
+            }
+            if (errEl) errEl.style.display = 'none';
+            loadServiceNowDashboard(true);
+        })
+        .catch(function (err) {
+            if (errEl) {
+                errEl.style.display = 'block';
+                errEl.textContent = err.message || String(err);
+            }
+        })
+        .finally(function () {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Conectar';
+        });
+}
+
+function showSnowAuthPrompt(data) {
+    var authWrap = document.getElementById('snow-auth-wrap');
+    var kpiRow = document.getElementById('snow-kpi-row');
+    var chartsWrap = document.getElementById('snow-charts-wrap');
+    if (!authWrap || !kpiRow) return;
+
+    var auth = (data && data.auth) || {};
+    var loginUrl = (data && data.login_url) || '/oauth/snow/login';
+    var instance = auth.instance || 'https://arlo.service-now.com';
+    var msg = (data && data.error) || auth.message || 'Conecta ServiceNow para ver KPIs y gráficas.';
+
+    authWrap.style.display = 'block';
+
+    if (auth.manual_login) {
+        authWrap.innerHTML =
+            '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;">' +
+            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">Conecta con Okta — capturamos cookies y token automáticamente.</p>' +
+            '<button type="button" id="snow-auto-connect" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-bottom:6px;">Conectar automático (Okta)</button>' +
+            '<p id="snow-auto-status" style="margin:0 0 6px;font-size:9px;color:#475569;display:none;line-height:1.35;"></p>' +
+            '<details style="font-size:9px;color:#64748b;"><summary style="cursor:pointer;color:#475569;">Modo manual (pegar cookies)</summary>' +
+            '<ol style="margin:6px 0;padding-left:16px;line-height:1.45;">' +
+            '<li>Application → Cookies → JSESSIONID + glide_session_store</li>' +
+            '<li>Console → <code>window.g_ck</code></li></ol>' +
+            '<input id="snow-jsessionid" type="text" placeholder="JSESSIONID" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
+            '<input id="snow-glide-session" type="text" placeholder="glide_session_store" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
+            '<input id="snow-gck" type="text" placeholder="window.g_ck" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
+            '<input id="snow-user-route" type="text" placeholder="glide_user_route (opcional)" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
+            '<textarea id="snow-cookie-input" rows="2" placeholder="Cookie completa (avanzado)" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;resize:vertical;"></textarea>' +
+            '<button type="button" id="snow-cookie-save" style="width:100%;padding:6px;background:#64748b;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer;">Conectar manual</button>' +
+            '</details>' +
+            '<p id="snow-cookie-err" style="margin:6px 0 0;font-size:9px;color:#dc2626;display:none;line-height:1.35;"></p>' +
+            '</div>';
+
+        var autoBtn = document.getElementById('snow-auto-connect');
+        var statusEl = document.getElementById('snow-auto-status');
+        var errEl = document.getElementById('snow-cookie-err');
+        if (autoBtn) {
+            autoBtn.onclick = function () {
+                startSnowAutoConnect(autoBtn, errEl, statusEl);
+            };
+        }
+        var jsEl = document.getElementById('snow-jsessionid');
+        var glEl = document.getElementById('snow-glide-session');
+        var gckEl = document.getElementById('snow-gck');
+        var routeEl = document.getElementById('snow-user-route');
+        var advEl = document.getElementById('snow-cookie-input');
+        var saveBtn = document.getElementById('snow-cookie-save');
+        if (saveBtn) {
+            saveBtn.onclick = function () {
+                var errEl = document.getElementById('snow-cookie-err');
+                var js = jsEl ? (jsEl.value || '').trim() : '';
+                var gl = glEl ? (glEl.value || '').trim() : '';
+                var gck = gckEl ? (gckEl.value || '').trim() : '';
+                var route = routeEl ? (routeEl.value || '').trim() : '';
+                var adv = advEl ? (advEl.value || '').trim() : '';
+                if (adv) {
+                    submitSnowSession({ cookie: adv, user_token: gck }, saveBtn, errEl);
+                    return;
+                }
+                if (!js || !gl || !gck) {
+                    if (errEl) {
+                        errEl.style.display = 'block';
+                        errEl.textContent = 'Necesitas JSESSIONID, glide_session_store y el token g_ck (window.g_ck en Console).';
+                    }
+                    return;
+                }
+                submitSnowSession({
+                    jsessionid: js,
+                    glide_session_store: gl,
+                    user_token: gck,
+                    glide_user_route: route,
+                }, saveBtn, errEl);
+            };
+        }
+    } else {
+        authWrap.innerHTML =
+            '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;">' +
+            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">' + msg + '</p>' +
+            '<a href="' + loginUrl + '" style="display:inline-block;padding:7px 12px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;">Conectar ServiceNow (Okta)</a>' +
+            '</div>';
+    }
+
+    kpiRow.innerHTML = '';
+    if (chartsWrap) chartsWrap.innerHTML = '';
+    destroySnowCharts();
+}
+
+async function applyServiceNowDashboardPayload(data) {
+    var kpiRow = document.getElementById('snow-kpi-row');
+    var chartsWrap = document.getElementById('snow-charts-wrap');
+    var timeEl = document.getElementById('snow-time');
+    var linkEl = document.getElementById('snow-dash-link');
+    var authWrap = document.getElementById('snow-auth-wrap');
+    if (!kpiRow || !chartsWrap) return;
+
+    if (data && data.authenticated === false) {
+        showSnowAuthPrompt(data);
+        if (timeEl) timeEl.textContent = 'Sin conexión ServiceNow';
+        return;
+    }
+
+    if (authWrap) {
+        authWrap.style.display = 'none';
+        authWrap.innerHTML = '';
+    }
+
+    if (timeEl) {
+        timeEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    }
+    if (linkEl && data && data.dashboard_url) {
+        linkEl.href = data.dashboard_url;
+    }
+
+    if (!data || data.success === false) {
+        var msg = (data && data.error) ? data.error : 'ServiceNow unavailable';
+        kpiRow.innerHTML = '<div style="grid-column:1/-1;color:#dc2626;font-size:10px;padding:4px;line-height:1.35;">' +
+            msg + ' <a href="/oauth/snow/login" style="color:#2563eb;">Reconectar</a></div>';
+        chartsWrap.innerHTML = '';
+        destroySnowCharts();
+        return;
+    }
+
+    var k = data.kpis || {};
+    var unasgInc = k.unassigned_incidents || 0;
+    var unasgReq = k.unassigned_requests || 0;
+    var openIncTotal = k.open_incidents_total || 0;
+    var openReqTotal = k.open_requests_total || 0;
+    var incMax = snowPaGaugeMax(unasgInc, 12);
+    var reqMax = snowPaGaugeMax(unasgReq, 45);
+
+    kpiRow.innerHTML = '';
+    kpiRow.style.display = 'none';
+
+    destroySnowCharts();
+    chartsWrap.innerHTML =
+        '<div class="snow-pa-dash">' +
+        '<div class="snow-pa-grid">' +
+        '<div class="snow-pa-panel snow-pa-gauge">' +
+        '<div class="snow-pa-title">Unassigned Incidents</div>' +
+        '<div class="snow-pa-chart"><canvas id="snow-gauge-unasg-inc"></canvas>' +
+        '<div class="snow-pa-gauge-num" id="snow-gauge-unasg-inc-num">' + unasgInc + '</div></div>' +
+        '<div class="snow-pa-scale"><span>0</span><span>' + incMax + '</span></div></div>' +
+        '<div class="snow-pa-panel snow-pa-priority">' + snowPaPriorityHtml(k) + '</div>' +
+        '<div class="snow-pa-panel snow-pa-gauge">' +
+        '<div class="snow-pa-title">Unassigned Requests</div>' +
+        '<div class="snow-pa-chart"><canvas id="snow-gauge-unasg-req"></canvas>' +
+        '<div class="snow-pa-gauge-num" id="snow-gauge-unasg-req-num">' + unasgReq + '</div></div>' +
+        '<div class="snow-pa-scale"><span>0</span><span>' + reqMax + '</span></div></div>' +
+        '<div class="snow-pa-donuts-row">' +
+        '<div class="snow-pa-panel snow-pa-donut">' +
+        '<div class="snow-pa-title">Open Incidents — Total</div>' +
+        '<div class="snow-pa-chart"><canvas id="snow-inc-donut"></canvas></div>' +
+        '<div id="snow-inc-legend" class="snow-pa-legend"></div></div>' +
+        '<div class="snow-pa-panel snow-pa-donut">' +
+        '<div class="snow-pa-title">Open Requests</div>' +
+        '<div class="snow-pa-chart"><canvas id="snow-req-donut"></canvas></div>' +
+        '<div id="snow-req-legend" class="snow-pa-legend"></div></div>' +
+        '</div>' +
+        '</div></div>';
+
+    await ensureChartJs();
+
+    var gInc = document.getElementById('snow-gauge-unasg-inc');
+    var gReq = document.getElementById('snow-gauge-unasg-req');
+    if (gInc) renderSnowPaGauge(gInc, 'gaugeInc', unasgInc, incMax, '#f97316');
+    if (gReq) renderSnowPaGauge(gReq, 'gaugeReq', unasgReq, reqMax, '#22c55e');
+
+    var incData = data.open_incidents_by_assignee || [];
+    var incCanvas = document.getElementById('snow-inc-donut');
+    if (incCanvas) {
+        renderSnowPaDonut(incCanvas, 'inc', incData, openIncTotal, document.getElementById('snow-inc-legend'));
+    }
+
+    var reqData = data.open_requests_by_assignee || [];
+    var reqCanvas = document.getElementById('snow-req-donut');
+    if (reqCanvas) {
+        renderSnowPaDonut(reqCanvas, 'req', reqData, openReqTotal, document.getElementById('snow-req-legend'));
+    }
+}
+
+function loadServiceNowDashboard(forceRefresh) {
+    var C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
+    var ck = 'servicenow_dashboard';
+    if (!forceRefresh && C) {
+        var hit = C.get(ck);
+        if (hit && hit.authenticated !== false) {
+            applyServiceNowDashboardPayload(hit);
+            return;
+        }
+    }
+    fetch('/api/servicenow/dashboard', { credentials: 'same-origin' })
+        .then(function (res) {
+            if (!res.ok) throw new Error('ServiceNow HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function (data) {
+            if (C && data && data.authenticated !== false && data.success !== false) {
+                C.set(ck, data, SIDEBAR_WIDGET_CACHE_TTL_MS);
+            }
+            applyServiceNowDashboardPayload(data);
+        })
+        .catch(function (err) {
+            console.error('ServiceNow dashboard:', err);
+            applyServiceNowDashboardPayload({ success: false, error: err.message || String(err) });
+        });
+}
+
+function bootServiceNowFromUrl() {
+    try {
+        var params = new URLSearchParams(window.location.search);
+        var snow = params.get('snow');
+        if (!snow) return;
+        if (snow === 'connected') {
+            loadServiceNowDashboard(true);
+        } else if (snow === 'error') {
+            var msg = params.get('msg') || 'Error al conectar ServiceNow';
+            applyServiceNowDashboardPayload({
+                authenticated: false,
+                success: false,
+                error: decodeURIComponent(msg.replace(/\+/g, ' ')),
+                login_url: '/oauth/snow/login',
+                auth: { configured: true, connected: false },
+            });
+        }
+        params.delete('snow');
+        params.delete('msg');
+        var qs = params.toString();
+        var clean = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+        window.history.replaceState({}, '', clean);
+    } catch (e) {
+        console.warn('ServiceNow URL boot:', e);
+    }
+}
+
+var _snowDashboardObserved = false;
+function observeServiceNowDashboardCard() {
+    if (_snowDashboardObserved) return;
+    var card = document.querySelector('.servicenow-dashboard-card');
+    if (!card || typeof IntersectionObserver === 'undefined') {
+        loadServiceNowDashboard(false);
+        return;
+    }
+    _snowDashboardObserved = true;
+    var loaded = false;
+    var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting && !loaded) {
+                loaded = true;
+                loadServiceNowDashboard(false);
+                obs.disconnect();
+            }
+        });
+    }, { root: null, threshold: 0.15 });
+    obs.observe(card);
+}
+
+window.loadServiceNowDashboard = loadServiceNowDashboard;
+
 function loadPagerDutyMonitor(forceRefresh) {
     const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
     const ck = 'pagerduty_monitor';
@@ -2107,6 +2624,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loadStatusMonitor();
         loadPagerDutyMonitor();
         loadSplunkOutliersMonitor();
+        bootServiceNowFromUrl();
+        observeServiceNowDashboardCard();
         loadUpcomingDeployments();
     };
     if (typeof requestIdleCallback === 'function') {
@@ -2119,6 +2638,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(loadStatusMonitor, 360000);
     setInterval(loadPagerDutyMonitor, 360000);
     setInterval(loadSplunkOutliersMonitor, 360000);
+    setInterval(loadServiceNowDashboard, 360000);
     setInterval(loadUpcomingDeployments, 360000);
     
     // Update timestamp initially

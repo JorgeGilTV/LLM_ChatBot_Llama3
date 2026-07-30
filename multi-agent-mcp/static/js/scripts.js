@@ -2132,7 +2132,7 @@ function showSnowAuthPrompt(data) {
 
     authWrap.style.display = 'block';
 
-    if auth.manual_login) {
+    if (auth.manual_login) {
         var extHint = _gocviewSnowExtReady
             ? ''
             : '<p style="margin:0 0 8px;font-size:9px;color:#64748b;line-height:1.35;">Requiere extensión <strong>GocView Chatbot v2.4+</strong> (lee cookies HttpOnly de ServiceNow).</p>';

@@ -69,6 +69,33 @@ _OUTLOOK_NOISE_RE = re.compile(
     r"daily digest from datadog|marketing@|newsletter|unsubscribe",
     re.IGNORECASE,
 )
+DEFAULT_SHIFT_OUTLOOK_NOC_DL = "DL-NOC"
+_JIRA_DONE_STATUSES = frozenset(
+    {
+        "done",
+        "closed",
+        "resolved",
+        "complete",
+        "completed",
+        "cancelled",
+        "canceled",
+    }
+)
+_JIRA_OPEN_STATUSES = frozenset(
+    {
+        "open",
+        "new",
+        "to do",
+        "backlog",
+        "in progress",
+        "in development",
+        "scheduled",
+        "so sign off",
+        "sign off",
+        "pending",
+        "on hold",
+    }
+)
 _GRM_ID_RE = re.compile(r"\bGRM\s*-?\s*(\d+)\b", re.IGNORECASE)
 _CHECKLIST_BLOCK_RE = re.compile(
     r"=== Message from Production Release Checklist.*?Message TS:\s*([\d.]+)\n(.*?)(?=\n=== Message from |\Z)",
@@ -1050,19 +1077,161 @@ def _outlook_mcp_error(text: str) -> str:
     return ""
 
 
+def _jira_status_bucket(status: str) -> str:
+    s = (status or "").strip().lower()
+    if not s:
+        return "other"
+    if s in _JIRA_DONE_STATUSES or re.search(r"\b(done|closed|resolved|complete)\b", s):
+        return "done"
+    if s in _JIRA_OPEN_STATUSES or "progress" in s or "scheduled" in s or "sign off" in s:
+        return "open"
+    return "other"
+
+
+def _prepare_jira_grm_shift_payload(jira_raw: str) -> str:
+    """Compact GRM/Jira for shift report — ticket keys only, grouped by Done vs Open."""
+    try:
+        data = json.loads(jira_raw)
+    except json.JSONDecodeError:
+        return jira_raw or json.dumps({"count": 0, "issues": []})
+
+    issues = data.get("issues") if isinstance(data, dict) else None
+    if not isinstance(issues, list):
+        return jira_raw
+
+    done_keys: list[str] = []
+    open_items: list[dict[str, str]] = []
+    other_keys: list[str] = []
+    seen: set[str] = set()
+
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        key = str(issue.get("key") or "").upper().strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        status = str(issue.get("status") or "").strip()
+        bucket = _jira_status_bucket(status)
+        if bucket == "done":
+            done_keys.append(key)
+        elif bucket == "open":
+            open_items.append({"key": key, "status": status or "Open"})
+        else:
+            other_keys.append(key)
+
+    done_keys.sort()
+    open_items.sort(key=lambda x: x["key"])
+    other_keys.sort()
+
+    return json.dumps(
+        {
+            "summary_only": True,
+            "instruction": (
+                "Use compact summary rows only — do NOT create one table row per GRM ticket."
+            ),
+            "done_count": len(done_keys),
+            "done_tickets": done_keys,
+            "open_count": len(open_items),
+            "open_tickets": open_items,
+            "other_count": len(other_keys),
+            "other_tickets": other_keys,
+            "found_keys": sorted(seen),
+            "requested_keys": data.get("requested_keys") or [],
+            "missing_keys": data.get("missing_keys") or [],
+            "errors": data.get("errors") or [],
+        },
+        indent=2,
+    )
+
+
+def _noc_outlook_terms() -> list[str]:
+    dl = (os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL).strip()
+    terms = [dl, "DL-NOC", "dl-noc", "NOC team", "Network Operations"]
+    raw_members = (os.getenv("SHIFT_OUTLOOK_NOC_MEMBERS") or "").strip()
+    for piece in raw_members.split(","):
+        m = piece.strip()
+        if m and m.lower() not in {t.lower() for t in terms}:
+            terms.append(m)
+    return terms
+
+
+def _is_noc_outlook_email(email: dict[str, Any]) -> bool:
+    parts = [
+        email.get("subject"),
+        email.get("bodyPreview"),
+        email.get("from"),
+        email.get("fromName"),
+        email.get("to"),
+        email.get("toRecipients"),
+        email.get("ccRecipients"),
+    ]
+    blob = " ".join(str(p) for p in parts if p)
+    blob_lower = blob.lower()
+    for term in _noc_outlook_terms():
+        if term.lower() in blob_lower:
+            return True
+    return bool(re.search(r"\bdl[- ]?noc\b", blob_lower))
+
+
+def _is_pending_outlook_email(email: dict[str, Any]) -> bool:
+    if email.get("isRead") is False:
+        return True
+    subject = str(email.get("subject") or "").lower()
+    preview = str(email.get("bodyPreview") or "").lower()
+    pending_markers = (
+        "pending",
+        "action required",
+        "approval needed",
+        "awaiting",
+        "reminder",
+        "follow up",
+        "follow-up",
+        "escalation",
+        "unread",
+    )
+    return any(m in subject or m in preview for m in pending_markers)
+
+
 def _slim_outlook_email(email: dict[str, Any]) -> dict[str, Any]:
     preview = str(email.get("bodyPreview") or "").replace("\r", " ").replace("\n", " ")
     preview = re.sub(r"\s+", " ", preview).strip()[:240]
     subject = str(email.get("subject") or "").strip()
+    to_recipients = email.get("toRecipients") or email.get("to") or ""
+    cc_recipients = email.get("ccRecipients") or email.get("cc") or ""
+    if isinstance(to_recipients, list):
+        to_recipients = ", ".join(
+            str(r.get("emailAddress", r.get("address", r)) if isinstance(r, dict) else r)
+            for r in to_recipients
+        )
+    if isinstance(cc_recipients, list):
+        cc_recipients = ", ".join(
+            str(r.get("emailAddress", r.get("address", r)) if isinstance(r, dict) else r)
+            for r in cc_recipients
+        )
     return {
         "subject": subject,
         "from": email.get("from"),
         "fromName": email.get("fromName"),
+        "to": str(to_recipients)[:240],
+        "toRecipients": str(to_recipients)[:240],
+        "ccRecipients": str(cc_recipients)[:240],
         "receivedDateTime": email.get("receivedDateTime"),
         "importance": email.get("importance"),
         "isRead": email.get("isRead"),
         "bodyPreview": preview,
         "related_topic": _outlook_related_topic(subject, preview),
+        "noc_relevant": _is_noc_outlook_email(
+            {
+                "subject": subject,
+                "bodyPreview": preview,
+                "from": email.get("from"),
+                "fromName": email.get("fromName"),
+                "toRecipients": to_recipients,
+                "ccRecipients": cc_recipients,
+            }
+        ),
+        "pending": _is_pending_outlook_email(email),
     }
 
 
@@ -1119,7 +1288,9 @@ def _outlook_date_range(window: ShiftWindow) -> tuple[str, str]:
 def _build_outlook_queries(window: ShiftWindow, terms: list[str]) -> list[str]:
     start_d, end_d = _outlook_date_range(window)
     date_clause = f"received:{start_d}..{end_d}"
+    noc_dl = (os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL).strip()
     queries = [
+        f'{date_clause} AND ("{noc_dl}" OR to:{noc_dl} OR cc:{noc_dl} OR participants:{noc_dl})',
         f'{date_clause} AND (pagerduty OR servicenow OR incident OR escalation OR "on call")',
         f"{date_clause} AND (deployment OR release OR GRM OR postcheck)",
     ]
@@ -1154,6 +1325,7 @@ async def _fetch_related_outlook_emails(
     terms = _extract_issue_search_terms(*issue_blobs)
     queries = _build_outlook_queries(window, terms)
     mailbox = (os.getenv("SHIFT_OUTLOOK_MAILBOX") or DEFAULT_SHIFT_OUTLOOK_MAILBOX).strip()
+    noc_dl = (os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL).strip()
     limit = max(5, min(int(os.getenv("SHIFT_OUTLOOK_EMAIL_LIMIT", "15")), 50))
 
     collected: list[dict[str, Any]] = []
@@ -1183,6 +1355,10 @@ async def _fetch_related_outlook_emails(
                 slim = _slim_outlook_email(email)
                 if not _is_relevant_outlook_email(slim):
                     continue
+                if not slim.get("noc_relevant"):
+                    continue
+                if not slim.get("pending"):
+                    continue
                 if eid:
                     seen_ids.add(eid)
                 collected.append(slim)
@@ -1190,6 +1366,8 @@ async def _fetch_related_outlook_emails(
         return json.dumps(
             {
                 "mailbox": mailbox or "(authenticated user)",
+                "noc_dl": noc_dl,
+                "noc_filter": "DL-NOC / NOC team — pending or unread only",
                 "search_terms": terms[:20],
                 "queries_run": queries,
                 "count": len(collected),
@@ -1578,10 +1756,10 @@ Note: release_threads[] is parsed from Production Release Checklist thread repli
 === GRM deployments (calendar window — prod + partner sub-calendars) ===
 {_truncate(grm_raw, 6000)}
 
-=== Jira GRM tickets (discovered ids + all GRM updated in shift window, incl. partner) ===
-{_truncate(jira_raw, 12000)}
+=== Jira GRM tickets (compact — Done vs Open keys only, no per-ticket expansion) ===
+{_truncate(jira_raw, 8000)}
 
-=== Outlook emails tied to shift issues (GRM, INC, PagerDuty, deployment, escalation) ===
+=== Outlook — pending items for NOC DL ({os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL}) ===
 {_truncate(outlook_raw, 12000)}
 
 JSON schema:
@@ -1611,11 +1789,13 @@ Rules:
   • Done — post-check complete (use exactly "Done", not "postcheck done")
   • pending postcheck — release started, pre/post not complete
   Put grm_id in service_or_topic, release_summary in summary, latest_activity in action_item.
-- GRM calendar: rows for deployments scheduled/completed in the shift window (source = "GRM", status = scheduled/completed/info). Includes partner sub-calendars (Samsung/ADT/Partner). Calendar data alone does not describe ticket outcome — pair with Jira when available.
-- Jira: one row per GRM ticket in the Jira section (source = "Jira") — both tickets discovered from other sources and GRM tickets updated during the shift (prod + partner). Put the GRM key (e.g. GRM-3543) in service_or_topic. Use ticket status (Scheduled, In Progress, SO Sign Off, Done, Closed, etc.), summary, assignee, and updated time. action_item = next step for on-call based on current Jira status (not just calendar schedule).
-- When the same GRM appears in Slack/GRM calendar and Jira, prefer one merged row with Jira status/details (source = "Jira" or "GRM" with Jira status in summary).
-- Outlook: include emails from the Outlook section (source = "Outlook"). Rows are grouped server-side by sender name; related_topic in service_or_topic, subjects combined in summary.
-- Jira / GRM: rows with the same GRM id or ticket name are grouped server-side into one row.
+- GRM calendar: rows for deployments scheduled/completed in the shift window (source = "GRM", status = scheduled/completed/info). Includes partner sub-calendars (Samsung/ADT/Partner). List GRM numbers or service names only — one summary row if more than 3 deployments (e.g. "5 GRM deployments: GRM-1234, GRM-1235, …").
+- Jira GRM: use the compact summary in the Jira section — at most TWO rows total:
+  • One row for Done tickets (source = "Jira", service_or_topic = "GRM Done", status = "Done", summary = comma-separated GRM keys only e.g. "GRM-3543, GRM-3544" — no assignee/summary text per ticket).
+  • One row for Open/In Progress tickets (source = "Jira", service_or_topic = "GRM Open", status = "open", summary = comma-separated keys with status in parentheses e.g. "GRM-3550 (In Progress), GRM-3551 (Scheduled)").
+  Do NOT create individual rows per GRM ticket. Do NOT repeat full Jira summaries.
+- When the same GRM appears in Slack/GRM calendar and Jira, prefer the compact Jira summary row (not duplicate calendar + jira rows).
+- Outlook: ONLY include pending/unread emails for NOC DL-NOC or NOC team members (already filtered server-side). At most ONE grouped row (source = "Outlook", service_or_topic = "DL-NOC pending", summary = count + subject lines). action_item = what NOC must still do. Omit read/non-NOC email.
 - Keep summaries and action items short and actionable.
 - If no items for a source, omit rows for that source (do not fabricate).
 - Merge duplicate PD+Slack references to the same incident into one row when possible.
@@ -1699,6 +1879,10 @@ def _outlook_owner_group_key(row: dict[str, str]) -> str | None:
 
 def _ticket_group_key(row: dict[str, str]) -> str | None:
     source = (row.get("source") or "").strip().lower()
+    if source == "jira":
+        topic = (row.get("service_or_topic") or "").strip()
+        if topic in ("GRM Done", "GRM Open", "GRM Other"):
+            return None
     if source not in ("jira", "grm", "slack prod dep"):
         return None
     topic = str(row.get("service_or_topic") or "")
@@ -1887,49 +2071,148 @@ def _ensure_pagerduty_auto_resolved_summary(
     return rows
 
 
+def _parse_jira_shift_summary(jira_raw: str) -> dict[str, Any]:
+    try:
+        data = json.loads(jira_raw)
+    except json.JSONDecodeError:
+        return {"done_keys": [], "open_items": [], "other_keys": []}
+    if not isinstance(data, dict):
+        return {"done_keys": [], "open_items": [], "other_keys": []}
+    if data.get("summary_only"):
+        return {
+            "done_keys": list(data.get("done_tickets") or []),
+            "open_items": list(data.get("open_tickets") or []),
+            "other_keys": list(data.get("other_tickets") or []),
+        }
+    done_keys: list[str] = []
+    open_items: list[dict[str, str]] = []
+    other_keys: list[str] = []
+    for issue in data.get("issues") or []:
+        if not isinstance(issue, dict):
+            continue
+        key = str(issue.get("key") or "").upper()
+        status = str(issue.get("status") or "")
+        bucket = _jira_status_bucket(status)
+        if bucket == "done":
+            done_keys.append(key)
+        elif bucket == "open":
+            open_items.append({"key": key, "status": status or "Open"})
+        elif key:
+            other_keys.append(key)
+    return {"done_keys": done_keys, "open_items": open_items, "other_keys": other_keys}
+
+
+def _ensure_jira_grm_summary_rows(
+    rows: list[dict[str, str]], jira_raw: str
+) -> list[dict[str, str]]:
+    """Replace verbose per-ticket Jira rows with compact Done / Open summaries."""
+    summary = _parse_jira_shift_summary(jira_raw)
+    done_keys = [k for k in summary.get("done_keys") or [] if k]
+    open_items = [i for i in summary.get("open_items") or [] if isinstance(i, dict) and i.get("key")]
+    other_keys = [k for k in summary.get("other_keys") or [] if k]
+
+    rows = [r for r in rows if (r.get("source") or "").strip().lower() != "jira"]
+
+    if done_keys:
+        rows.append(
+            {
+                "source": "Jira",
+                "time_local": "—",
+                "priority": "—",
+                "service_or_topic": "GRM Done",
+                "status": "Done",
+                "summary": ", ".join(sorted(set(done_keys)))[:200],
+                "action_item": "—",
+                "owner": "—",
+            }
+        )
+    if open_items:
+        open_bits = []
+        for item in sorted(open_items, key=lambda x: x.get("key", "")):
+            key = item.get("key", "")
+            status = item.get("status") or "Open"
+            open_bits.append(f"{key} ({status})")
+        rows.append(
+            {
+                "source": "Jira",
+                "time_local": "—",
+                "priority": "—",
+                "service_or_topic": "GRM Open",
+                "status": "open",
+                "summary": ", ".join(open_bits)[:200],
+                "action_item": "Follow open GRM tickets in Jira",
+                "owner": "Release / NOC",
+            }
+        )
+    if other_keys and not open_items:
+        rows.append(
+            {
+                "source": "Jira",
+                "time_local": "—",
+                "priority": "—",
+                "service_or_topic": "GRM Other",
+                "status": "info",
+                "summary": ", ".join(sorted(set(other_keys)))[:200],
+                "action_item": "Review GRM ticket status in Jira",
+                "owner": "—",
+            }
+        )
+    return rows
+
+
 def _ensure_outlook_email_rows(
     rows: list[dict[str, str]], outlook_raw: str, window: ShiftWindow
 ) -> list[dict[str, str]]:
-    """Add one table row per relevant Outlook email returned by search."""
+    """One grouped row for pending DL-NOC / NOC team Outlook items."""
     try:
         data = json.loads(outlook_raw)
     except json.JSONDecodeError:
         return rows
     emails = data.get("emails") if isinstance(data, dict) else None
     if not isinstance(emails, list) or not emails:
+        return [r for r in rows if (r.get("source") or "").strip().lower() != "outlook"]
+
+    rows = [r for r in rows if (r.get("source") or "").strip().lower() != "outlook"]
+
+    pending = [
+        e for e in emails
+        if isinstance(e, dict) and e.get("noc_relevant") and e.get("pending")
+    ]
+    if not pending:
         return rows
 
-    existing_subjects = {
-        (row.get("summary") or "").strip().lower()
-        for row in rows
-        if (row.get("source") or "").strip().lower() == "outlook"
-    }
+    noc_dl = (os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL).strip()
+    subjects: list[str] = []
+    seen_subjects: set[str] = set()
+    for email in pending:
+        subj = str(email.get("subject") or "(no subject)").strip()[:100]
+        if subj.lower() not in seen_subjects:
+            seen_subjects.add(subj.lower())
+            subjects.append(subj)
 
-    for email in emails:
-        if not isinstance(email, dict) or not _is_relevant_outlook_email(email):
-            continue
-        subject = str(email.get("subject") or "(no subject)").strip()[:200]
-        if subject.lower() in existing_subjects:
-            continue
-        owner = str(email.get("fromName") or email.get("from") or "—").strip()[:200]
-        importance = str(email.get("importance") or "").lower()
-        priority = "P2" if importance == "high" else "—"
-        is_read = email.get("isRead")
-        status = "read" if is_read is True else "unread"
-        related = str(email.get("related_topic") or _outlook_related_topic(subject, email.get("bodyPreview") or ""))
-        rows.append(
-            {
-                "source": "Outlook",
-                "time_local": _outlook_time_local(email, window.tz_name),
-                "priority": priority,
-                "service_or_topic": related[:200],
-                "status": status,
-                "summary": subject,
-                "action_item": "Review email thread and tie to open GRM/incident",
-                "owner": owner,
-            }
-        )
-        existing_subjects.add(subject.lower())
+    summary = f"{len(pending)} pending for {noc_dl} — " + " · ".join(subjects[:4])
+    if len(subjects) > 4:
+        summary += f" (+{len(subjects) - 4} more)"
+    summary = summary[:200]
+
+    owners: list[str] = []
+    for email in pending:
+        owner = str(email.get("fromName") or email.get("from") or "").strip()
+        if owner and owner not in owners:
+            owners.append(owner)
+
+    rows.append(
+        {
+            "source": "Outlook",
+            "time_local": _outlook_time_local(pending[0], window.tz_name),
+            "priority": "P2" if any(str(e.get("importance") or "").lower() == "high" for e in pending) else "—",
+            "service_or_topic": f"{noc_dl} pending",
+            "status": "unread",
+            "summary": summary,
+            "action_item": "Review pending NOC DL email threads and assign follow-up",
+            "owner": owners[0][:200] if owners else noc_dl,
+        }
+    )
     return rows
 
 
@@ -2157,6 +2440,7 @@ def generate_shift_report(mode: str = "shift1") -> dict[str, Any]:
     """
     window = compute_shift_window(mode)
     collected = asyncio.run(_collect_shift_data(window))
+    jira_compact = _prepare_jira_grm_shift_payload(collected["jira_raw"])
 
     prompt = _build_bedrock_prompt(
         window,
@@ -2165,7 +2449,7 @@ def generate_shift_report(mode: str = "shift1") -> dict[str, Any]:
         collected["slack_prod_dep_raw"],
         collected["datadog_raw"],
         collected["grm_raw"],
-        collected["jira_raw"],
+        jira_compact,
         collected["outlook_raw"],
     )
     raw = ask_bedrock(prompt, temperature=0.2, max_tokens=7000)
@@ -2175,6 +2459,7 @@ def generate_shift_report(mode: str = "shift1") -> dict[str, Any]:
     parsed = _extract_json_object(raw)
     summary, rows = _normalize_rows(parsed)
     rows = _ensure_pagerduty_auto_resolved_summary(rows, collected["pagerduty_raw"])
+    rows = _ensure_jira_grm_summary_rows(rows, jira_compact)
     rows = _ensure_outlook_email_rows(rows, collected["outlook_raw"], window)
     rows = _ensure_prod_dep_postcheck_rows(rows, collected["slack_prod_dep_raw"])
     rows = _consolidate_shift_rows(rows)

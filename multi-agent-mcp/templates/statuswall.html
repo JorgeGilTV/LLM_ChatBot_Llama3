@@ -3722,7 +3722,7 @@
 
         document.getElementById('sw-slack').addEventListener('click', function() {
             if (typeof SlackShare === 'undefined') {
-                alert('Slack: no se pudo cargar slack_share.js');
+                alert('Slack: could not load slack_share.js');
                 return;
             }
             var st = document.getElementById('sw-status');

@@ -149,6 +149,8 @@ SECRET_FIELD_GROUPS: list[dict[str, Any]] = [
             {"key": "ANTHROPIC_API_KEY", "label": "Anthropic API Key", "type": "password"},
             {"key": "SNOW_USER", "label": "ServiceNow User", "type": "text"},
             {"key": "SNOW_PASSWORD", "label": "ServiceNow Password", "type": "password"},
+            {"key": "SNOW_SESSION_COOKIE", "label": "ServiceNow session cookie (glide_session_store=…)", "type": "password"},
+            {"key": "SNOW_USER_TOKEN", "label": "ServiceNow g_ck (X-UserToken)", "type": "password"},
         ],
     },
 ]

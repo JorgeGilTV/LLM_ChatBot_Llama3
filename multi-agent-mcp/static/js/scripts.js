@@ -416,7 +416,7 @@ function copyResultsToClipboard() {
 
 function sendResultsToSlack() {
     if (typeof window.SlackShare === 'undefined') {
-        showNotification('⚠️ Slack no disponible (falta slack_share.js)', 6000);
+        showNotification('⚠️ Slack unavailable (missing slack_share.js)', 6000);
         return;
     }
     const box = document.getElementById('results-box');
@@ -434,7 +434,7 @@ window.sendResultsToSlack = sendResultsToSlack;
 /** Barra superior: resumen Bedrock de toda la UI (sidebar + columna principal). */
 function sendMainPageSlackSummary() {
     if (typeof window.SlackShare === 'undefined') {
-        showNotification('⚠️ Slack no disponible (falta slack_share.js)', 6000);
+        showNotification('⚠️ Slack unavailable (missing slack_share.js)', 6000);
         return;
     }
     window.SlackShare.sendSummaryFromHomePage();
@@ -940,7 +940,7 @@ const HISTORY_PREVIEW_COUNT = 3;
 function loadHistory() {
     fetch('/api/history')
         .then(res => {
-            if (!res.ok) throw new Error('Error al cargar historial');
+            if (!res.ok) throw new Error('Error loading history');
             return res.json();
         })
         .then(data => {
@@ -948,7 +948,7 @@ function loadHistory() {
             renderHistory(historyExpanded);
         })
         .catch(err => {
-            console.error('Error cargando historial:', err);
+            console.error('Error loading history:', err);
             const historyList = document.getElementById("history-list");
             historyList.innerHTML = '<li style="color: #f56565; font-size: 12px; padding: 10px;">⚠️ Error loading history</li>';
         });
@@ -1868,6 +1868,29 @@ window.addEventListener('message', function (e) {
     }
 });
 
+function probeSnowExtension(timeoutMs) {
+    if (_gocviewSnowExtReady) {
+        return Promise.resolve(true);
+    }
+    var limit = timeoutMs || 1200;
+    return new Promise(function (resolve) {
+        var timer = setTimeout(function () {
+            window.removeEventListener('message', onMsg);
+            resolve(_gocviewSnowExtReady);
+        }, limit);
+        function onMsg(e) {
+            if (e.data && e.data.type === 'GOCVIEW_EXTENSION_READY' && e.data.feature === 'snow_connect') {
+                _gocviewSnowExtReady = true;
+                clearTimeout(timer);
+                window.removeEventListener('message', onMsg);
+                resolve(true);
+            }
+        }
+        window.addEventListener('message', onMsg);
+        window.postMessage({ type: 'GOCVIEW_SNOW_EXTENSION_PING' }, '*');
+    });
+}
+
 function snowInstanceUrl(data) {
     var auth = (data && data.auth) || {};
     return auth.instance || 'https://arlo.service-now.com';
@@ -1878,8 +1901,8 @@ function captureSnowViaExtension(instance) {
         var requestId = 'snow_' + Date.now() + '_' + Math.random().toString(36).slice(2);
         var timer = setTimeout(function () {
             window.removeEventListener('message', onMsg);
-            reject(new Error('Tiempo agotado esperando la extensión GocView'));
-        }, 120000);
+            reject(new Error('Timed out. Complete Okta sign-in in the ServiceNow tab, then click Connect again.'));
+        }, 185000);
 
         function onMsg(e) {
             if (!e.data || e.data.type !== 'GOCVIEW_SNOW_CONNECT_RESPONSE') return;
@@ -1889,7 +1912,7 @@ function captureSnowViaExtension(instance) {
             if (e.data.success) {
                 resolve(e.data);
             } else {
-                reject(new Error(e.data.error || 'No se pudo leer la sesión ServiceNow'));
+                reject(new Error(e.data.error || 'Could not read ServiceNow session'));
             }
         }
 
@@ -1910,12 +1933,12 @@ function captureSnowViaPopup(instance) {
         var url = instance.replace(/\/+$/, '') + '/navpage.do?gocview_connect=1';
         var popup = window.open(url, 'gocview_snow_connect', 'width=960,height=720');
         if (!popup) {
-            reject(new Error('El navegador bloqueó la ventana emergente. Permite popups para gocview.arlocloud.com.'));
+            reject(new Error('Popup blocked. Allow popups for gocview.arlocloud.com.'));
             return;
         }
         var timer = setTimeout(function () {
             window.removeEventListener('message', onMsg);
-            reject(new Error('Tiempo agotado. ¿Completaste login en ServiceNow?'));
+            reject(new Error('Timed out. Did you complete ServiceNow login?'));
         }, 180000);
 
         function onMsg(e) {
@@ -1925,7 +1948,7 @@ function captureSnowViaPopup(instance) {
             if (e.data.success) {
                 resolve(e.data);
             } else {
-                reject(new Error(e.data.error || 'Conexión ServiceNow fallida'));
+                reject(new Error(e.data.error || 'ServiceNow connection failed'));
             }
         }
 
@@ -1933,77 +1956,172 @@ function captureSnowViaPopup(instance) {
     });
 }
 
-function startSnowBrowserConnect(btn, errEl, statusEl, instance) {
+function saveSnowSessionPayload(payload) {
+    return fetch('/api/servicenow/session', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            cookies: payload.cookies || {},
+            user_token: payload.user_token || payload.g_ck || '',
+        }),
+    }).then(function (res) {
+        return res.json().then(function (j) {
+            if (!res.ok || !j.success) {
+                throw new Error((j && j.error) || 'Could not save session');
+            }
+            return j;
+        });
+    });
+}
+
+function runSnowPlaywrightConnect(statusEl, errEl) {
+    return fetch('/api/servicenow/connect/auto/start', {
+        method: 'POST',
+        credentials: 'same-origin',
+    })
+        .then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
+        .then(function (r) {
+            if (!r.ok || !r.j.success) {
+                throw new Error((r.j && r.j.error) || 'Could not start browser auto-connect');
+            }
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.textContent = r.j.message || 'Sign in with Okta in the Chromium window…';
+            }
+            var connectId = r.j.connect_id || '';
+            var polls = 0;
+            var maxPolls = 150;
+            return new Promise(function (resolve, reject) {
+                var timer = setInterval(function () {
+                    polls += 1;
+                    var statusUrl = '/api/servicenow/connect/auto/status';
+                    if (connectId) statusUrl += '?connect_id=' + encodeURIComponent(connectId);
+                    fetch(statusUrl, { credentials: 'same-origin' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (st) {
+                            if (st.status === 'pending') {
+                                if (statusEl) statusEl.textContent = st.message || 'Waiting for Okta login in Chromium…';
+                                return;
+                            }
+                            clearInterval(timer);
+                            if (st.status === 'connected') {
+                                if (errEl) errEl.style.display = 'none';
+                                resolve(st);
+                                return;
+                            }
+                            reject(new Error(st.error || 'Auto-connect failed'));
+                        })
+                        .catch(function (err) {
+                            clearInterval(timer);
+                            reject(err);
+                        });
+                    if (polls >= maxPolls) {
+                        clearInterval(timer);
+                        reject(new Error('Timed out. Did you complete login in Chromium?'));
+                    }
+                }, 2000);
+            });
+        });
+}
+
+function startSnowBrowserConnect(btn, errEl, statusEl, instance, autoConnectAvailable) {
     var snowUrl = instance || 'https://arlo.service-now.com';
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Leyendo sesión…';
+        btn.textContent = 'Connecting…';
     }
     if (statusEl) {
         statusEl.style.display = 'block';
         statusEl.style.color = '#475569';
-        statusEl.textContent = 'Capturando cookies y token desde tu navegador…';
+        statusEl.textContent = 'Starting connection…';
     }
     if (errEl) errEl.style.display = 'none';
 
-    var capture = _gocviewSnowExtReady
-        ? captureSnowViaExtension(snowUrl)
-        : captureSnowViaPopup(snowUrl);
+    function setStatus(msg) {
+        if (statusEl) statusEl.textContent = msg;
+    }
 
-    capture
-        .then(function (payload) {
-            if (statusEl) statusEl.textContent = 'Guardando sesión en el servidor…';
-            return fetch('/api/servicenow/session', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cookies: payload.cookies || {},
-                    user_token: payload.user_token || payload.g_ck || '',
-                }),
-            }).then(function (res) {
-                return res.json().then(function (j) {
-                    return { ok: res.ok, j: j };
-                });
+    function finishOk() {
+        if (statusEl) {
+            statusEl.style.color = '#16a34a';
+            statusEl.textContent = 'ServiceNow connected — loading dashboard…';
+        }
+        authWrapHide();
+        loadServiceNowDashboard(true);
+    }
+
+    function tryPlaywright() {
+        setStatus('Opening Chromium — complete Okta sign-in when the window appears…');
+        return runSnowPlaywrightConnect(statusEl, errEl).then(finishOk);
+    }
+
+    function tryExtension() {
+        setStatus('Reading ServiceNow session from your browser…');
+        return captureSnowViaExtension(snowUrl).then(function (payload) {
+            setStatus('Saving session…');
+            return saveSnowSessionPayload(payload);
+        }).then(finishOk);
+    }
+
+    function tryPopup() {
+        setStatus('Opening ServiceNow login (requires GocView extension v2.5+)…');
+        return captureSnowViaPopup(snowUrl).then(function (payload) {
+            setStatus('Saving session…');
+            return saveSnowSessionPayload(payload);
+        }).then(finishOk);
+    }
+
+    probeSnowExtension(2000).then(function (hasExt) {
+        var chain;
+        if (hasExt) {
+            chain = tryExtension().catch(function (extErr) {
+                if (autoConnectAvailable) {
+                    return tryPlaywright();
+                }
+                throw extErr;
             });
-        })
-        .then(function (r) {
-            if (!r.ok || !r.j.success) {
-                throw new Error((r.j && r.j.error) || 'No se pudo guardar la sesión');
-            }
-            if (statusEl) {
-                statusEl.style.color = '#16a34a';
-                statusEl.textContent = 'ServiceNow conectado';
-            }
-            loadServiceNowDashboard(true);
-        })
-        .catch(function (err) {
-            var msg = err.message || String(err);
-            if (!_gocviewSnowExtReady && msg.indexOf('extensión') < 0) {
-                msg += ' Instala o actualiza la extensión GocView Chatbot v2.4+ (carpeta chrome-extension).';
-            }
-            if (errEl) {
-                errEl.style.display = 'block';
-                errEl.textContent = msg;
-            }
-        })
-        .finally(function () {
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = 'Conectar con mi sesión ServiceNow';
-            }
-        });
+        } else if (autoConnectAvailable) {
+            chain = tryPlaywright();
+        } else {
+            chain = tryPopup();
+        }
+        return chain;
+    }).catch(function (err) {
+        var msg = err.message || String(err);
+        if (!autoConnectAvailable && msg.indexOf('extension') < 0 && msg.indexOf('Popup blocked') < 0) {
+            msg += ' Install GocView Chatbot extension v2.5+ from chrome-extension/ and reload.';
+        }
+        if (errEl) {
+            errEl.style.display = 'block';
+            errEl.textContent = msg;
+        }
+    }).finally(function () {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Connect ServiceNow';
+        }
+    });
+}
+
+function authWrapHide() {
+    var authWrap = document.getElementById('snow-auth-wrap');
+    var kpiRow = document.getElementById('snow-kpi-row');
+    var chartsWrap = document.getElementById('snow-charts-wrap');
+    if (authWrap) authWrap.style.display = 'none';
+    if (kpiRow) kpiRow.style.display = '';
+    if (chartsWrap) chartsWrap.style.display = '';
 }
 
 function startSnowAutoConnect(btn, errEl, statusEl) {
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Abriendo navegador…';
+        btn.textContent = 'Opening browser…';
     }
     if (statusEl) {
         statusEl.style.display = 'block';
         statusEl.style.color = '#475569';
-        statusEl.textContent = 'Iniciando…';
+        statusEl.textContent = 'Starting…';
     }
     fetch('/api/servicenow/connect/auto/start', {
         method: 'POST',
@@ -2012,10 +2130,10 @@ function startSnowAutoConnect(btn, errEl, statusEl) {
         .then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
         .then(function (r) {
             if (!r.ok || !r.j.success) {
-                throw new Error((r.j && r.j.error) || 'No se pudo iniciar conexión automática');
+                throw new Error((r.j && r.j.error) || 'Could not start auto-connect');
             }
             if (statusEl) {
-                statusEl.textContent = r.j.message || 'Inicia sesión con Okta en la ventana de Chromium…';
+                statusEl.textContent = r.j.message || 'Sign in with Okta in the Chromium window…';
             }
             var connectId = r.j.connect_id || '';
             if (connectId) {
@@ -2031,28 +2149,28 @@ function startSnowAutoConnect(btn, errEl, statusEl) {
                     .then(function (res) { return res.json(); })
                     .then(function (st) {
                         if (st.status === 'pending') {
-                            if (statusEl) statusEl.textContent = st.message || 'Esperando login…';
+                            if (statusEl) statusEl.textContent = st.message || 'Waiting for login…';
                             return;
                         }
                         clearInterval(timer);
                         if (st.status === 'connected') {
                             if (statusEl) {
                                 statusEl.style.color = '#16a34a';
-                                statusEl.textContent = st.message || 'Conectado';
+                                statusEl.textContent = st.message || 'Connected';
                             }
                             if (errEl) errEl.style.display = 'none';
                             if (btn) {
                                 btn.disabled = false;
-                                btn.textContent = 'Conectar automático (Okta)';
+                                btn.textContent = 'Auto-connect (Okta)';
                             }
                             loadServiceNowDashboard(true);
                             return;
                         }
                         if (btn) {
                             btn.disabled = false;
-                            btn.textContent = 'Conectar automático (Okta)';
+                            btn.textContent = 'Auto-connect (Okta)';
                         }
-                        throw new Error(st.error || 'Conexión automática fallida');
+                        throw new Error(st.error || 'Auto-connect failed');
                     })
                     .catch(function (err) {
                         clearInterval(timer);
@@ -2062,18 +2180,18 @@ function startSnowAutoConnect(btn, errEl, statusEl) {
                         }
                         if (btn) {
                             btn.disabled = false;
-                            btn.textContent = 'Conectar automático (Okta)';
+                            btn.textContent = 'Auto-connect (Okta)';
                         }
                     });
                 if (polls >= maxPolls) {
                     clearInterval(timer);
                     if (errEl) {
                         errEl.style.display = 'block';
-                        errEl.textContent = 'Tiempo agotado. ¿Completaste el login en Chromium?';
+                        errEl.textContent = 'Timed out. Did you complete login in Chromium?';
                     }
                     if (btn) {
                         btn.disabled = false;
-                        btn.textContent = 'Conectar automático (Okta)';
+                        btn.textContent = 'Auto-connect (Okta)';
                     }
                 }
             }, 2000);
@@ -2085,14 +2203,14 @@ function startSnowAutoConnect(btn, errEl, statusEl) {
             }
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'Conectar automático (Okta)';
+                btn.textContent = 'Auto-connect (Okta)';
             }
         });
 }
 
 function submitSnowSession(payload, saveBtn, errEl) {
     saveBtn.disabled = true;
-    saveBtn.textContent = 'Conectando…';
+    saveBtn.textContent = 'Connecting…';
     fetch('/api/servicenow/session', {
         method: 'POST',
         credentials: 'same-origin',
@@ -2102,9 +2220,10 @@ function submitSnowSession(payload, saveBtn, errEl) {
         .then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
         .then(function (r) {
             if (!r.ok || !r.j.success) {
-                throw new Error((r.j && r.j.error) || 'No se pudo conectar');
+                throw new Error((r.j && r.j.error) || 'Could not connect');
             }
             if (errEl) errEl.style.display = 'none';
+            authWrapHide();
             loadServiceNowDashboard(true);
         })
         .catch(function (err) {
@@ -2115,7 +2234,7 @@ function submitSnowSession(payload, saveBtn, errEl) {
         })
         .finally(function () {
             saveBtn.disabled = false;
-            saveBtn.textContent = 'Conectar';
+            saveBtn.textContent = 'Connect';
         });
 }
 
@@ -2128,37 +2247,28 @@ function showSnowAuthPrompt(data) {
     var auth = (data && data.auth) || {};
     var loginUrl = (data && data.login_url) || '/oauth/snow/login';
     var instance = auth.instance || 'https://arlo.service-now.com';
-    var msg = (data && data.error) || auth.message || 'Conecta ServiceNow para ver KPIs y gráficas.';
+    var msg = (data && data.error) || auth.message || 'Connect ServiceNow to view KPIs and charts.';
 
     authWrap.style.display = 'block';
 
     if (auth.manual_login) {
-        var extHint = _gocviewSnowExtReady
-            ? ''
-            : '<p style="margin:0 0 8px;font-size:9px;color:#64748b;line-height:1.35;">Requiere extensión <strong>GocView Chatbot v2.4+</strong> (lee cookies HttpOnly de ServiceNow).</p>';
         authWrap.innerHTML =
             '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;">' +
-            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">Usa la sesión ServiceNow que ya tienes en este navegador (Okta/SSO).</p>' +
-            extHint +
-            '<button type="button" id="snow-browser-connect" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-bottom:6px;">Conectar con mi sesión ServiceNow</button>' +
-            '<p id="snow-auto-status" style="margin:0 0 6px;font-size:9px;color:#475569;display:none;line-height:1.35;"></p>' +
-            '<details style="font-size:9px;color:#64748b;"><summary style="cursor:pointer;color:#475569;">Opciones avanzadas</summary>' +
+            '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">One click: reads your ServiceNow session (Okta), saves it, and loads KPIs automatically.</p>' +
+            '<button type="button" id="snow-browser-connect" style="width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">Connect ServiceNow</button>' +
+            '<p id="snow-auto-status" style="margin:0;font-size:9px;color:#475569;display:none;line-height:1.35;"></p>' +
+            '<p id="snow-cookie-err" style="margin:6px 0 0;font-size:9px;color:#dc2626;display:none;line-height:1.35;"></p>' +
+            '<details style="margin-top:8px;font-size:9px;color:#64748b;"><summary style="cursor:pointer;color:#475569;">Troubleshooting</summary>' +
+            '<p style="margin:6px 0;line-height:1.4;">Requires <strong>GocView Chatbot v2.5+</strong> extension. Load unpacked from <code>chrome-extension/</code>, then hard-refresh this page.</p>' +
             (auth.auto_connect
-                ? '<button type="button" id="snow-auto-connect" style="width:100%;padding:6px;margin-top:6px;background:#64748b;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer;">Playwright local (solo dev)</button>'
+                ? '<button type="button" id="snow-auto-connect" style="width:100%;padding:6px;margin-top:6px;background:#64748b;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer;">Playwright local (dev only)</button>'
                 : '') +
-            '<p style="margin:8px 0 4px;font-size:9px;color:#64748b;">Modo manual (pegar cookies):</p>' +
-            '<ol style="margin:6px 0;padding-left:16px;line-height:1.45;">' +
-            '<li>Application → Cookies → JSESSIONID + glide_session_store</li>' +
-            '<li>Console → <code>window.g_ck</code></li></ol>' +
+            '<p style="margin:8px 0 4px;">Manual fallback:</p>' +
             '<input id="snow-jsessionid" type="text" placeholder="JSESSIONID" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
             '<input id="snow-glide-session" type="text" placeholder="glide_session_store" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
             '<input id="snow-gck" type="text" placeholder="window.g_ck" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
-            '<input id="snow-user-route" type="text" placeholder="glide_user_route (opcional)" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;" />' +
-            '<textarea id="snow-cookie-input" rows="2" placeholder="Cookie completa (avanzado)" style="width:100%;box-sizing:border-box;font-size:9px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;margin-bottom:4px;font-family:monospace;resize:vertical;"></textarea>' +
-            '<button type="button" id="snow-cookie-save" style="width:100%;padding:6px;background:#64748b;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer;">Conectar manual</button>' +
-            '</details>' +
-            '<p id="snow-cookie-err" style="margin:6px 0 0;font-size:9px;color:#dc2626;display:none;line-height:1.35;"></p>' +
-            '</div>';
+            '<button type="button" id="snow-cookie-save" style="width:100%;padding:6px;background:#64748b;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer;">Connect manually</button>' +
+            '</details></div>';
 
         var browserBtn = document.getElementById('snow-browser-connect');
         var autoBtn = document.getElementById('snow-auto-connect');
@@ -2166,7 +2276,7 @@ function showSnowAuthPrompt(data) {
         var errEl = document.getElementById('snow-cookie-err');
         if (browserBtn) {
             browserBtn.onclick = function () {
-                startSnowBrowserConnect(browserBtn, errEl, statusEl, instance);
+                startSnowBrowserConnect(browserBtn, errEl, statusEl, instance, !!auth.auto_connect);
             };
         }
         if (autoBtn) {
@@ -2177,8 +2287,6 @@ function showSnowAuthPrompt(data) {
         var jsEl = document.getElementById('snow-jsessionid');
         var glEl = document.getElementById('snow-glide-session');
         var gckEl = document.getElementById('snow-gck');
-        var routeEl = document.getElementById('snow-user-route');
-        var advEl = document.getElementById('snow-cookie-input');
         var saveBtn = document.getElementById('snow-cookie-save');
         if (saveBtn) {
             saveBtn.onclick = function () {
@@ -2186,16 +2294,10 @@ function showSnowAuthPrompt(data) {
                 var js = jsEl ? (jsEl.value || '').trim() : '';
                 var gl = glEl ? (glEl.value || '').trim() : '';
                 var gck = gckEl ? (gckEl.value || '').trim() : '';
-                var route = routeEl ? (routeEl.value || '').trim() : '';
-                var adv = advEl ? (advEl.value || '').trim() : '';
-                if (adv) {
-                    submitSnowSession({ cookie: adv, user_token: gck }, saveBtn, errEl);
-                    return;
-                }
                 if (!js || !gl || !gck) {
                     if (errEl) {
                         errEl.style.display = 'block';
-                        errEl.textContent = 'Necesitas JSESSIONID, glide_session_store y el token g_ck (window.g_ck en Console).';
+                        errEl.textContent = 'JSESSIONID, glide_session_store, and g_ck (window.g_ck in Console) are required.';
                     }
                     return;
                 }
@@ -2203,7 +2305,6 @@ function showSnowAuthPrompt(data) {
                     jsessionid: js,
                     glide_session_store: gl,
                     user_token: gck,
-                    glide_user_route: route,
                 }, saveBtn, errEl);
             };
         }
@@ -2211,7 +2312,7 @@ function showSnowAuthPrompt(data) {
         authWrap.innerHTML =
             '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;">' +
             '<p style="margin:0 0 8px;font-size:10px;color:#475569;line-height:1.4;">' + msg + '</p>' +
-            '<a href="' + loginUrl + '" style="display:inline-block;padding:7px 12px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;">Conectar ServiceNow (Okta)</a>' +
+            '<a href="' + loginUrl + '" style="display:inline-block;padding:7px 12px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;">Connect ServiceNow (Okta)</a>' +
             '</div>';
     }
 
@@ -2230,7 +2331,7 @@ async function applyServiceNowDashboardPayload(data) {
 
     if (data && data.authenticated === false) {
         showSnowAuthPrompt(data);
-        if (timeEl) timeEl.textContent = 'Sin conexión ServiceNow';
+        if (timeEl) timeEl.textContent = 'ServiceNow not connected';
         return;
     }
 
@@ -2249,7 +2350,7 @@ async function applyServiceNowDashboardPayload(data) {
     if (!data || data.success === false) {
         var msg = (data && data.error) ? data.error : 'ServiceNow unavailable';
         kpiRow.innerHTML = '<div style="grid-column:1/-1;color:#dc2626;font-size:10px;padding:4px;line-height:1.35;">' +
-            msg + ' <a href="/oauth/snow/login" style="color:#2563eb;">Reconectar</a></div>';
+            msg + ' <a href="/oauth/snow/login" style="color:#2563eb;">Reconnect</a></div>';
         chartsWrap.innerHTML = '';
         destroySnowCharts();
         return;
@@ -2348,7 +2449,7 @@ function bootServiceNowFromUrl() {
         if (snow === 'connected') {
             loadServiceNowDashboard(true);
         } else if (snow === 'error') {
-            var msg = params.get('msg') || 'Error al conectar ServiceNow';
+            var msg = params.get('msg') || 'ServiceNow connection error';
             applyServiceNowDashboardPayload({
                 authenticated: false,
                 success: false,
@@ -2770,6 +2871,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sidebar widgets: defer until idle so first paint + /api/tools are not blocked
     const runSidebarMonitors = () => {
+        probeSnowExtension(1200);
         loadStatusMonitor();
         loadPagerDutyMonitor();
         loadSplunkOutliersMonitor();

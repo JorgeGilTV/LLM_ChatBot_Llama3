@@ -843,7 +843,7 @@
     <script>
         window.sendStatusMonitorToSlack = function () {
             if (typeof SlackShare === 'undefined') {
-                alert('Slack: no se pudo cargar slack_share.js');
+                alert('Slack: could not load slack_share.js');
                 return;
             }
             var envLabel = ENVIRONMENT == null ? 'hub (all envs)' : String(ENVIRONMENT);

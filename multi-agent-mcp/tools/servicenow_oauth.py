@@ -95,7 +95,7 @@ def clear_token_bundle(flask_session: dict[str, Any]) -> None:
 def build_authorize_url(flask_session: dict[str, Any], *, redirect_uri: str, return_to: str = "/") -> str:
     if not oauth_configured():
         raise RuntimeError(
-            "Falta SNOW_OAUTH_CLIENT_ID en .env. Pide al admin de ServiceNow una app OAuth "
+            "SNOW_OAUTH_CLIENT_ID is missing in .env. Ask the ServiceNow admin for an OAuth app "
             "(Application Registry → Authorization Code + PKCE)."
         )
     verifier, challenge = _pkce_pair()
@@ -201,31 +201,39 @@ def api_requests_session(flask_session: dict[str, Any]) -> requests.Session | No
 
 def auth_status(flask_session: dict[str, Any]) -> dict[str, Any]:
     from tools.servicenow_browser_connect import auto_connect_available
-    from tools.servicenow_session import cookie_session_connected
+    from tools.servicenow_session import cookie_session_connected, server_env_auth_available
 
     oauth_connected = get_token_bundle(flask_session) is not None
     cookie_connected = cookie_session_connected(flask_session)
-    connected = oauth_connected or cookie_connected
+    env_connected = server_env_auth_available()
+    connected = oauth_connected or cookie_connected or env_connected
     oauth_ready = oauth_configured()
 
     out: dict[str, Any] = {
-        "configured": oauth_ready,
+        "configured": oauth_ready or env_connected,
         "connected": connected,
         "instance": _snow_instance(),
-        "method": "oauth" if oauth_connected else ("cookie" if cookie_connected else None),
-        "manual_login": not oauth_ready,
+        "method": (
+            "oauth"
+            if oauth_connected
+            else ("cookie" if cookie_connected else ("env" if env_connected else None))
+        ),
+        "manual_login": not oauth_ready and not env_connected,
         "auto_connect": auto_connect_available(),
         "browser_session_connect": True,
+        "server_env_auth": env_connected,
     }
     if connected:
+        if env_connected and not oauth_connected and not cookie_connected:
+            out["message"] = "Using server ServiceNow session (SNOW_SESSION_COOKIE in .env)."
         return out
 
     if oauth_ready:
         out["login_path"] = "/oauth/snow/login"
-        out["message"] = "Conecta ServiceNow con Okta."
+        out["message"] = "Connect ServiceNow with Okta."
     else:
         out["message"] = (
-            "Sin acceso a OAuth de ServiceNow: inicia sesión con Okta en otra pestaña "
-            "y pega tu cookie glide_session_store aquí."
+            "ServiceNow session required. Set SNOW_SESSION_COOKIE + SNOW_USER_TOKEN in .env "
+            "(server-wide), or connect with the GocView extension / paste cookies below."
         )
     return out

@@ -5,13 +5,26 @@
     return;
   }
 
-  window.postMessage({ type: 'GOCVIEW_EXTENSION_READY', feature: 'snow_connect' }, '*');
+  function announceReady() {
+    window.postMessage({ type: 'GOCVIEW_EXTENSION_READY', feature: 'snow_connect' }, '*');
+  }
+
+  // Content script may run before scripts.js — re-announce on ping and briefly on load.
+  announceReady();
+  var readyTimer = setInterval(announceReady, 1500);
+  setTimeout(function () {
+    clearInterval(readyTimer);
+  }, 15000);
 
   window.addEventListener('message', function (event) {
     if (event.source !== window) {
       return;
     }
     var data = event.data;
+    if (data && data.type === 'GOCVIEW_SNOW_EXTENSION_PING') {
+      announceReady();
+      return;
+    }
     if (!data || data.type !== 'GOCVIEW_SNOW_CONNECT_REQUEST') {
       return;
     }
@@ -22,7 +35,7 @@
         var err = chrome.runtime.lastError;
         var payload = err
           ? { success: false, error: err.message }
-          : result || { success: false, error: 'Sin respuesta de la extensión' };
+          : result || { success: false, error: 'No response from extension' };
         window.postMessage(
           {
             type: 'GOCVIEW_SNOW_CONNECT_RESPONSE',

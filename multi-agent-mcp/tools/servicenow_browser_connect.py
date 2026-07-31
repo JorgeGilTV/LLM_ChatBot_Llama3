@@ -158,11 +158,11 @@ def _wait_for_sn_session(page, context, instance: str, connect_id: str, timeout_
     cookies = _sn_cookies(context)
     if _has_session_cookies(cookies):
         raise RuntimeError(
-            "Login detectado pero no se obtuvo g_ck. Cierra Chromium e intenta modo manual "
-            "(pega cookies + window.g_ck)."
+            "Login detected but g_ck was not obtained. Close Chromium and try manual mode "
+            "(paste cookies + window.g_ck)."
         )
     raise RuntimeError(
-        "Tiempo agotado esperando login. ¿Completaste Okta en la ventana de Chromium?"
+        "Timed out waiting for login. Did you complete Okta in the Chromium window?"
     )
 
 
@@ -184,9 +184,9 @@ def _run_browser_connect(connect_id: str, instance: str) -> None:
             browser = None
 
         if not g_ck:
-            raise RuntimeError("No se obtuvo g_ck tras el login.")
+            raise RuntimeError("No g_ck obtained after login.")
         if not _has_session_cookies(cookies):
-            raise RuntimeError("No se capturaron cookies de sesión.")
+            raise RuntimeError("No session cookies were captured.")
 
         result = {"ok": True, "cookies": cookies, "user_token": str(g_ck)}
         _log.info("ServiceNow auto-connect %s: success (%d cookies)", connect_id, len(cookies))
@@ -209,15 +209,15 @@ def start_auto_connect() -> dict[str, Any]:
         return {
             "success": False,
             "error": (
-                "La conexión automática solo está disponible en desarrollo local. "
-                "En gocview.arlocloud.com usa el modo manual (pegar cookies) abajo."
+                "Auto-connect is only available in local development. "
+                "On gocview.arlocloud.com use manual mode (paste cookies) below."
             ),
         }
     if not playwright_available():
         return {
             "success": False,
             "error": (
-                "Playwright no está instalado. Ejecuta: "
+                "Playwright is not installed. Run: "
                 "pip install playwright && playwright install chromium"
             ),
         }
@@ -239,7 +239,7 @@ def start_auto_connect() -> dict[str, Any]:
         "success": True,
         "connect_id": connect_id,
         "instance": instance,
-        "message": "Se abrió Chromium. Inicia sesión con Okta en esa ventana.",
+        "message": "Chromium opened. Sign in with Okta in that window.",
     }
 
 
@@ -248,12 +248,12 @@ def poll_auto_connect(connect_id: str, flask_session: dict[str, Any]) -> dict[st
         result = _load_connect_result(connect_id)
 
     if result is None:
-        return {"status": "unknown", "error": "Sesión de conexión no encontrada. Pulsa Conectar de nuevo."}
+        return {"status": "unknown", "error": "Connect session not found. Click Connect again."}
     if result.get("pending"):
-        return {"status": "pending", "message": "Esperando login en Chromium… (no cierres la ventana)"}
+        return {"status": "pending", "message": "Waiting for login in Chromium… (do not close the window)"}
 
     if not result.get("ok"):
-        err = result.get("error") or "Conexión fallida."
+        err = result.get("error") or "Connection failed."
         with _CONNECT_LOCK:
             _delete_connect_result(connect_id)
         return {"status": "error", "error": err}
@@ -269,9 +269,9 @@ def poll_auto_connect(connect_id: str, flask_session: dict[str, Any]) -> dict[st
         from tools.servicenow_session import clear_cookies
 
         clear_cookies(flask_session)
-        return {"status": "error", "error": err or "Validación de sesión fallida."}
+        return {"status": "error", "error": err or "Session validation failed."}
 
-    return {"status": "connected", "message": "ServiceNow conectado."}
+    return {"status": "connected", "message": "ServiceNow connected."}
 
 
 def cancel_auto_connect(connect_id: str) -> None:

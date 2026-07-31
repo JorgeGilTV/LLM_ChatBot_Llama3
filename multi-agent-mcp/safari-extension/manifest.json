@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GocView Chatbot",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "GocView Chatbot for Safari — ask from any page; ServiceNow session sync for ServiceDesk.",
   "browser_specific_settings": {
     "safari": {

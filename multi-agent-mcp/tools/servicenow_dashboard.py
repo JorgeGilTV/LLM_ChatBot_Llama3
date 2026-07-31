@@ -68,8 +68,8 @@ def _snow_session(flask_session: dict[str, Any] | None = None) -> requests.Sessi
         return session
 
     raise RuntimeError(
-        "ServiceNow no está conectado. Usa «Conectar ServiceNow» en el panel ServiceDesk "
-        "(cookie de sesión tras login Okta) o configura OAuth."
+        "ServiceNow is not connected. Use «Connect ServiceNow» in the ServiceDesk panel "
+        "(session cookie after Okta login) or configure OAuth."
     )
 
 
@@ -78,8 +78,8 @@ def _snow_auth_hint(status_code: int, body: str) -> str:
         return ""
     if "not authenticated" in body.lower() or "auth information" in body.lower():
         return (
-            " ServiceNow rechazó user/password (HTTP 401). Si entras con Okta, "
-            "tu contraseña corporativa no sirve para la REST API — pide OAuth o una cuenta técnica al admin."
+            " ServiceNow rejected user/password (HTTP 401). With Okta login, "
+            "your corporate password does not work for REST API — request OAuth or a technical account from admin."
         )
     return ""
 
@@ -801,8 +801,8 @@ def _build_pa_queries(session: requests.Session) -> dict[str, str]:
 
     if not global_id:
         raise RuntimeError(
-            f"No se encontró el grupo «{_GROUP_GLOBAL}» en ServiceNow. "
-            "Verifica SNOW_GROUP_GLOBAL en .env."
+            f"Assignment group «{_GROUP_GLOBAL}» was not found in ServiceNow. "
+            "Check SNOW_GROUP_GLOBAL in .env."
         )
 
     incidents_total = f"active=true^assignment_group={global_id}"
@@ -990,17 +990,18 @@ def fetch_servicedesk_dashboard_data(flask_session: dict[str, Any] | None = None
 
 def servicedesk_dashboard_payload(flask_session: dict[str, Any] | None = None) -> dict[str, Any]:
     from tools.servicenow_oauth import auth_status
+    from tools.servicenow_session import server_env_auth_available
 
     session_dict = flask_session if flask_session is not None else {}
     auth = auth_status(session_dict)
-    if not auth.get("connected"):
+    if not auth.get("connected") and not server_env_auth_available():
         return {
             "success": False,
             "authenticated": False,
             "auth": auth,
             "login_url": auth.get("login_path") or "/oauth/snow/login",
             "error": auth.get("message")
-            or "Conecta ServiceNow con Okta para ver el dashboard.",
+            or "Connect ServiceNow with Okta to view the dashboard.",
             "dashboard_url": _snow_dashboard_url(),
             "kpis": {},
         }
@@ -1076,17 +1077,17 @@ def render_servicedesk_dashboard_html(
     if not payload.get("authenticated"):
         auth = payload.get("auth") or {}
         inst = html.escape(str(auth.get("instance") or _snow_instance()))
-        msg = html.escape(str(payload.get("error") or "Conecta ServiceNow."))
+        msg = html.escape(str(payload.get("error") or "Connect ServiceNow."))
         if auth.get("manual_login"):
             return (
                 f"<div style='font-family:system-ui,sans-serif;padding:12px;border:1px solid #e2e8f0;"
                 f"border-radius:8px;background:#f8fafc;'>"
                 f"<p style='margin:0 0 8px;color:#334155;'>{msg}</p>"
                 f"<ol style='margin:0 0 10px;padding-left:18px;color:#475569;font-size:13px;line-height:1.5;'>"
-                f"<li><a href='{inst}' target='_blank' rel='noopener'>Abrir ServiceNow</a> e iniciar sesión con Okta</li>"
-                f"<li>F12 → Application → Cookies → copiar <code>glide_session_store</code></li>"
-                f"<li>Pegar en el widget ServiceDesk de GocView</li></ol>"
-                f"<p style='margin:0;color:#64748b;font-size:12px;'>No requiere Application Registry ni OAuth de admin.</p>"
+                f"<li><a href='{inst}' target='_blank' rel='noopener'>Open ServiceNow</a> and sign in with Okta</li>"
+                f"<li>Develop → Web Inspector → Storage → Cookies → copy <code>glide_session_store</code></li>"
+                f"<li>Paste in the GocView ServiceDesk widget</li></ol>"
+                f"<p style='margin:0;color:#64748b;font-size:12px;'>Does not require Application Registry or admin OAuth.</p>"
                 f"</div>"
             )
         login = html.escape(payload.get("login_url") or "/oauth/snow/login")
@@ -1096,7 +1097,7 @@ def render_servicedesk_dashboard_html(
             f"<p style='margin:0 0 10px;color:#334155;'>{msg}</p>"
             f"<a href='{login}' style='display:inline-block;padding:8px 14px;background:#2563eb;"
             f"color:#fff;border-radius:6px;text-decoration:none;font-weight:600;'>"
-            f"Conectar ServiceNow (Okta)</a></div>"
+            f"Connect ServiceNow (Okta)</a></div>"
         )
     if not payload.get("success"):
         return _render_dashboard_html(payload, compact=compact)

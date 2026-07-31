@@ -86,17 +86,17 @@ def _mcp_uses_local_server() -> bool:
 def _mcp_connect_hint_html() -> str:
     if _mcp_uses_local_server():
         return (
-            "• El MCP corre dentro de este mismo servicio (no requiere VPN)<br>"
-            "• Revisa logs ECS o reinicia el task si persiste<br>"
+            "• MCP runs inside this same service (no VPN required)<br>"
+            "• Check ECS logs or restart the task if it persists<br>"
         )
     if is_mintmcp_url(get_mcp_server_url()):
         return (
-            "• MintMCP requiere MINTMCP_API_KEY válido<br>"
-            "• Revisa permisos del gateway arlo en app.mintmcp.com<br>"
+            "• MintMCP requires a valid MINTMCP_API_KEY<br>"
+            "• Check arlo gateway permissions at app.mintmcp.com<br>"
         )
     return (
-        "• Conéctate a Arlo VPN (GlobalProtect) para alcanzar el MCP interno<br>"
-        "• Comprueba DNS y red corporativa<br>"
+        "• Connect to Arlo VPN (GlobalProtect) to reach the internal MCP<br>"
+        "• Check DNS and corporate network<br>"
     )
 
 

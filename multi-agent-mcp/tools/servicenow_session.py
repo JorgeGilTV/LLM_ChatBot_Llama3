@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
+
+_log = logging.getLogger(__name__)
 
 DEFAULT_SNOW_INSTANCE = "https://arlo.service-now.com"
 _HTTP_TIMEOUT = (10, 45)
@@ -83,6 +88,45 @@ def cookie_header_from_dict(cookies: dict[str, str]) -> str:
     return "; ".join(f"{name}={value}" for name, value in ordered)
 
 
+def _server_session_path() -> Path:
+    root = Path(os.getenv("SNOW_SESSION_FILE") or os.path.join(os.getcwd(), "data", "snow_server_session.json"))
+    root.parent.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def load_persisted_server_session() -> tuple[dict[str, str], str]:
+    path = _server_session_path()
+    if not path.is_file():
+        return {}, ""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {}, ""
+        cookies = data.get("cookies") if isinstance(data.get("cookies"), dict) else {}
+        token = str(data.get("user_token") or "").strip()
+        return {str(k): str(v) for k, v in cookies.items() if v}, token
+    except Exception as e:
+        _log.warning("Could not read persisted ServiceNow session: %s", e)
+        return {}, ""
+
+
+def persist_server_session(cookies: dict[str, str], user_token: str | None = None) -> None:
+    flag = (os.getenv("SNOW_PERSIST_SESSION") or "1").strip().lower()
+    if flag in ("0", "false", "no", "off"):
+        return
+    token = (user_token or "").strip()
+    if not cookies or not token:
+        return
+    try:
+        _server_session_path().write_text(
+            json.dumps({"cookies": cookies, "user_token": token}, indent=0),
+            encoding="utf-8",
+        )
+        _log.info("Persisted ServiceNow session to %s", _server_session_path())
+    except Exception as e:
+        _log.warning("Could not persist ServiceNow session: %s", e)
+
+
 def get_raw_cookie_header(flask_session: dict[str, Any] | None) -> str:
     if flask_session is not None:
         raw = (flask_session.get(SESSION_RAW_KEY) or "").strip()
@@ -92,6 +136,10 @@ def get_raw_cookie_header(flask_session: dict[str, Any] | None) -> str:
     env_raw = (os.getenv("SNOW_SESSION_COOKIE") or "").strip()
     if env_raw:
         return _strip_cookie_prefix(env_raw)
+
+    file_cookies, _ = load_persisted_server_session()
+    if file_cookies:
+        return cookie_header_from_dict(file_cookies)
     return ""
 
 
@@ -130,7 +178,11 @@ def get_user_token(flask_session: dict[str, Any] | None) -> str:
         stored = (flask_session.get(SESSION_USER_TOKEN_KEY) or "").strip()
         if stored:
             return stored
-    return (os.getenv("SNOW_USER_TOKEN") or os.getenv("SNOW_G_CK") or "").strip()
+    env_token = (os.getenv("SNOW_USER_TOKEN") or os.getenv("SNOW_G_CK") or "").strip()
+    if env_token:
+        return env_token
+    _, file_token = load_persisted_server_session()
+    return file_token
 
 
 def save_session_auth(
@@ -145,6 +197,7 @@ def save_session_auth(
     if token:
         flask_session[SESSION_USER_TOKEN_KEY] = token
     _touch_session(flask_session)
+    persist_server_session(get_stored_cookies(flask_session), token)
 
 
 def clear_cookies(flask_session: dict[str, Any]) -> None:
@@ -163,6 +216,11 @@ def cookie_session_connected(flask_session: dict[str, Any] | None) -> bool:
         return False
     keys = {k.lower() for k in cookies}
     return bool(keys & _IMPORTANT_COOKIES)
+
+
+def server_env_auth_available() -> bool:
+    """Server .env has a ServiceNow browser session (works for all users / MCP without OAuth)."""
+    return cookie_session_connected(None)
 
 
 def cookie_names_hint(flask_session: dict[str, Any] | None) -> list[str]:
@@ -207,13 +265,13 @@ def _auth_error_hint(flask_session: dict[str, Any] | None) -> str:
     names = {n.lower() for n in cookie_names_hint(flask_session)}
     parts: list[str] = []
     if names:
-        parts.append("Detectadas: " + ", ".join(sorted(names)))
+        parts.append("Detected: " + ", ".join(sorted(names)))
     if not get_user_token(flask_session):
         parts.append(
-            "Falta el token g_ck: en ServiceNow abre F12 → Console, escribe window.g_ck y copia el valor."
+            "Missing g_ck token: in ServiceNow open Develop → Web Inspector → Console, run window.g_ck and copy the value."
         )
     if "glide_user_route" not in names:
-        parts.append("Opcional: agrega glide_user_route (Application → Cookies).")
+        parts.append("Optional: add glide_user_route (Storage → Cookies).")
     return " ".join(parts)
 
 
@@ -221,7 +279,7 @@ def validate_session(flask_session: dict[str, Any] | None) -> tuple[bool, str]:
     """Quick REST probe to verify cookies still work."""
     sess = api_requests_session_from_cookies(flask_session)
     if sess is None:
-        return False, "Cookie de sesión inválida o vacía."
+        return False, "Session cookie is invalid or empty."
 
     inst = _snow_instance()
     probes = (
@@ -244,12 +302,12 @@ def validate_session(flask_session: dict[str, Any] | None) -> tuple[bool, str]:
                 return True, ""
         if last_code == 401:
             return False, (
-                "Sesión expirada o cookie incompleta (401). "
+                "Session expired or incomplete cookie (401). "
                 + _auth_error_hint(flask_session)
             )
         if last_code == 403:
             return False, (
-                "ServiceNow rechazó el acceso (403). Tu usuario puede no tener permiso REST. "
+                "ServiceNow denied access (403). Your user may not have REST permission. "
                 + _auth_error_hint(flask_session)
             )
         return False, f"ServiceNow HTTP {last_code}: {last_body}"

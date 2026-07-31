@@ -1,6 +1,14 @@
 'use strict';
 
 const DEFAULT_INSTANCE = 'https://arlo.service-now.com';
+const LOGIN_WAIT_MS = 180000;
+const POLL_MS = 1500;
+
+function sleep(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
+}
 
 function waitTabComplete(tabId, timeoutMs) {
   const limit = timeoutMs || 120000;
@@ -17,7 +25,7 @@ function waitTabComplete(tabId, timeoutMs) {
           return;
         }
         if (Date.now() > deadline) {
-          reject(new Error('Tiempo agotado esperando ServiceNow'));
+          reject(new Error('Timed out waiting for ServiceNow page load'));
           return;
         }
         setTimeout(check, 400);
@@ -73,55 +81,128 @@ function readGck(tabId) {
     })
     .then(function (results) {
       return (results && results[0] && results[0].result) || '';
+    })
+    .catch(function () {
+      return '';
     });
+}
+
+function findInstanceTabs(host) {
+  return chrome.tabs
+    .query({ url: ['https://*.service-now.com/*', 'http://*.service-now.com/*'] })
+    .then(function (tabs) {
+      return (tabs || []).filter(function (tab) {
+        if (!tab.url) return false;
+        try {
+          return new URL(tab.url).hostname === host;
+        } catch (e) {
+          return tab.url.indexOf(host) >= 0;
+        }
+      });
+    });
+}
+
+function tryCaptureFromTab(tabId, host) {
+  return readSnowCookies(host).then(function (cookies) {
+    if (!hasSessionCookies(cookies)) {
+      return null;
+    }
+    return readGck(tabId).then(function (g_ck) {
+      if (!g_ck) {
+        return null;
+      }
+      return {
+        success: true,
+        cookies: cookies,
+        user_token: g_ck,
+      };
+    });
+  });
+}
+
+function waitForLoginAndCapture(host, tabId, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || LOGIN_WAIT_MS);
+  return new Promise(function (resolve, reject) {
+    function poll() {
+      tryCaptureFromTab(tabId, host).then(function (result) {
+        if (result && result.success) {
+          resolve(result);
+          return;
+        }
+        if (Date.now() > deadline) {
+          reject(
+            new Error(
+              'Timed out waiting for ServiceNow login. Complete Okta sign-in in the ServiceNow tab, then click Connect again.'
+            )
+          );
+          return;
+        }
+        setTimeout(poll, POLL_MS);
+      });
+    }
+    poll();
+  });
 }
 
 function captureSnowSession(instance) {
   const base = (instance || DEFAULT_INSTANCE).replace(/\/+$/, '');
   const host = new URL(base).hostname;
-  let tabId = null;
-  let created = false;
+  let createdTabId = null;
 
   return readSnowCookies(host)
     .then(function (cookies) {
-      const needsLogin = !hasSessionCookies(cookies);
-      return chrome.tabs
-        .create({
-          url: base + '/navpage.do',
-          active: needsLogin,
-        })
-        .then(function (tab) {
-          tabId = tab.id;
-          created = true;
-          return waitTabComplete(tabId);
-        })
-        .then(function () {
-          return readSnowCookies(host);
-        })
-        .then(function (fresh) {
-          cookies = fresh;
-          if (!hasSessionCookies(cookies)) {
-            throw new Error(
-              'No hay sesión ServiceNow. Inicia sesión con Okta en la pestaña que se abrió e intenta de nuevo.'
-            );
-          }
-          return readGck(tabId).then(function (g_ck) {
-            if (!g_ck) {
-              throw new Error('No se obtuvo g_ck tras abrir ServiceNow.');
+      return findInstanceTabs(host).then(function (tabs) {
+        var tabPromises = tabs.map(function (tab) {
+          return tryCaptureFromTab(tab.id, host);
+        });
+        return Promise.all(tabPromises).then(function (results) {
+          for (var i = 0; i < results.length; i++) {
+            if (results[i] && results[i].success) {
+              return results[i];
             }
-            return readSnowCookies(host).then(function (finalCookies) {
-              return {
-                success: true,
-                cookies: finalCookies,
-                user_token: g_ck,
-              };
-            });
+          }
+          if (hasSessionCookies(cookies)) {
+            var useTab = tabs.length ? tabs[0] : null;
+            if (useTab) {
+              return waitForLoginAndCapture(host, useTab.id, 15000).catch(function () {
+                return null;
+              });
+            }
+            return chrome.tabs
+              .create({ url: base + '/navpage.do', active: false })
+              .then(function (tab) {
+                createdTabId = tab.id;
+                return waitTabComplete(tab.id).then(function () {
+                  return waitForLoginAndCapture(host, tab.id, 20000);
+                });
+              })
+              .finally(function () {
+                if (createdTabId != null) {
+                  chrome.tabs.remove(createdTabId).catch(function () {});
+                  createdTabId = null;
+                }
+              });
+          }
+          return null;
+        });
+      });
+    })
+    .then(function (existing) {
+      if (existing && existing.success) {
+        return existing;
+      }
+      return chrome.tabs
+        .create({ url: base + '/navpage.do', active: true })
+        .then(function (tab) {
+          createdTabId = tab.id;
+          return waitTabComplete(tab.id).then(function () {
+            return waitForLoginAndCapture(host, tab.id, LOGIN_WAIT_MS);
           });
         });
     })
     .finally(function () {
-      if (created && tabId != null) {
-        chrome.tabs.remove(tabId).catch(function () {});
+      if (createdTabId != null) {
+        chrome.tabs.remove(createdTabId).catch(function () {});
       }
     });
 }

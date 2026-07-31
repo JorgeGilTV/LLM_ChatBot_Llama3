@@ -2420,6 +2420,25 @@ def api_splunk_monitor():
         )
 
 
+@flask_app.route("/api/servicenow/probe")
+def api_servicenow_probe():
+    """Check server/env ServiceNow session (no secrets returned)."""
+    from tools.servicenow_oauth import auth_status
+    from tools.servicenow_session import server_env_auth_available, validate_session
+
+    auth = auth_status(session)
+    env = server_env_auth_available()
+    ok, err = validate_session(None if env else session)
+    return jsonify(
+        {
+            "auth": auth,
+            "server_env_configured": env,
+            "rest_ok": ok,
+            "error": err or None,
+        }
+    )
+
+
 @flask_app.route("/api/servicenow/dashboard")
 def api_servicenow_dashboard():
     """Sidebar: ServiceDesk KPIs + chart data from ServiceNow REST API."""
@@ -2484,11 +2503,11 @@ def oauth_snow_callback():
     state = (request.args.get("state") or "").strip()
     expected = (session.get(STATE_KEY) or "").strip()
     if not state or state != expected:
-        return redirect("/?snow=error&msg=" + quote("Estado OAuth inválido — intenta de nuevo."))
+        return redirect("/?snow=error&msg=" + quote("Invalid OAuth state — please try again."))
 
     code = (request.args.get("code") or "").strip()
     if not code:
-        return redirect("/?snow=error&msg=" + quote("Código OAuth faltante."))
+        return redirect("/?snow=error&msg=" + quote("Missing OAuth code."))
 
     try:
         exchange_code_for_tokens(
@@ -2532,7 +2551,7 @@ def api_servicenow_auto_status():
             or (session.get("snow_connect_id") or "").strip()
         )
         if not connect_id:
-            return jsonify({"status": "unknown", "error": "No hay conexión en curso."})
+            return jsonify({"status": "unknown", "error": "No connection in progress."})
         out = poll_auto_connect(connect_id, session)
         if out.get("status") == "connected":
             session.pop("snow_connect_id", None)
@@ -2594,7 +2613,7 @@ def api_servicenow_session():
         return jsonify(
             {
                 "success": False,
-                "error": "Pega JSESSIONID, glide_session_store y el token g_ck.",
+                "error": "Paste JSESSIONID, glide_session_store, and g_ck token.",
             }
         ), 400
 
@@ -2602,7 +2621,7 @@ def api_servicenow_session():
         return jsonify(
             {
                 "success": False,
-                "error": "Falta el token g_ck. En ServiceNow: F12 → Console → window.g_ck",
+                "error": "Missing g_ck token. In ServiceNow: Develop → Web Inspector → Console → window.g_ck",
             }
         ), 400
 

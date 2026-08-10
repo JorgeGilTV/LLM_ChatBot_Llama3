@@ -72,6 +72,10 @@
         {
           "name": "oncall_schedule",
           "description": "Get current on-call schedule"
+        },
+        {
+          "name": "sentinel_certificates",
+          "description": "Monitor SSL/TLS certificates from sentinel.arlocloud.com"
         }
       ],
       "endpoints": {

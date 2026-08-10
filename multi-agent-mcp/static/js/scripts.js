@@ -1698,6 +1698,152 @@ function applySplunkOutliersMonitorPayload(data) {
     listEl.innerHTML = '<li style="padding:0;margin:0;list-style:none;">' + buildSplunkSemaphoreRowHtml(data) + '</li>';
 }
 
+function _sentinelEsc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/"/g, '&quot;');
+}
+
+function _sentinelSetLight(dotEl, numEl, count, active, glowColor) {
+    if (!dotEl || !numEl) return;
+    numEl.textContent = String(Number(count) || 0);
+    if (active) {
+        dotEl.classList.add('is-on');
+        dotEl.style.boxShadow = glowColor ? '0 0 6px ' + glowColor : 'none';
+    } else {
+        dotEl.classList.remove('is-on');
+        dotEl.style.boxShadow = 'none';
+    }
+}
+
+function buildSentinelPopoverHtml(data) {
+    if (!data || !data.success) {
+        return '<div style="color:#991b1b;">' + _sentinelEsc((data && data.error) || 'Unable to load') + '</div>';
+    }
+
+    function tableSection(title, items, statusColor) {
+        if (!items || !items.length) {
+            return '<div class="sentinel-popover-section" style="color:#64748b;">' +
+                _sentinelEsc(title) + ': none</div>';
+        }
+        var rows = items.slice(0, 12).map(function (c) {
+            var days = (c.days_until_expiry != null) ? c.days_until_expiry + 'd' : '—';
+            return '<tr>' +
+                '<td style="font-family:monospace;font-size:9px;max-width:140px;word-break:break-all;">' +
+                _sentinelEsc(c.domain) + '</td>' +
+                '<td style="white-space:nowrap;">' + _sentinelEsc(c.environment || '—') + '</td>' +
+                '<td style="text-align:center;white-space:nowrap;color:' + statusColor + ';font-weight:700;">' +
+                days + '</td></tr>';
+        }).join('');
+        var more = items.length > 12
+            ? '<div style="font-size:9px;color:#64748b;margin-top:3px;">+' + (items.length - 12) + ' more in Sentinel</div>'
+            : '';
+        return '<div class="sentinel-popover-section">' + _sentinelEsc(title) + ' (' + items.length + ')</div>' +
+            '<table><thead><tr><th>Domain</th><th>Env</th><th>Days</th></tr></thead><tbody>' +
+            rows + '</tbody></table>' + more;
+    }
+
+    var s = data.summary || {};
+    var portal = data.source_url || 'https://sentinel.arlocloud.com';
+    var checked = data.checked_at || data.last_updated || '';
+    var head = '<div style="font-weight:700;margin-bottom:6px;">SSL Certificate Monitor</div>' +
+        '<div style="font-size:9px;color:#64748b;margin-bottom:6px;">' +
+        _sentinelEsc(s.semaphore_label || '') +
+        (checked ? ' · ' + _sentinelEsc(String(checked).slice(0, 19).replace('T', ' ')) : '') +
+        '</div>';
+
+    return head +
+        tableSection('Expired', data.expired, '#dc2626') +
+        tableSection('Expiring soon (≤' + (data.expiring_days || 15) + 'd)', data.expiring, '#ca8a04') +
+        '<div class="sentinel-popover-foot">Total ' + (s.total || 0) +
+        ' · <a href="' + _sentinelEsc(portal) + '" target="_blank" rel="noopener">Open Sentinel →</a></div>';
+}
+
+function applySentinelCertificatesPayload(data) {
+    const timeEl = document.getElementById('sentinel-time');
+    if (timeEl) {
+        if (!data || !data.success) {
+            timeEl.textContent = 'Sentinel unavailable';
+        } else {
+            const now = new Date();
+            timeEl.textContent = 'Updated ' + now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
+            }) + ' · hover for details';
+        }
+    }
+
+    const wrap = document.getElementById('sentinel-summary-wrap');
+    const popover = document.getElementById('sentinel-popover');
+    const portal = (data && data.source_url) ? data.source_url : 'https://sentinel.arlocloud.com';
+    if (wrap) wrap.href = portal;
+
+    if (!data || !data.success) {
+        _sentinelSetLight(document.getElementById('sentinel-dot-valid'), document.getElementById('sentinel-num-valid'), 0, false, '');
+        _sentinelSetLight(document.getElementById('sentinel-dot-expiring'), document.getElementById('sentinel-num-expiring'), 0, false, '');
+        _sentinelSetLight(document.getElementById('sentinel-dot-expired'), document.getElementById('sentinel-num-expired'), 0, true, 'rgba(239,68,68,0.5)');
+        if (popover) popover.innerHTML = buildSentinelPopoverHtml(data);
+        return;
+    }
+
+    const s = data.summary || {};
+    const expiring = s.expiring || 0;
+    const expired = s.expired || 0;
+    _sentinelSetLight(
+        document.getElementById('sentinel-dot-valid'),
+        document.getElementById('sentinel-num-valid'),
+        s.valid,
+        expiring === 0 && expired === 0,
+        'rgba(34,197,94,0.45)'
+    );
+    _sentinelSetLight(
+        document.getElementById('sentinel-dot-expiring'),
+        document.getElementById('sentinel-num-expiring'),
+        expiring,
+        expiring > 0,
+        'rgba(234,179,8,0.5)'
+    );
+    _sentinelSetLight(
+        document.getElementById('sentinel-dot-expired'),
+        document.getElementById('sentinel-num-expired'),
+        expired,
+        expired > 0,
+        'rgba(239,68,68,0.5)'
+    );
+
+    if (popover) popover.innerHTML = buildSentinelPopoverHtml(data);
+}
+
+function loadSentinelCertificates(forceRefresh) {
+    const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
+    const ck = 'sentinel_certificates';
+    if (!forceRefresh && C) {
+        const hit = C.get(ck);
+        if (hit) {
+            applySentinelCertificatesPayload(hit);
+            return;
+        }
+    }
+    fetch('/api/sentinel/certificates' + (forceRefresh ? '?refresh=1' : ''))
+        .then(function (res) {
+            if (!res.ok) throw new Error('Sentinel HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function (data) {
+            if (C) {
+                C.set(ck, data, SIDEBAR_WIDGET_CACHE_TTL_MS);
+            }
+            applySentinelCertificatesPayload(data);
+        })
+        .catch(function (err) {
+            console.error('Sentinel certificates:', err);
+            applySentinelCertificatesPayload({ success: false, error: err.message || String(err) });
+        });
+}
+
+window.loadSentinelCertificates = loadSentinelCertificates;
+
 function loadSplunkOutliersMonitor(forceRefresh) {
     const C = typeof SessionDataCache !== 'undefined' ? SessionDataCache : null;
     const ck = 'splunk_outliers_monitor';
@@ -2875,6 +3021,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadStatusMonitor();
         loadPagerDutyMonitor();
         loadSplunkOutliersMonitor();
+        loadSentinelCertificates();
         bootServiceNowFromUrl();
         observeServiceNowDashboardCard();
         loadUpcomingDeployments();
@@ -2889,6 +3036,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(loadStatusMonitor, 360000);
     setInterval(loadPagerDutyMonitor, 360000);
     setInterval(loadSplunkOutliersMonitor, 360000);
+    setInterval(loadSentinelCertificates, 360000);
     setInterval(loadServiceNowDashboard, 360000);
     setInterval(loadUpcomingDeployments, 360000);
     

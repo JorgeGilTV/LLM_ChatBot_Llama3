@@ -94,6 +94,14 @@ MCP_TOOL_CATEGORIES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "security",
+        "Security / SSL",
+        "#dc2626",
+        (
+            "sentinel_certificates",
+        ),
+    ),
+    (
         "servicenow",
         "ServiceNow",
         "#81B5A1",
@@ -249,6 +257,8 @@ def build_mcp_tool_arguments(
         return {"question": q, "query": extract_noc_kt_query(q) or svc or q}
     if tool_name == "servicenow_servicedesk":
         return {"question": q or "ServiceDesk dashboard", "query": q}
+    if tool_name == "sentinel_certificates":
+        return {"question": q or "SSL certificates expiring and expired", "query": q}
     if tool_name in MCP_SPLUNK_P0_TOOLS:
         return {"query": svc or q, "timerange": f"{tr}h"}
     if tool_name in MCP_TIMERANGE_TOOLS:

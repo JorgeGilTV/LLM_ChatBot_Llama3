@@ -12,6 +12,7 @@ LEGACY_TO_MCP_CHECKBOX: dict[str, str] = {
     "Wiki": mcp_checkbox_value("wiki_search"),
     "Owners": mcp_checkbox_value("service_owners"),
     "Arlo_Versions": mcp_checkbox_value("arlo_versions"),
+    "Sentinel_SSL": mcp_checkbox_value("sentinel_certificates"),
     "Deployed_FW_Versions": mcp_checkbox_value("deployed_fw_versions"),
     "Holiday_Oncall": mcp_checkbox_value("oncall_schedule"),
     "DD_Search": mcp_checkbox_value("datadog_search"),
@@ -78,6 +79,12 @@ _SHM_INTENT_RE = re.compile(
 _SHM_DAILY_INTENT_RE = re.compile(
     r"\b(?:shmdaily|active\s+users?\s+(?:daily|by\s+os)|dau\s+(?:trend|daily|by\s+os)|"
     r"daily\s+active\s+users?|users?\s+by\s+os|platform\s+split|ios\s+(?:vs|and|e)\s+android)\b",
+    re.I,
+)
+
+_SENTINEL_INTENT_RE = re.compile(
+    r"\b(?:sentinel|ssl|tls|certificate|certificates|certificados?|expir(?:y|ing|e|a|ados?|an)|"
+    r"venc(?:idos?|en)|caduc(?:ados?|an))\b",
     re.I,
 )
 
@@ -154,6 +161,12 @@ def augment_suggested_tools_for_query(query: str, tools: list[str]) -> list[str]
 
     if _SPLUNK_INTENT_RE.search(q):
         for cb in mcp_checkbox_values_for("splunk_p0_streaming"):
+            if cb not in seen:
+                out.append(cb)
+                seen.add(cb)
+
+    if _SENTINEL_INTENT_RE.search(q):
+        for cb in mcp_checkbox_values_for("sentinel_certificates"):
             if cb not in seen:
                 out.append(cb)
                 seen.add(cb)

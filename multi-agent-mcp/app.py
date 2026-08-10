@@ -115,6 +115,7 @@ from tools.pagerduty_tool import get_pagerduty_incidents
 from tools.pagerduty_analytics import get_pagerduty_analytics
 from tools.pagerduty_insights import get_pagerduty_insights
 from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
+from tools.sentinel_certificates import read_sentinel_certificates
 from tools.slack_http import format_slack_connection_error, post_incoming_webhook, post_slack_api
 
 # 📋 Logging
@@ -134,6 +135,7 @@ TOOLS = {
     "Owners": {"description": "Verify who owns each service", "function": service_owners_search},
     "Arlo_Versions": {"description": "Read version information from versions.arlocloud.com", "function": read_versions},
     "Deployed_FW_Versions": {"description": "Read deployed firmware/version matrix from deployed-fw-versions.arlocloud.com", "function": read_deployed_fw_versions},
+    "Sentinel_SSL": {"description": "Monitor SSL/TLS certificates from sentinel.arlocloud.com — expired and expiring soon", "function": read_sentinel_certificates},
     "DD_Search": {"description": "Search and list Datadog dashboards by name/query", "function": search_datadog_dashboards},
     "DD_Services": {"description": "Search Datadog APM services (backend-*, api-*, etc.)", "function": search_datadog_services},
     "DD_Red_Metrics": {"description": "List and search Datadog dashboards", "function": read_datadog_dashboards},
@@ -2399,6 +2401,20 @@ def api_slack_send_screenshot():
     except Exception as e:
         logging.error("Slack screenshot upload: %s", e)
         return jsonify({"success": False, "error": format_slack_connection_error(e)}), 500
+
+
+@flask_app.route("/api/sentinel/certificates")
+def api_sentinel_certificates():
+    """Sidebar: SSL certificate semaphore from sentinel.arlocloud.com."""
+    try:
+        from tools.sentinel_certificates import sentinel_certificates_payload
+
+        query = (request.args.get("query") or "").strip()
+        force = request.args.get("refresh") in ("1", "true", "yes")
+        return jsonify(sentinel_certificates_payload(query, force_refresh=force))
+    except Exception as e:
+        logging.error("Error in Sentinel certificates: %s", e)
+        return jsonify({"success": False, "error": str(e), "summary": {}, "expired": [], "expiring": []})
 
 
 @flask_app.route("/api/splunk/monitor")

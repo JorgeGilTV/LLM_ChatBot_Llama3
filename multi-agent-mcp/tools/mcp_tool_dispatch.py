@@ -171,6 +171,13 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
             flask_session=args.get("_flask_session"),
         )
 
+    if name == "sentinel_certificates":
+        return func(
+            question=text_arg(args, "question"),
+            query=text_arg(args, "query"),
+            force_refresh=bool(args.get("force_refresh")),
+        )
+
     if name == "shm_daily":
         timerange = args.get("timerange")
         if timerange is None and args.get("timerange_hours") is not None:

@@ -334,6 +334,117 @@
                     </div>
                 </div>
 
+                <div class="sentinel-ssl-card" style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-color, #e5e7eb);">
+                    <style>
+                        .sentinel-semaphore-wrap { position: relative; }
+                        .sentinel-semaphore-row {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 10px;
+                            padding: 8px 6px;
+                            border-radius: 8px;
+                            background: var(--bg-tertiary, #f1f5f9);
+                            text-decoration: none;
+                            color: inherit;
+                            cursor: pointer;
+                        }
+                        .sentinel-light {
+                            display: inline-flex;
+                            flex-direction: column;
+                            align-items: center;
+                            gap: 2px;
+                            min-width: 34px;
+                        }
+                        .sentinel-light-dot {
+                            width: 11px;
+                            height: 11px;
+                            border-radius: 50%;
+                            opacity: 0.28;
+                            box-shadow: none;
+                            transition: opacity 0.15s, box-shadow 0.15s;
+                        }
+                        .sentinel-light-dot.is-on { opacity: 1; }
+                        .sentinel-light-lbl { font-size: 8px; font-weight: 800; opacity: 0.75; line-height: 1; }
+                        .sentinel-light-num { font-size: 10px; font-weight: 900; line-height: 1; }
+                        .sentinel-popover {
+                            display: none;
+                            position: absolute;
+                            right: 0;
+                            top: calc(100% + 6px);
+                            width: min(320px, 92vw);
+                            max-height: 280px;
+                            overflow: auto;
+                            padding: 10px;
+                            background: #fff;
+                            border: 1px solid #cbd5e1;
+                            border-radius: 8px;
+                            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+                            z-index: 250;
+                            font-size: 10px;
+                            color: #0f172a;
+                            pointer-events: none;
+                        }
+                        .sentinel-semaphore-wrap:hover .sentinel-popover { display: block; }
+                        .sentinel-popover table { width: 100%; border-collapse: collapse; }
+                        .sentinel-popover th {
+                            text-align: left;
+                            font-size: 9px;
+                            color: #64748b;
+                            border-bottom: 1px solid #e2e8f0;
+                            padding: 4px 3px;
+                        }
+                        .sentinel-popover td {
+                            padding: 4px 3px;
+                            border-bottom: 1px solid #f1f5f9;
+                            vertical-align: top;
+                            line-height: 1.25;
+                        }
+                        .sentinel-popover .sentinel-popover-section {
+                            font-weight: 700;
+                            font-size: 10px;
+                            margin: 8px 0 4px;
+                        }
+                        .sentinel-popover .sentinel-popover-section:first-child { margin-top: 0; }
+                        .sentinel-popover-foot {
+                            margin-top: 8px;
+                            padding-top: 6px;
+                            border-top: 1px solid #e2e8f0;
+                            font-size: 9px;
+                            color: #64748b;
+                            text-align: center;
+                        }
+                        .sentinel-popover-foot a { color: #2563eb; text-decoration: none; }
+                    </style>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <h2 style="margin: 0; font-size: 13px; color: #111827;">🔒 SSL</h2>
+                        <button type="button" onclick="loadSentinelCertificates(true)" class="refresh-status-btn" title="Refresh Sentinel SSL" style="font-size: 14px;">🔄</button>
+                    </div>
+                    <div class="sentinel-semaphore-wrap">
+                        <a id="sentinel-summary-wrap" href="https://sentinel.arlocloud.com" target="_blank" rel="noopener noreferrer" class="sentinel-semaphore-row" title="Hover for certificate details">
+                            <span class="sentinel-light" title="Valid">
+                                <span id="sentinel-dot-valid" class="sentinel-light-dot" style="background:#22c55e;"></span>
+                                <span class="sentinel-light-lbl">OK</span>
+                                <span id="sentinel-num-valid" class="sentinel-light-num">—</span>
+                            </span>
+                            <span class="sentinel-light" title="Expiring soon">
+                                <span id="sentinel-dot-expiring" class="sentinel-light-dot" style="background:#eab308;"></span>
+                                <span class="sentinel-light-lbl">Soon</span>
+                                <span id="sentinel-num-expiring" class="sentinel-light-num">—</span>
+                            </span>
+                            <span class="sentinel-light" title="Expired">
+                                <span id="sentinel-dot-expired" class="sentinel-light-dot" style="background:#ef4444;"></span>
+                                <span class="sentinel-light-lbl">Exp</span>
+                                <span id="sentinel-num-expired" class="sentinel-light-num">—</span>
+                            </span>
+                        </a>
+                        <div id="sentinel-popover" class="sentinel-popover" aria-hidden="true"></div>
+                    </div>
+                    <div style="margin-top: 4px; font-size: 9px; color: var(--text-secondary); text-align: center;">
+                        <span id="sentinel-time">—</span>
+                    </div>
+                </div>
+
                 <div class="servicenow-dashboard-card" style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-color, #e5e7eb);">
                     <style>
                         .snow-pa-dash { font-family: system-ui, sans-serif; width: 100%; }
@@ -512,7 +623,7 @@
 
     <script src="/static/js/session_data_cache.js?v=20260328"></script>
     <script src="/static/js/slack_share.js?v=20260326-home-fullpage"></script>
-    <script src="/static/js/scripts.js?v=20260731-snow-autoconnect"></script>
+    <script src="/static/js/scripts.js?v=20260810-sentinel-compact"></script>
     <script>
         // loadHistory() and showHistoryResult() live in scripts.js
         // Tool list loading is also in scripts.js (DOMContentLoaded)

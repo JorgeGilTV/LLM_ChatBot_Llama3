@@ -13,6 +13,7 @@ LEGACY_TO_MCP_CHECKBOX: dict[str, str] = {
     "Owners": mcp_checkbox_value("service_owners"),
     "Arlo_Versions": mcp_checkbox_value("arlo_versions"),
     "Sentinel_SSL": mcp_checkbox_value("sentinel_certificates"),
+    "Piranha_Employees": mcp_checkbox_value("piranha_employee_lookup"),
     "Deployed_FW_Versions": mcp_checkbox_value("deployed_fw_versions"),
     "Holiday_Oncall": mcp_checkbox_value("oncall_schedule"),
     "DD_Search": mcp_checkbox_value("datadog_search"),
@@ -85,6 +86,12 @@ _SHM_DAILY_INTENT_RE = re.compile(
 _SENTINEL_INTENT_RE = re.compile(
     r"\b(?:sentinel|ssl|tls|certificate|certificates|certificados?|expir(?:y|ing|e|a|ados?|an)|"
     r"venc(?:idos?|en)|caduc(?:ados?|an))\b",
+    re.I,
+)
+
+_PIRANHA_INTENT_RE = re.compile(
+    r"\b(?:piranha|engihub|engi[\s-]?hub|employee|employees|empleado|equipo|team\s+is|"
+    r"what\s+team|qu[eé]\s+equipo|manager|supervisor|job\s+title|reports?\s+to)\b",
     re.I,
 )
 
@@ -167,6 +174,12 @@ def augment_suggested_tools_for_query(query: str, tools: list[str]) -> list[str]
 
     if _SENTINEL_INTENT_RE.search(q):
         for cb in mcp_checkbox_values_for("sentinel_certificates"):
+            if cb not in seen:
+                out.append(cb)
+                seen.add(cb)
+
+    if _PIRANHA_INTENT_RE.search(q):
+        for cb in mcp_checkbox_values_for("piranha_employee_lookup"):
             if cb not in seen:
                 out.append(cb)
                 seen.add(cb)

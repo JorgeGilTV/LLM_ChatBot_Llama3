@@ -116,6 +116,7 @@ from tools.pagerduty_analytics import get_pagerduty_analytics
 from tools.pagerduty_insights import get_pagerduty_insights
 from tools.grafana_dashboards import get_grafana_dns_mapper, get_grafana_savant_z2, get_grafana_dashboard_list
 from tools.sentinel_certificates import read_sentinel_certificates
+from tools.piranha_employees import piranha_employee_lookup
 from tools.slack_http import format_slack_connection_error, post_incoming_webhook, post_slack_api
 
 # 📋 Logging
@@ -136,6 +137,7 @@ TOOLS = {
     "Arlo_Versions": {"description": "Read version information from versions.arlocloud.com", "function": read_versions},
     "Deployed_FW_Versions": {"description": "Read deployed firmware/version matrix from deployed-fw-versions.arlocloud.com", "function": read_deployed_fw_versions},
     "Sentinel_SSL": {"description": "Monitor SSL/TLS certificates from sentinel.arlocloud.com — expired and expiring soon", "function": read_sentinel_certificates},
+    "Piranha_Employees": {"description": "Look up employee team, title, and manager from Piranha EngiHub (piranha.arlo.com)", "function": piranha_employee_lookup},
     "DD_Search": {"description": "Search and list Datadog dashboards by name/query", "function": search_datadog_dashboards},
     "DD_Services": {"description": "Search Datadog APM services (backend-*, api-*, etc.)", "function": search_datadog_services},
     "DD_Red_Metrics": {"description": "List and search Datadog dashboards", "function": read_datadog_dashboards},
@@ -2401,6 +2403,89 @@ def api_slack_send_screenshot():
     except Exception as e:
         logging.error("Slack screenshot upload: %s", e)
         return jsonify({"success": False, "error": format_slack_connection_error(e)}), 500
+
+
+@flask_app.route("/api/piranha/probe")
+def api_piranha_probe():
+    """Check Piranha Okta/ALB session (no secrets returned)."""
+    from tools.piranha_employees import piranha_auth_status
+
+    return jsonify(piranha_auth_status(session))
+
+
+@flask_app.route("/api/piranha/session", methods=["POST", "DELETE"])
+def api_piranha_session():
+    """Save or clear Piranha browser session cookies (Okta via ALB)."""
+    from tools.piranha_employees import piranha_auth_status
+    from tools.piranha_session import clear_cookies, save_cookies, validate_session
+    from tools.servicenow_session import cookie_header_from_dict, parse_cookie_blob
+
+    if request.method == "DELETE":
+        clear_cookies(session)
+        return jsonify({"success": True, "auth": piranha_auth_status(session)})
+
+    body = request.get_json(silent=True) or {}
+    cookies: dict[str, str] = {}
+    raw_header = ""
+
+    if isinstance(body.get("cookies"), dict):
+        cookies = {str(k): str(v) for k, v in body["cookies"].items() if v}
+        raw_header = cookie_header_from_dict(cookies) if cookies else ""
+    else:
+        raw = str(body.get("cookie") or body.get("cookies") or "").strip()
+        cookies = parse_cookie_blob(raw)
+        raw_header = raw
+
+    if not cookies and not raw_header:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Missing cookie header. Paste AWSELBAuthSessionCookie-0/1 from piranha.arlo.com.",
+            }
+        ), 400
+
+    save_cookies(session, cookies, raw_header=raw_header or None)
+    ok, err = validate_session(session)
+    if not ok:
+        clear_cookies(session)
+        return jsonify({"success": False, "error": err, "auth": piranha_auth_status(session)}), 401
+
+    return jsonify({"success": True, "auth": piranha_auth_status(session)})
+
+
+@flask_app.route("/api/piranha/connect/auto/start", methods=["POST"])
+def api_piranha_auto_start():
+    try:
+        from tools.piranha_browser_connect import start_auto_connect
+
+        out = start_auto_connect()
+        if out.get("success") and out.get("connect_id"):
+            session["piranha_connect_id"] = out["connect_id"]
+            session.modified = True
+        return jsonify(out), (200 if out.get("success") else 503)
+    except Exception as e:
+        logging.error("Piranha auto-connect start: %s", e)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@flask_app.route("/api/piranha/connect/auto/status")
+def api_piranha_auto_status():
+    try:
+        from tools.piranha_browser_connect import poll_auto_connect
+
+        connect_id = (
+            (request.args.get("connect_id") or "").strip()
+            or (session.get("piranha_connect_id") or "").strip()
+        )
+        if not connect_id:
+            return jsonify({"status": "unknown", "error": "No connection in progress."})
+        out = poll_auto_connect(connect_id, session)
+        if out.get("status") == "connected":
+            session.pop("piranha_connect_id", None)
+        return jsonify(out)
+    except Exception as e:
+        logging.error("Piranha auto-connect status: %s", e)
+        return jsonify({"status": "error", "error": str(e)})
 
 
 @flask_app.route("/api/sentinel/certificates")

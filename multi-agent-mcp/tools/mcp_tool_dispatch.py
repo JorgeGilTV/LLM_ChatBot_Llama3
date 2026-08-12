@@ -178,6 +178,14 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
             force_refresh=bool(args.get("force_refresh")),
         )
 
+    if name == "piranha_employee_lookup":
+        return func(
+            question=text_arg(args, "question"),
+            query=text_arg(args, "query"),
+            flask_session=args.get("_flask_session"),
+            force_refresh=bool(args.get("force_refresh")),
+        )
+
     if name == "shm_daily":
         timerange = args.get("timerange")
         if timerange is None and args.get("timerange_hours") is not None:

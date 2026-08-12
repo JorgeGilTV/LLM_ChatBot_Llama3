@@ -30,6 +30,7 @@ MCP_TOOL_CATEGORIES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
             "service_owners",
             "arlo_versions",
             "deployed_fw_versions",
+            "piranha_employee_lookup",
         ),
     ),
     (
@@ -259,6 +260,8 @@ def build_mcp_tool_arguments(
         return {"question": q or "ServiceDesk dashboard", "query": q}
     if tool_name == "sentinel_certificates":
         return {"question": q or "SSL certificates expiring and expired", "query": q}
+    if tool_name == "piranha_employee_lookup":
+        return {"question": q or "employee team lookup", "query": q}
     if tool_name in MCP_SPLUNK_P0_TOOLS:
         return {"query": svc or q, "timerange": f"{tr}h"}
     if tool_name in MCP_TIMERANGE_TOOLS:

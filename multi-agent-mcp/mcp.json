@@ -76,6 +76,10 @@
         {
           "name": "sentinel_certificates",
           "description": "Monitor SSL/TLS certificates from sentinel.arlocloud.com"
+        },
+        {
+          "name": "piranha_employee_lookup",
+          "description": "Look up employee team and manager from Piranha EngiHub"
         }
       ],
       "endpoints": {

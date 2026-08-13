@@ -988,9 +988,43 @@ def fetch_servicedesk_dashboard_data(flask_session: dict[str, Any] | None = None
     }
 
 
+def _snow_reconnect_payload(auth: dict[str, Any], error: str) -> dict[str, Any]:
+    from tools.servicenow_oauth import oauth_configured
+
+    stale_auth = dict(auth)
+    stale_auth["connected"] = False
+    stale_auth["message"] = error
+    if auth.get("method") in ("cookie", "env", None):
+        stale_auth["manual_login"] = True
+    else:
+        stale_auth["manual_login"] = not oauth_configured()
+    return {
+        "success": False,
+        "authenticated": False,
+        "auth": stale_auth,
+        "login_url": auth.get("login_path") or "/oauth/snow/login",
+        "error": error,
+        "dashboard_url": _snow_dashboard_url(),
+        "kpis": {},
+    }
+
+
+def _snow_session_probe_target(flask_session: dict[str, Any] | None) -> dict[str, Any] | None:
+    from tools.servicenow_oauth import get_token_bundle
+    from tools.servicenow_session import cookie_session_connected, server_env_auth_available
+
+    if get_token_bundle(flask_session or {}):
+        return None
+    if server_env_auth_available():
+        return None
+    if cookie_session_connected(flask_session):
+        return flask_session
+    return flask_session
+
+
 def servicedesk_dashboard_payload(flask_session: dict[str, Any] | None = None) -> dict[str, Any]:
-    from tools.servicenow_oauth import auth_status
-    from tools.servicenow_session import server_env_auth_available
+    from tools.servicenow_oauth import auth_status, get_token_bundle
+    from tools.servicenow_session import server_env_auth_available, validate_session
 
     session_dict = flask_session if flask_session is not None else {}
     auth = auth_status(session_dict)
@@ -1005,17 +1039,32 @@ def servicedesk_dashboard_payload(flask_session: dict[str, Any] | None = None) -
             "dashboard_url": _snow_dashboard_url(),
             "kpis": {},
         }
+
+    if auth.get("connected") and not get_token_bundle(session_dict):
+        ok, err = validate_session(_snow_session_probe_target(flask_session))
+        if not ok:
+            return _snow_reconnect_payload(
+                auth,
+                err or "ServiceNow session expired. Reconnect to view KPIs.",
+            )
+
     try:
         data = fetch_servicedesk_dashboard_data(flask_session)
         data["authenticated"] = True
         data["auth"] = auth
         return data
     except Exception as e:
+        msg = str(e)
+        if any(
+            token in msg.lower()
+            for token in ("401", "session expired", "not connected", "not authenticated")
+        ):
+            return _snow_reconnect_payload(auth, msg)
         return {
             "success": False,
             "authenticated": True,
             "auth": auth,
-            "error": str(e),
+            "error": msg,
             "dashboard_url": _snow_dashboard_url(),
             "kpis": {},
         }

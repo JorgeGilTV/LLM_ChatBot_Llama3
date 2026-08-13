@@ -2514,6 +2514,7 @@ async function applyServiceNowDashboardPayload(data) {
     kpiRow.style.display = 'none';
 
     destroySnowCharts();
+    chartsWrap.style.display = 'flex';
     chartsWrap.innerHTML =
         '<div class="snow-pa-dash">' +
         '<div class="snow-pa-grid">' +
@@ -2540,7 +2541,17 @@ async function applyServiceNowDashboardPayload(data) {
         '</div>' +
         '</div></div>';
 
-    await ensureChartJs();
+    try {
+        await ensureChartJs();
+    } catch (chartErr) {
+        console.error('ServiceNow charts:', chartErr);
+        chartsWrap.insertAdjacentHTML(
+            'beforeend',
+            '<div style="grid-column:1/-1;color:#dc2626;font-size:10px;padding:4px;line-height:1.35;">' +
+            'Charts unavailable (Chart.js). KPI numbers above still reflect live data.</div>'
+        );
+        return;
+    }
 
     var gInc = document.getElementById('snow-gauge-unasg-inc');
     var gReq = document.getElementById('snow-gauge-unasg-req');
@@ -2565,7 +2576,7 @@ function loadServiceNowDashboard(forceRefresh) {
     var ck = 'servicenow_dashboard';
     if (!forceRefresh && C) {
         var hit = C.get(ck);
-        if (hit && hit.authenticated !== false) {
+        if (hit && hit.authenticated !== false && hit.success !== false) {
             applyServiceNowDashboardPayload(hit);
             return;
         }
@@ -2614,26 +2625,15 @@ function bootServiceNowFromUrl() {
     }
 }
 
-var _snowDashboardObserved = false;
 function observeServiceNowDashboardCard() {
-    if (_snowDashboardObserved) return;
-    var card = document.querySelector('.servicenow-dashboard-card');
-    if (!card || typeof IntersectionObserver === 'undefined') {
-        loadServiceNowDashboard(false);
-        return;
+    var chartsWrap = document.getElementById('snow-charts-wrap');
+    if (chartsWrap && !chartsWrap.textContent.trim()) {
+        chartsWrap.innerHTML =
+            '<div style="font-size:10px;color:#64748b;padding:6px 4px;text-align:center;">Loading ServiceDesk…</div>';
     }
-    _snowDashboardObserved = true;
-    var loaded = false;
-    var obs = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-            if (entry.isIntersecting && !loaded) {
-                loaded = true;
-                loadServiceNowDashboard(false);
-                obs.disconnect();
-            }
-        });
-    }, { root: null, threshold: 0.15 });
-    obs.observe(card);
+    // Load on boot like PagerDuty/Splunk — lazy IntersectionObserver skipped KPIs when
+    // Sentinel/Splunk widgets pushed this card below the fold.
+    loadServiceNowDashboard(false);
 }
 
 window.loadServiceNowDashboard = loadServiceNowDashboard;

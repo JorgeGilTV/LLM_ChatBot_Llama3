@@ -2222,8 +2222,13 @@ function startSnowBrowserConnect(btn, errEl, statusEl, instance, autoConnectAvai
         var chain;
         if (hasExt) {
             chain = tryExtension().catch(function (extErr) {
+                var msg = extErr.message || String(extErr);
                 if (autoConnectAvailable) {
                     return tryPlaywright();
+                }
+                if (/g_ck|token|No response|navpage/i.test(msg)) {
+                    setStatus('Opening ServiceNow classic page for session token…');
+                    return tryPopup();
                 }
                 throw extErr;
             });

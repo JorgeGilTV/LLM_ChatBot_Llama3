@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GocView Chatbot",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "GocView Chatbot for Firefox — ask from any page; ServiceNow session sync for ServiceDesk.",
   "permissions": ["storage", "activeTab", "cookies", "scripting", "tabs"],
   "host_permissions": [

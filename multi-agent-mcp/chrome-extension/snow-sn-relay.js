@@ -15,6 +15,7 @@
 
   var deadline = Date.now() + 180000;
   var done = false;
+  var triedClassicNav = false;
 
   function finish(payload) {
     if (done) return;
@@ -44,6 +45,11 @@
           : result || { success: false, error: 'No response' };
         if (payload.success) {
           finish(payload);
+          return;
+        }
+        if (!triedClassicNav && !/\/navpage\.do/i.test(location.pathname)) {
+          triedClassicNav = true;
+          location.replace(location.origin + '/navpage.do?gocview_connect=1');
           return;
         }
         if (Date.now() > deadline) {

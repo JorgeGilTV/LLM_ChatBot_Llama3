@@ -753,11 +753,37 @@
         .sw-group--apm-pending .sw-group-head {
             margin: 0;
             padding: 8px 12px;
-            border-radius: 0;
+            border-radius: 10px 10px 0 0;
             background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
             border: none;
             border-bottom: 1px solid #1e3a55;
             box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38);
+        }
+        .sw-group--apm-pending .sw-apm-pending-body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 28px 16px 32px;
+            min-height: 140px;
+            color: rgba(248, 250, 252, 0.88);
+            font-size: 13px;
+            font-weight: 600;
+        }
+        body.sw-theme-apm-light .sw-group--apm-pending .sw-apm-pending-body {
+            color: #475569;
+        }
+        .sw-apm-pending-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(148, 163, 184, 0.35);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: sw-apm-spin 0.85s linear infinite;
+        }
+        @keyframes sw-apm-spin {
+            to { transform: rotate(360deg); }
         }
         .sw-group--apm-pending .sw-group-title {
             color: #ffffff;
@@ -3501,17 +3527,23 @@
         const WALL_APM_PARALLEL_GOLDEN = {{ wall_apm_parallel_golden_envs|default([])|tojson }};
         const WALL_APM_ENV_LABELS = {{ wall_apm_env_labels|default({})|tojson }};
 
-        async function swPostWallBody(postBody) {
-            const maxAttempts = 3;
-            const retryDelayMs = 5000;
+        async function swPostWallBody(postBody, opts) {
+            opts = opts || {};
+            const maxAttempts = opts.incremental ? 2 : 3;
+            const retryDelayMs = opts.incremental ? 2000 : 5000;
+            const timeoutMs = opts.timeoutMs || (opts.incremental ? 180000 : 0);
             let lastErr = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    const res = await fetch(WALL_DATA_URL, {
+                    const fetchOpts = {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(postBody),
-                    });
+                    };
+                    if (timeoutMs > 0 && typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+                        fetchOpts.signal = AbortSignal.timeout(timeoutMs);
+                    }
+                    const res = await fetch(WALL_DATA_URL, fetchOpts);
                     const text = await res.text();
                     if (res.status === 504) {
                         throw new Error('HTTP 504 — Gateway Time-out');
@@ -3543,7 +3575,9 @@
                     const retryable =
                         msg.indexOf('504') >= 0 ||
                         /Gateway Time-?out/i.test(msg) ||
-                        /Failed to fetch/i.test(msg);
+                        /Failed to fetch/i.test(msg) ||
+                        /timed out/i.test(msg) ||
+                        /AbortError/i.test(msg);
                     if (retryable && attempt < maxAttempts) {
                         await new Promise(function(r) { setTimeout(r, retryDelayMs * attempt); });
                         continue;
@@ -3564,12 +3598,89 @@
             title.className = 'sw-group-title';
             title.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
             const meta = document.createElement('span');
-            meta.className = 'sw-meta';
+            meta.className = 'sw-meta sw-apm-pending-meta';
             meta.textContent = 'Loading…';
             head.appendChild(title);
             head.appendChild(meta);
             section.appendChild(head);
+            const body = document.createElement('div');
+            body.className = 'sw-apm-pending-body';
+            const spin = document.createElement('div');
+            spin.className = 'sw-apm-pending-spinner';
+            spin.setAttribute('aria-hidden', 'true');
+            const note = document.createElement('p');
+            note.className = 'sw-apm-pending-note';
+            note.style.margin = '0';
+            note.textContent = 'Fetching APM metrics…';
+            body.appendChild(spin);
+            body.appendChild(note);
+            section.appendChild(body);
             return section;
+        }
+
+        function swResolveDdEnvChoice(ddEl, body) {
+            if (SW_APM_TAB === 'golden') return 'golden';
+            if (ddEl && ddEl.value) return String(ddEl.value);
+            if (body && body.dd_env) return String(body.dd_env);
+            if (WALL_DD_ENV) return String(WALL_DD_ENV);
+            return 'all';
+        }
+
+        function swPaintIncrementalEnvSlot(env, data, monitors, root, envList, myGen) {
+            if (myGen !== wallLoadGeneration) return { ok: false };
+            const groups = data.groups || [];
+            const g = groups[0];
+            if (!g) {
+                const errSec = document.createElement('section');
+                errSec.className = 'sw-group';
+                errSec.dataset.swDdEnv = env;
+                const h = document.createElement('div');
+                h.className = 'sw-group-head';
+                const ti = document.createElement('div');
+                ti.className = 'sw-group-title';
+                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
+                const er = document.createElement('span');
+                er.className = 'sw-meta err';
+                er.textContent = 'No data';
+                h.appendChild(ti);
+                h.appendChild(er);
+                errSec.appendChild(h);
+                replaceWallEnvSlot(root, env, errSec, envList);
+                return { ok: false };
+            }
+            try {
+                const sec = buildApmGroupSection(g, monitors || data.monitors || null, {
+                    allEnvPanel: true,
+                });
+                sec.dataset.swDdEnv = env;
+                replaceWallEnvSlot(root, env, sec, envList);
+                swInitWallTilePackResize();
+                swSchedulePackAllWallTileGrids();
+                const src = data.source || {};
+                return {
+                    ok: true,
+                    inScope: Number(src.services_in_scope || 0),
+                    tiles: Number(src.tiles_shown || 0),
+                };
+            } catch (re) {
+                console.error('APM wall incremental render', env, re);
+                const errSec = document.createElement('section');
+                errSec.className = 'sw-group';
+                errSec.dataset.swDdEnv = env;
+                const h = document.createElement('div');
+                h.className = 'sw-group-head';
+                const ti = document.createElement('div');
+                ti.className = 'sw-group-title';
+                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
+                const er = document.createElement('span');
+                er.className = 'sw-meta err';
+                er.textContent = 'Render failed';
+                h.appendChild(ti);
+                h.appendChild(er);
+                errSec.appendChild(h);
+                replaceWallEnvSlot(root, env, errSec, envList);
+                return { ok: false };
+            }
         }
 
         async function loadWallApmIncremental(
@@ -3582,6 +3693,7 @@
         ) {
             const root = document.getElementById('sw-root');
             prepareIncrementalWallRoot(root, envList, retainExistingWidgets);
+            wallDomEverPainted = true;
             if (retainExistingWidgets && root) {
                 root.classList.add('sw-root--refreshing');
                 root.dataset.swRefreshGen = String(myGen);
@@ -3599,7 +3711,7 @@
                 if (myGen !== wallLoadGeneration) return;
                 let line;
                 if (doneOk + failed < total) {
-                    line = 'Loading ' + total + ' environment(s): ' + doneOk + ' ready';
+                    line = 'Loading ' + total + ' environments: ' + doneOk + ' ready';
                     if (failed) line += ', ' + failed + ' error(s)';
                     line += ' · range ' + timerange + 'h';
                 } else {
@@ -3613,119 +3725,89 @@
             }
             bumpStatus();
 
-            function replaceSlot(env, newChild) {
+            function finishIncrementalCleanup() {
                 if (myGen !== wallLoadGeneration) return;
-                replaceWallEnvSlot(root, env, newChild, envList);
+                dedupeIncrementalWallRoot(root, envList);
+                if (
+                    retainExistingWidgets &&
+                    root &&
+                    root.dataset.swRefreshGen === String(myGen)
+                ) {
+                    root.classList.remove('sw-root--refreshing');
+                    delete root.dataset.swRefreshGen;
+                }
+                if (doneOk === 0 && failed === total) {
+                    statusEl.classList.add('err');
+                } else {
+                    statusEl.classList.remove('err');
+                }
             }
 
-            await Promise.all(
-                envList.map(function(env) {
-                    return swPostWallBody({
+            const tasks = envList.map(function(env) {
+                return swPostWallBody(
+                    {
                         timerange: timerange,
                         force_refresh: forceRefresh,
                         dd_env: env,
-                    })
-                        .then(function(data) {
-                            if (myGen !== wallLoadGeneration) return;
-                            if (!monitors && data.monitors) monitors = data.monitors;
-                            const groups = data.groups || [];
-                            const g = groups[0];
-                            if (!g) {
-                                failed++;
-                                const errSec = document.createElement('section');
-                                errSec.className = 'sw-group';
-                                errSec.dataset.swDdEnv = env;
-                                const h = document.createElement('div');
-                                h.className = 'sw-group-head';
-                                const ti = document.createElement('div');
-                                ti.className = 'sw-group-title';
-                                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
-                                const er = document.createElement('span');
-                                er.className = 'sw-meta err';
-                                er.textContent = 'No data';
-                                h.appendChild(ti);
-                                h.appendChild(er);
-                                errSec.appendChild(h);
-                                replaceSlot(env, errSec);
+                    },
+                    { incremental: true, timeoutMs: 180000 }
+                )
+                    .then(function(data) {
+                        if (myGen !== wallLoadGeneration) return;
+                        if (!monitors && data.monitors) monitors = data.monitors;
+                        return new Promise(function(resolve) {
+                            requestAnimationFrame(function() {
+                                const painted = swPaintIncrementalEnvSlot(
+                                    env,
+                                    data,
+                                    monitors,
+                                    root,
+                                    envList,
+                                    myGen
+                                );
+                                if (painted.ok) {
+                                    doneOk++;
+                                    totInScope += painted.inScope || 0;
+                                    totTiles += painted.tiles || 0;
+                                    if (doneOk === 1) swScrollToHashIfAny();
+                                } else {
+                                    failed++;
+                                }
                                 bumpStatus();
-                                return;
-                            }
-                            try {
-                                const sec = buildApmGroupSection(g, monitors || data.monitors || null, {
-                                    allEnvPanel: true,
-                                });
-                                sec.dataset.swDdEnv = env;
-                                replaceSlot(env, sec);
-                                swInitWallTilePackResize();
-                                swSchedulePackAllWallTileGrids();
-                                doneOk++;
-                                const src = data.source || {};
-                                totInScope += Number(src.services_in_scope || 0);
-                                totTiles += Number(src.tiles_shown || 0);
-                                if (doneOk === 1) swScrollToHashIfAny();
-                            } catch (re) {
-                                console.error('APM wall incremental render', env, re);
-                                failed++;
-                                const errSec = document.createElement('section');
-                                errSec.className = 'sw-group';
-                                errSec.dataset.swDdEnv = env;
-                                const h = document.createElement('div');
-                                h.className = 'sw-group-head';
-                                const ti = document.createElement('div');
-                                ti.className = 'sw-group-title';
-                                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
-                                const er = document.createElement('span');
-                                er.className = 'sw-meta err';
-                                er.textContent = 'Render failed';
-                                h.appendChild(ti);
-                                h.appendChild(er);
-                                errSec.appendChild(h);
-                                replaceSlot(env, errSec);
-                            }
-                            bumpStatus();
-                        })
-                        .catch(function(err) {
-                            if (myGen !== wallLoadGeneration) return;
-                            failed++;
-                            const errSec = document.createElement('section');
-                            errSec.className = 'sw-group';
-                            errSec.dataset.swDdEnv = env;
-                            const head = document.createElement('div');
-                            head.className = 'sw-group-head';
-                            const ti = document.createElement('div');
-                            ti.className = 'sw-group-title';
-                            ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
-                            const er = document.createElement('span');
-                            er.className = 'sw-meta err';
-                            var em = (err && err.message) ? String(err.message) : String(err);
-                            if (em.indexOf('504') >= 0 || /Gateway Time-?out/i.test(em)) {
-                                em = 'HTTP 504 (timeout) — try again or raise proxy timeout';
-                            }
-                            er.textContent = 'Error: ' + em;
-                            head.appendChild(ti);
-                            head.appendChild(er);
-                            errSec.appendChild(head);
-                            replaceSlot(env, errSec);
-                            bumpStatus();
+                                resolve();
+                            });
                         });
-                })
-            );
+                    })
+                    .catch(function(err) {
+                        if (myGen !== wallLoadGeneration) return;
+                        failed++;
+                        const errSec = document.createElement('section');
+                        errSec.className = 'sw-group';
+                        errSec.dataset.swDdEnv = env;
+                        const head = document.createElement('div');
+                        head.className = 'sw-group-head';
+                        const ti = document.createElement('div');
+                        ti.className = 'sw-group-title';
+                        ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
+                        const er = document.createElement('span');
+                        er.className = 'sw-meta err';
+                        var em = (err && err.message) ? String(err.message) : String(err);
+                        if (em.indexOf('504') >= 0 || /Gateway Time-?out/i.test(em)) {
+                            em = 'HTTP 504 (timeout) — try again or raise proxy timeout';
+                        } else if (/timed out|AbortError/i.test(em)) {
+                            em = 'Timed out — try Refresh or pick one env';
+                        }
+                        er.textContent = 'Error: ' + em;
+                        head.appendChild(ti);
+                        head.appendChild(er);
+                        errSec.appendChild(head);
+                        replaceWallEnvSlot(root, env, errSec, envList);
+                        bumpStatus();
+                    });
+            });
 
-            if (myGen !== wallLoadGeneration) return;
-            dedupeIncrementalWallRoot(root, envList);
-            if (
-                retainExistingWidgets &&
-                root &&
-                root.dataset.swRefreshGen === String(myGen)
-            ) {
-                root.classList.remove('sw-root--refreshing');
-                delete root.dataset.swRefreshGen;
-            }
-            if (doneOk === 0 && failed === total) {
-                statusEl.classList.add('err');
-            } else {
-                statusEl.classList.remove('err');
-            }
+            await Promise.allSettled(tasks);
+            finishIncrementalCleanup();
         }
 
         function swApmUpdateDatadogLink() {
@@ -3754,9 +3836,12 @@
             const trEl = document.getElementById('sw-timerange');
             const timerange = trEl ? parseInt(trEl.value, 10) : 1;
             const ddEl = document.getElementById('sw-apm-dd-env');
+            const ddEnvChoice = swResolveDdEnvChoice(ddEl, null);
             const body = { timerange, force_refresh: forceRefresh };
             if (SW_APM_TAB === 'golden') {
                 body.dd_env = 'golden';
+            } else if (ddEnvChoice === 'all') {
+                body.dd_env = 'all';
             } else if (ddEl) {
                 body.dd_env = ddEl.value;
             } else if (WALL_DD_ENV) {
@@ -3771,8 +3856,7 @@
                     Array.isArray(WALL_APM_PARALLEL_GOLDEN) &&
                     WALL_APM_PARALLEL_GOLDEN.length > 0) ||
                     (SW_APM_TAB !== 'golden' &&
-                        ddEl &&
-                        ddEl.value === 'all' &&
+                        ddEnvChoice === 'all' &&
                         Array.isArray(WALL_APM_PARALLEL_MAIN) &&
                         WALL_APM_PARALLEL_MAIN.length > 0));
             const envList =
@@ -3805,7 +3889,6 @@
                         retainExistingWidgets
                     );
                     if (myGen !== wallLoadGeneration) return;
-                    wallDomEverPainted = true;
                     return;
                 }
 

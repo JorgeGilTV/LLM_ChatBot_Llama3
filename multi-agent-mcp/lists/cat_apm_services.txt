@@ -1,0 +1,3 @@
+# APM service names for env:cat_prod
+# Primary source: Datadog GET /api/v2/apm/services?filter[env]=cat_prod (SOFTWARE_CATALOG_WALL_DD_APM_LIST)
+# Optional offline copy: populate this file and set SOFTWARE_CATALOG_USE_BUNDLED_CAT=1

@@ -60,7 +60,17 @@ from tools.deployments_calendar import get_grm_deployments_mcp
 from tools.mcp_tool_dispatch import invoke_tool
 from tools.noc_kt import noc_kt_search_mcp
 from tools.read_arlo_status import read_arlo_status
-from tools.pagerduty_samsung_scrape import get_pagerduty_samsung_board_html
+from tools.partner_monitor_tools import (
+    read_datadog_cat,
+    read_datadog_cat_errors_only,
+    read_datadog_comcast,
+    read_datadog_comcast_errors_only,
+)
+from tools.pagerduty_samsung_scrape import (
+    get_pagerduty_cat_board_html,
+    get_pagerduty_comcast_board_html,
+    get_pagerduty_samsung_board_html,
+)
 from tools.mcp_phase3_tools import (
     aws_cloudtrail_search_mcp,
     aws_connect_monitor_mcp,
@@ -259,6 +269,44 @@ TOOL_REGISTRY = {
             "required": ["service"]
         }
     },
+    "datadog_red_cat": {
+        "description": "Get Datadog RED metrics for CAT partner network dashboard",
+        "function": read_datadog_cat,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name to query"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            },
+            "required": ["service"]
+        }
+    },
+    "datadog_red_comcast": {
+        "description": "Get Datadog RED metrics for Comcast partner network dashboard",
+        "function": read_datadog_comcast,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name to query"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            },
+            "required": ["service"]
+        }
+    },
     "datadog_red_metrics_us": {
         "description": "Get Datadog RED metrics for US region dashboard",
         "function": read_datadog_redmetrics_us,
@@ -299,6 +347,42 @@ TOOL_REGISTRY = {
     "datadog_samsung_errors": {
         "description": "Show Samsung network services with errors > 0 from Datadog",
         "function": read_datadog_samsung_errors_only,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Optional: filter by service name"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            }
+        }
+    },
+    "datadog_cat_errors": {
+        "description": "Show CAT partner network services with errors > 0 from Datadog",
+        "function": read_datadog_cat_errors_only,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Optional: filter by service name"
+                },
+                "timerange": {
+                    "type": "string",
+                    "description": "Time range (1h, 4h, 1d, 7d, 1w, 1mo)",
+                    "default": "4h"
+                }
+            }
+        }
+    },
+    "datadog_comcast_errors": {
+        "description": "Show Comcast partner network services with errors > 0 from Datadog",
+        "function": read_datadog_comcast_errors_only,
         "schema": {
             "type": "object",
             "properties": {
@@ -503,6 +587,19 @@ TOOL_REGISTRY = {
                     "type": "string",
                     "description": "Filter by status: triggered, acknowledged, resolved",
                     "enum": ["triggered", "acknowledged", "resolved", "all"]
+                },
+                "shift": {
+                    "type": "string",
+                    "description": "Filter to shift crew: shift1 (Mexico), shift2, or shift3 (PAGERDUTY_SHIFTn_USER_IDS)",
+                    "enum": ["shift1", "shift2", "shift3", ""],
+                },
+                "team_only": {
+                    "type": "boolean",
+                    "description": "Legacy: when shift empty, union of all shift crews",
+                },
+                "missing_root_cause": {
+                    "type": "boolean",
+                    "description": "When true, only incidents with empty root_cause custom field",
                 }
             }
         }
@@ -592,6 +689,46 @@ TOOL_REGISTRY = {
                 "dashboard_id": {
                     "type": "string",
                     "description": "External status dashboard ID (default SAMSUNG_STATUS_DASHBOARD_ID or PRBJIO4)",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Optional filter on title/service/status",
+                },
+            },
+        },
+    },
+    "pagerduty_cat_board": {
+        "description": (
+            "Scrape CAT PagerDuty external status dashboard — "
+            "active and recently resolved incidents without REST API."
+        ),
+        "function": get_pagerduty_cat_board_html,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {
+                    "type": "string",
+                    "description": "External status dashboard ID (default CAT_STATUS_DASHBOARD_ID)",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Optional filter on title/service/status",
+                },
+            },
+        },
+    },
+    "pagerduty_comcast_board": {
+        "description": (
+            "Scrape Comcast PagerDuty external status dashboard — "
+            "active and recently resolved incidents without REST API."
+        ),
+        "function": get_pagerduty_comcast_board_html,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {
+                    "type": "string",
+                    "description": "External status dashboard ID (default COMCAST_STATUS_DASHBOARD_ID)",
                 },
                 "query": {
                     "type": "string",

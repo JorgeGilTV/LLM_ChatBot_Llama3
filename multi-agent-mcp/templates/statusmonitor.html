@@ -796,6 +796,9 @@
                     <ul class="nav-menu">
                         <li><a href="/statusmonitor" class="{{ 'active' if not environment else '' }}">All Environments</a></li>
                         <li><a href="/statusmonitor/samsung" class="{{ 'active' if environment == 'samsung' else '' }}">Samsung</a></li>
+                        <li><a href="/statusmonitor/adt" class="{{ 'active' if environment == 'adt' else '' }}">ADT</a></li>
+                        <li><a href="/statusmonitor/cat" class="{{ 'active' if environment == 'cat' else '' }}">CAT</a></li>
+                        <li><a href="/statusmonitor/comcast" class="{{ 'active' if environment == 'comcast' else '' }}">Comcast</a></li>
                         <li><a href="/statusmonitor/redmetrics-us" class="{{ 'active' if environment == 'redmetrics-us' else '' }}">RED Metrics US</a></li>
                         <li><a href="/apm-services?dd_env=adt_prod">🔵 Status Wall</a></li>
                     </ul>

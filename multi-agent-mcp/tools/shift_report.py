@@ -16,6 +16,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from urllib.parse import quote
+
 import requests
 
 from tools.bedrock_tool import ask_bedrock
@@ -70,6 +72,20 @@ _OUTLOOK_NOISE_RE = re.compile(
     re.IGNORECASE,
 )
 DEFAULT_SHIFT_OUTLOOK_NOC_DL = "DL-NOC"
+# NOC shift review — emails TO/CC these mailboxes (override via SHIFT_OUTLOOK_NOC_MEMBERS)
+DEFAULT_NOC_TEAM_MEMBERS: tuple[tuple[str, str], ...] = (
+    ("Fenil Vaghasiya", "fvaghasiya.c@arlo.com"),
+    ("Amisha Kabra", "akabra.c@arlo.com"),
+    ("Krunal Patel", "KPatel@arlo.com"),
+    ("Vikas Mishra", "VMishra@arlo.com"),
+    ("Praful Choudhary", "pchoudhary.c@arlo.com"),
+    ("Dhruv Shah", "DhShah@arlo.com"),
+    ("Jagannath Giri", "jgiri@arlo.com"),
+    ("Ankita Maheshwari", "amaheshwar@arlo.com"),
+    ("Sarthak Barochiya", "sbarochiya.c@arlo.com"),
+    ("Sumanth Kumar", "sumkumar@arlo.com"),
+    ("Vijayaraghavan R", "vr@arlo.com"),
+)
 _JIRA_DONE_STATUSES = frozenset(
     {
         "done",
@@ -373,10 +389,16 @@ def _shift_pd_partner_dashboards() -> list[tuple[str, str]]:
     boards = []
     samsung = (os.getenv("SAMSUNG_STATUS_DASHBOARD_ID") or "PRBJIO4").strip()
     adt = (os.getenv("ADT_STATUS_DASHBOARD_ID") or "PK1QF1G").strip()
+    cat = (os.getenv("CAT_STATUS_DASHBOARD_ID") or "").strip()
+    comcast = (os.getenv("COMCAST_STATUS_DASHBOARD_ID") or "").strip()
     if samsung and samsung.lower() not in ("0", "false", "off", "none"):
         boards.append((samsung, "Samsung"))
     if adt and adt.lower() not in ("0", "false", "off", "none"):
         boards.append((adt, "ADT"))
+    if cat and cat.lower() not in ("0", "false", "off", "none"):
+        boards.append((cat, "CAT"))
+    if comcast and comcast.lower() not in ("0", "false", "off", "none"):
+        boards.append((comcast, "Comcast"))
     return boards
 
 
@@ -1145,18 +1167,138 @@ def _prepare_jira_grm_shift_payload(jira_raw: str) -> str:
     )
 
 
-def _noc_outlook_terms() -> list[str]:
+def _parse_noc_member_list(raw: str) -> list[tuple[str, str]]:
+    parsed: list[tuple[str, str]] = []
+    for piece in (raw or "").split(","):
+        piece = piece.strip()
+        if not piece:
+            continue
+        if "@" in piece and ":" not in piece:
+            parsed.append(("", piece))
+        elif ":" in piece:
+            name, email = piece.split(":", 1)
+            parsed.append((name.strip(), email.strip()))
+        elif "@" in piece:
+            parsed.append(("", piece))
+    return parsed
+
+
+def _noc_team_members(shift: str | None = None) -> list[tuple[str, str]]:
+    """Return (display_name, email) for NOC Outlook filtering — per shift when configured."""
+    mode = (shift or "").strip().lower()
+    if mode in SHIFT_MODES:
+        env_key = f"SHIFT{mode[-1]}_OUTLOOK_NOC_MEMBERS"
+        raw = (os.getenv(env_key) or "").strip()
+        if raw:
+            parsed = _parse_noc_member_list(raw)
+            if parsed:
+                return parsed
+    raw = (os.getenv("SHIFT_OUTLOOK_NOC_MEMBERS") or "").strip()
+    if raw:
+        parsed = _parse_noc_member_list(raw)
+        if parsed:
+            return parsed
+    return list(DEFAULT_NOC_TEAM_MEMBERS)
+
+
+def _noc_team_emails(shift: str | None = None) -> list[str]:
+    return [email for _name, email in _noc_team_members(shift) if email]
+
+
+def _noc_member_label(email: str) -> str:
+    lower = email.lower()
+    for name, member_email in _noc_team_members():
+        if member_email.lower() == lower:
+            return name or member_email
+    return email
+
+
+def _extract_recipient_emails(email: dict[str, Any]) -> list[str]:
+    """Parse To/Cc recipient addresses from Outlook search payload."""
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, list):
+            for item in value:
+                add(item)
+            return
+        if isinstance(value, dict):
+            for key in ("address", "emailAddress", "email"):
+                nested = value.get(key)
+                if isinstance(nested, dict):
+                    add(nested.get("address") or nested.get("email"))
+                elif nested:
+                    add(nested)
+            return
+        text = str(value).strip()
+        if not text:
+            return
+        for part in re.split(r"[;,]+", text):
+            piece = part.strip()
+            if not piece:
+                continue
+            match = re.search(r"[\w.+-]+@[\w.-]+\.\w+", piece)
+            addr = (match.group(0) if match else piece).lower()
+            if addr and addr not in seen:
+                seen.add(addr)
+                found.append(addr)
+
+    for key in ("toRecipients", "ccRecipients", "to", "cc", "recipients"):
+        add(email.get(key))
+    return found
+
+
+def _email_sent_to_noc_member(email: dict[str, Any], shift: str | None = None) -> tuple[bool, str]:
+    """True when the message was sent To/Cc a configured NOC mailbox for this shift."""
+    team = {e.lower() for e in _noc_team_emails(shift)}
+    if not team:
+        return False, ""
+    for recipient in _extract_recipient_emails(email):
+        if recipient in team:
+            return True, _noc_member_label(recipient)
+    blob = " ".join(
+        str(email.get(k) or "")
+        for k in ("to", "toRecipients", "ccRecipients", "subject", "bodyPreview")
+    ).lower()
+    for member_email in team:
+        if member_email in blob:
+            return True, _noc_member_label(member_email)
+    return False, ""
+
+
+def _outlook_message_url(email: dict[str, Any]) -> str:
+    for key in ("webLink", "weblink", "web_link"):
+        val = str(email.get(key) or "").strip()
+        if val.startswith("http"):
+            return val
+    msg_id = str(email.get("id") or "").strip()
+    if msg_id:
+        return (
+            "https://outlook.office365.com/owa/"
+            f"?ItemID={quote(msg_id, safe='')}&exvsurl=1&viewmodel=ReadMessageItem"
+        )
+    internet_id = str(email.get("internetMessageId") or "").strip()
+    if internet_id:
+        return (
+            "https://outlook.office365.com/owa/"
+            f"?ItemID={quote(internet_id, safe='')}&exvsurl=1&viewmodel=ReadMessageItem"
+        )
+    return ""
+
+
+def _noc_outlook_terms(shift: str | None = None) -> list[str]:
     dl = (os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL).strip()
     terms = [dl, "DL-NOC", "dl-noc", "NOC team", "Network Operations"]
-    raw_members = (os.getenv("SHIFT_OUTLOOK_NOC_MEMBERS") or "").strip()
-    for piece in raw_members.split(","):
-        m = piece.strip()
-        if m and m.lower() not in {t.lower() for t in terms}:
-            terms.append(m)
+    for _name, email in _noc_team_members(shift):
+        if email and email.lower() not in {t.lower() for t in terms}:
+            terms.append(email)
     return terms
 
 
-def _is_noc_outlook_email(email: dict[str, Any]) -> bool:
+def _is_noc_outlook_email(email: dict[str, Any], shift: str | None = None) -> bool:
     parts = [
         email.get("subject"),
         email.get("bodyPreview"),
@@ -1168,7 +1310,7 @@ def _is_noc_outlook_email(email: dict[str, Any]) -> bool:
     ]
     blob = " ".join(str(p) for p in parts if p)
     blob_lower = blob.lower()
-    for term in _noc_outlook_terms():
+    for term in _noc_outlook_terms(shift):
         if term.lower() in blob_lower:
             return True
     return bool(re.search(r"\bdl[- ]?noc\b", blob_lower))
@@ -1193,7 +1335,7 @@ def _is_pending_outlook_email(email: dict[str, Any]) -> bool:
     return any(m in subject or m in preview for m in pending_markers)
 
 
-def _slim_outlook_email(email: dict[str, Any]) -> dict[str, Any]:
+def _slim_outlook_email(email: dict[str, Any], shift: str | None = None) -> dict[str, Any]:
     preview = str(email.get("bodyPreview") or "").replace("\r", " ").replace("\n", " ")
     preview = re.sub(r"\s+", " ", preview).strip()[:240]
     subject = str(email.get("subject") or "").strip()
@@ -1209,6 +1351,7 @@ def _slim_outlook_email(email: dict[str, Any]) -> dict[str, Any]:
             str(r.get("emailAddress", r.get("address", r)) if isinstance(r, dict) else r)
             for r in cc_recipients
         )
+    matched_member, noc_recipient = _email_sent_to_noc_member(email, shift)
     return {
         "subject": subject,
         "from": email.get("from"),
@@ -1220,6 +1363,10 @@ def _slim_outlook_email(email: dict[str, Any]) -> dict[str, Any]:
         "importance": email.get("importance"),
         "isRead": email.get("isRead"),
         "bodyPreview": preview,
+        "id": email.get("id"),
+        "outlook_url": _outlook_message_url(email),
+        "noc_recipient": noc_recipient,
+        "sent_to_noc_member": matched_member,
         "related_topic": _outlook_related_topic(subject, preview),
         "noc_relevant": _is_noc_outlook_email(
             {
@@ -1229,7 +1376,8 @@ def _slim_outlook_email(email: dict[str, Any]) -> dict[str, Any]:
                 "fromName": email.get("fromName"),
                 "toRecipients": to_recipients,
                 "ccRecipients": cc_recipients,
-            }
+            },
+            shift,
         ),
         "pending": _is_pending_outlook_email(email),
     }
@@ -1285,15 +1433,35 @@ def _outlook_date_range(window: ShiftWindow) -> tuple[str, str]:
     return start_local.isoformat(), end_local.isoformat()
 
 
+def _build_noc_member_outlook_queries(window: ShiftWindow) -> list[str]:
+    """KQL queries for emails sent To/Cc NOC team mailboxes in the shift window."""
+    start_d, end_d = _outlook_date_range(window)
+    date_clause = f"received:{start_d}..{end_d}"
+    emails = [e.lower() for e in _noc_team_emails(window.mode)]
+    if not emails:
+        return []
+    queries: list[str] = []
+    chunk_size = 4
+    for i in range(0, len(emails), chunk_size):
+        chunk = emails[i : i + chunk_size]
+        parts = []
+        for addr in chunk:
+            parts.append(f"to:{addr}")
+            parts.append(f"cc:{addr}")
+        queries.append(f"{date_clause} AND ({' OR '.join(parts)})")
+    return queries
+
+
 def _build_outlook_queries(window: ShiftWindow, terms: list[str]) -> list[str]:
     start_d, end_d = _outlook_date_range(window)
     date_clause = f"received:{start_d}..{end_d}"
     noc_dl = (os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL).strip()
-    queries = [
+    queries = _build_noc_member_outlook_queries(window)
+    queries.extend([
         f'{date_clause} AND ("{noc_dl}" OR to:{noc_dl} OR cc:{noc_dl} OR participants:{noc_dl})',
         f'{date_clause} AND (pagerduty OR servicenow OR incident OR escalation OR "on call")',
         f"{date_clause} AND (deployment OR release OR GRM OR postcheck)",
-    ]
+    ])
     issue_terms = [
         t for t in terms
         if re.match(r"^(GRM-|INC|#|\d{5,})", t, re.I) or t.lower().startswith("backend-")
@@ -1313,7 +1481,7 @@ def _build_outlook_queries(window: ShiftWindow, terms: list[str]) -> list[str]:
     grm_terms = [t for t in terms if t.upper().startswith("GRM-")][:6]
     for grm in grm_terms:
         queries.append(f'{date_clause} AND "{grm}"')
-    return queries[:6]
+    return queries[:10]
 
 
 async def _fetch_related_outlook_emails(
@@ -1352,22 +1520,29 @@ async def _fetch_related_outlook_emails(
                     continue
                 if not _email_in_window(email, window.start_utc, window.end_utc):
                     continue
-                slim = _slim_outlook_email(email)
-                if not _is_relevant_outlook_email(slim):
+                slim = _slim_outlook_email(email, window.mode)
+                subject_preview = f"{slim.get('subject') or ''} {slim.get('bodyPreview') or ''}"
+                if _OUTLOOK_NOISE_RE.search(subject_preview):
                     continue
-                if not slim.get("noc_relevant"):
-                    continue
-                if not slim.get("pending"):
+                if slim.get("sent_to_noc_member"):
+                    pass
+                elif slim.get("noc_relevant") and slim.get("pending"):
+                    if not _is_relevant_outlook_email(slim):
+                        continue
+                else:
                     continue
                 if eid:
                     seen_ids.add(eid)
                 collected.append(slim)
 
+        noc_members = ", ".join(e for _n, e in _noc_team_members(window.mode))
         return json.dumps(
             {
                 "mailbox": mailbox or "(authenticated user)",
                 "noc_dl": noc_dl,
-                "noc_filter": "DL-NOC / NOC team — pending or unread only",
+                "shift": window.mode,
+                "noc_team_members": noc_members,
+                "noc_filter": f"Emails To/Cc {SHIFT_LABELS.get(window.mode, window.mode)} mailboxes (any read state) + pending DL-NOC",
                 "search_terms": terms[:20],
                 "queries_run": queries,
                 "count": len(collected),
@@ -1759,7 +1934,7 @@ Note: release_threads[] is parsed from Production Release Checklist thread repli
 === Jira GRM tickets (compact — Done vs Open keys only, no per-ticket expansion) ===
 {_truncate(jira_raw, 8000)}
 
-=== Outlook — pending items for NOC DL ({os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL}) ===
+=== Outlook — emails To/Cc {SHIFT_LABELS.get(window.mode, window.mode)} ({", ".join(e for _n, e in _noc_team_members(window.mode))}) ===
 {_truncate(outlook_raw, 12000)}
 
 JSON schema:
@@ -1795,7 +1970,7 @@ Rules:
   • One row for Open/In Progress tickets (source = "Jira", service_or_topic = "GRM Open", status = "open", summary = comma-separated keys with status in parentheses e.g. "GRM-3550 (In Progress), GRM-3551 (Scheduled)").
   Do NOT create individual rows per GRM ticket. Do NOT repeat full Jira summaries.
 - When the same GRM appears in Slack/GRM calendar and Jira, prefer the compact Jira summary row (not duplicate calendar + jira rows).
-- Outlook: ONLY include pending/unread emails for NOC DL-NOC or NOC team members (already filtered server-side). At most ONE grouped row (source = "Outlook", service_or_topic = "DL-NOC pending", summary = count + subject lines). action_item = what NOC must still do. Omit read/non-NOC email.
+- Outlook: server-side data lists emails sent To/Cc NOC team members (read or unread). Do NOT add Outlook rows in JSON — they are injected after Bedrock with clickable links. Omit Outlook from your rows array.
 - Keep summaries and action items short and actionable.
 - If no items for a source, omit rows for that source (do not fabricate).
 - Merge duplicate PD+Slack references to the same incident into one row when possible.
@@ -1870,6 +2045,8 @@ def _normalize_rows(data: dict[str, Any]) -> tuple[str, list[dict[str, str]]]:
 
 def _outlook_owner_group_key(row: dict[str, str]) -> str | None:
     if (row.get("source") or "").strip().lower() != "outlook":
+        return None
+    if row.get("outlook_url"):
         return None
     owner = (row.get("owner") or "").strip()
     if not owner or owner == "—":
@@ -2163,7 +2340,7 @@ def _ensure_jira_grm_summary_rows(
 def _ensure_outlook_email_rows(
     rows: list[dict[str, str]], outlook_raw: str, window: ShiftWindow
 ) -> list[dict[str, str]]:
-    """One grouped row for pending DL-NOC / NOC team Outlook items."""
+    """One row per email sent To/Cc a NOC team member, with Outlook deep link."""
     try:
         data = json.loads(outlook_raw)
     except json.JSONDecodeError:
@@ -2174,45 +2351,44 @@ def _ensure_outlook_email_rows(
 
     rows = [r for r in rows if (r.get("source") or "").strip().lower() != "outlook"]
 
-    pending = [
+    team_emails = [
         e for e in emails
-        if isinstance(e, dict) and e.get("noc_relevant") and e.get("pending")
+        if isinstance(e, dict) and e.get("sent_to_noc_member")
     ]
-    if not pending:
+    if not team_emails:
         return rows
 
-    noc_dl = (os.getenv("SHIFT_OUTLOOK_NOC_DL") or DEFAULT_SHIFT_OUTLOOK_NOC_DL).strip()
-    subjects: list[str] = []
+    def _received_sort_key(email: dict[str, Any]) -> str:
+        return str(email.get("receivedDateTime") or "")
+
     seen_subjects: set[str] = set()
-    for email in pending:
-        subj = str(email.get("subject") or "(no subject)").strip()[:100]
-        if subj.lower() not in seen_subjects:
-            seen_subjects.add(subj.lower())
-            subjects.append(subj)
+    for email in sorted(team_emails, key=_received_sort_key, reverse=True):
+        subject = str(email.get("subject") or "(no subject)").strip()[:200]
+        dedupe_key = f"{subject.lower()}|{email.get('receivedDateTime') or ''}"
+        if dedupe_key in seen_subjects:
+            continue
+        seen_subjects.add(dedupe_key)
 
-    summary = f"{len(pending)} pending for {noc_dl} — " + " · ".join(subjects[:4])
-    if len(subjects) > 4:
-        summary += f" (+{len(subjects) - 4} more)"
-    summary = summary[:200]
-
-    owners: list[str] = []
-    for email in pending:
-        owner = str(email.get("fromName") or email.get("from") or "").strip()
-        if owner and owner not in owners:
-            owners.append(owner)
-
-    rows.append(
-        {
-            "source": "Outlook",
-            "time_local": _outlook_time_local(pending[0], window.tz_name),
-            "priority": "P2" if any(str(e.get("importance") or "").lower() == "high" for e in pending) else "—",
-            "service_or_topic": f"{noc_dl} pending",
-            "status": "unread",
-            "summary": summary,
-            "action_item": "Review pending NOC DL email threads and assign follow-up",
-            "owner": owners[0][:200] if owners else noc_dl,
-        }
-    )
+        url = str(email.get("outlook_url") or "").strip()
+        recipient = str(email.get("noc_recipient") or "NOC team").strip()
+        is_unread = email.get("isRead") is False
+        rows.append(
+            {
+                "source": "Outlook",
+                "time_local": _outlook_time_local(email, window.tz_name),
+                "priority": (
+                    "P2"
+                    if str(email.get("importance") or "").lower() == "high"
+                    else "—"
+                ),
+                "service_or_topic": f"To: {recipient}"[:200],
+                "status": "unread" if is_unread else "read",
+                "summary": subject,
+                "action_item": "Open in Outlook" if url else "Review email thread",
+                "owner": str(email.get("fromName") or email.get("from") or "—")[:200],
+                "outlook_url": url,
+            }
+        )
     return rows
 
 
@@ -2336,7 +2512,24 @@ def _rows_to_html(summary: str, window: ShiftWindow, rows: list[dict[str, str]])
         bg = "#f8fafc" if idx % 2 == 0 else "#ffffff"
         cells = []
         for field in SHIFT_TABLE_FIELDS:
-            val = html_module.escape(row.get(field, ""))
+            raw_val = row.get(field, "")
+            outlook_url = str(row.get("outlook_url") or "").strip()
+            if field == "summary" and outlook_url:
+                url = html_module.escape(outlook_url, quote=True)
+                text = html_module.escape(raw_val or "Open email")
+                val = (
+                    f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+                    f'style="color:#2563eb;font-weight:600;text-decoration:underline;">{text}</a>'
+                )
+            elif field == "action_item" and outlook_url:
+                url = html_module.escape(outlook_url, quote=True)
+                text = html_module.escape(raw_val or "Open in Outlook")
+                val = (
+                    f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+                    f'style="color:#1e40af;font-weight:600;text-decoration:underline;">{text}</a>'
+                )
+            else:
+                val = html_module.escape(raw_val)
             style = f"padding:7px 10px;border:1px solid #e2e8f0;font-size:12px;vertical-align:top;background:{bg};"
             if field == "priority":
                 style += _priority_style(row.get(field, ""))

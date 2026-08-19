@@ -228,15 +228,65 @@ SAMSUNG_BOARD_KEYWORDS = (
     "external status samsung",
 )
 
+CAT_BOARD_KEYWORDS = (
+    "cat pagerduty",
+    "pagerduty cat",
+    "cat board",
+    "cat incidents",
+    "cat status dashboard",
+    "external status cat",
+)
+
+COMCAST_BOARD_KEYWORDS = (
+    "comcast pagerduty",
+    "pagerduty comcast",
+    "comcast board",
+    "comcast incidents",
+    "comcast status dashboard",
+    "external status comcast",
+)
+
+_PARTNER_BOARD_META: dict[str, dict[str, Any]] = {
+    "samsung": {
+        "label": "Samsung",
+        "env": "SAMSUNG_STATUS_DASHBOARD_ID",
+        "default_id": "PRBJIO4",
+        "gradient": "linear-gradient(135deg,#06b6d4 0%,#3b82f6 100%)",
+        "keywords": SAMSUNG_BOARD_KEYWORDS,
+        "token": "samsung",
+    },
+    "cat": {
+        "label": "CAT",
+        "env": "CAT_STATUS_DASHBOARD_ID",
+        "default_id": "",
+        "gradient": "linear-gradient(135deg,#ea580c 0%,#c2410c 100%)",
+        "keywords": CAT_BOARD_KEYWORDS,
+        "token": "cat",
+    },
+    "comcast": {
+        "label": "Comcast",
+        "env": "COMCAST_STATUS_DASHBOARD_ID",
+        "default_id": "",
+        "gradient": "linear-gradient(135deg,#7c3aed 0%,#5b21b6 100%)",
+        "keywords": COMCAST_BOARD_KEYWORDS,
+        "token": "comcast",
+    },
+}
+
+
+def _default_partner_dashboard_id(partner: str) -> str:
+    meta = _PARTNER_BOARD_META[partner]
+    value = os.getenv(meta["env"])
+    if value is None:
+        return str(meta["default_id"] or "")
+    text = str(value).strip()
+    if not text or text.lower() in ("off", "false", "no", "0", "none", "*"):
+        return str(meta["default_id"] or "")
+    return text
+
 
 def _default_samsung_dashboard_id() -> str:
-    v = os.getenv("SAMSUNG_STATUS_DASHBOARD_ID")
-    if v is None:
-        return "PRBJIO4"
-    s = str(v).strip()
-    if not s or s.lower() in ("off", "false", "no", "0", "none", "*"):
-        return "PRBJIO4"
-    return s
+    return _default_partner_dashboard_id("samsung")
 
 
 def _external_status_url(dashboard_id: str, tab: str = "active") -> str:
@@ -247,15 +297,29 @@ def _external_status_url(dashboard_id: str, tab: str = "active") -> str:
     return base
 
 
-def is_pagerduty_samsung_board_question(question: str) -> bool:
+def is_pagerduty_partner_board_question(partner: str, question: str) -> bool:
     if not (question or "").strip():
         return False
+    meta = _PARTNER_BOARD_META[partner]
     ql = question.lower()
-    if "samsung" not in ql:
+    token = str(meta["token"])
+    if token not in ql:
         return False
-    return any(kw in ql for kw in SAMSUNG_BOARD_KEYWORDS) or (
-        "pagerduty" in ql and "samsung" in ql
+    return any(kw in ql for kw in meta["keywords"]) or (
+        "pagerduty" in ql and token in ql
     )
+
+
+def is_pagerduty_samsung_board_question(question: str) -> bool:
+    return is_pagerduty_partner_board_question("samsung", question)
+
+
+def is_pagerduty_cat_board_question(question: str) -> bool:
+    return is_pagerduty_partner_board_question("cat", question)
+
+
+def is_pagerduty_comcast_board_question(question: str) -> bool:
+    return is_pagerduty_partner_board_question("comcast", question)
 
 
 def _filter_incident_rows(rows: list[dict], query: str) -> list[dict]:
@@ -309,28 +373,37 @@ def _incidents_table_html(title: str, rows: list[dict]) -> str:
     """
 
 
-def get_pagerduty_samsung_board_html(
+def get_pagerduty_partner_board_html(
+    partner: str,
     dashboard_id: str = "",
     query: str = "",
 ) -> str:
-    """MCP entry: scrape Samsung PagerDuty external status dashboard."""
-    bid = (dashboard_id or _default_samsung_dashboard_id()).strip()
+    """MCP entry: scrape a partner PagerDuty external status dashboard."""
+    meta = _PARTNER_BOARD_META[partner]
+    label = str(meta["label"])
+    bid = (dashboard_id or _default_partner_dashboard_id(partner)).strip()
+    if not bid:
+        return (
+            f"<p style='color:#dc2626;'>Set <code>{html_module.escape(str(meta['env']))}</code> "
+            f"for {html_module.escape(label)} PagerDuty external status board.</p>"
+        )
     try:
         payload = build_samsung_pagerduty_scrape_payload(bid)
     except Exception as exc:
-        logging.exception("Samsung PagerDuty scrape failed")
+        logging.exception("%s PagerDuty scrape failed", label)
         return (
-            f"<p style='color:#dc2626;'>Error scraping Samsung PagerDuty board "
+            f"<p style='color:#dc2626;'>Error scraping {html_module.escape(label)} PagerDuty board "
             f"{html_module.escape(bid)}: {html_module.escape(str(exc))}</p>"
         )
 
     active = _filter_incident_rows(payload.get("active") or [], query)
     resolved = _filter_incident_rows(payload.get("recently_resolved") or [], query)
     board_url = _external_status_url(bid, "active")
+    gradient = str(meta["gradient"])
 
     header = f"""
-    <div style='background:linear-gradient(135deg,#06b6d4 0%,#3b82f6 100%);padding:14px 16px;border-radius:8px;color:white;margin-bottom:12px;'>
-      <h2 style='margin:0;font-size:16px;'>Samsung PagerDuty External Status</h2>
+    <div style='background:{gradient};padding:14px 16px;border-radius:8px;color:white;margin-bottom:12px;'>
+      <h2 style='margin:0;font-size:16px;'>{html_module.escape(label)} PagerDuty External Status</h2>
       <p style='margin:6px 0 0;font-size:12px;opacity:0.95;'>
         Board <strong>{html_module.escape(bid)}</strong> ·
         triggered {int(payload.get('triggered') or 0)} ·
@@ -345,3 +418,24 @@ def get_pagerduty_samsung_board_html(
         + _incidents_table_html("Active / Ongoing", active)
         + _incidents_table_html("Recently resolved", resolved)
     )
+
+
+def get_pagerduty_samsung_board_html(
+    dashboard_id: str = "",
+    query: str = "",
+) -> str:
+    return get_pagerduty_partner_board_html("samsung", dashboard_id, query)
+
+
+def get_pagerduty_cat_board_html(
+    dashboard_id: str = "",
+    query: str = "",
+) -> str:
+    return get_pagerduty_partner_board_html("cat", dashboard_id, query)
+
+
+def get_pagerduty_comcast_board_html(
+    dashboard_id: str = "",
+    query: str = "",
+) -> str:
+    return get_pagerduty_partner_board_html("comcast", dashboard_id, query)

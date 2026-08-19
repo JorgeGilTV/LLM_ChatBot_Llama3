@@ -743,9 +743,13 @@ const MCP_TIMERANGE_TOOLS = new Set([
     'MCP:datadog_red_metrics',
     'MCP:datadog_red_adt',
     'MCP:datadog_red_samsung',
+    'MCP:datadog_red_cat',
+    'MCP:datadog_red_comcast',
     'MCP:datadog_red_metrics_us',
     'MCP:datadog_errors',
     'MCP:datadog_samsung_errors',
+    'MCP:datadog_cat_errors',
+    'MCP:datadog_comcast_errors',
     'MCP:datadog_failed_pods',
     'MCP:datadog_403_errors',
     'MCP:splunk_p0_streaming',
@@ -785,7 +789,8 @@ function splunkP0OnlyToolSelection(selectedTools) {
 function toolSelectionNeedsTimerange(selectedTools) {
     const legacy = [
         'DD_Red_Metrics', 'DD_Errors', 'DD_Red_ADT', 'DD_Red_Samsung',
-        'DD_Red_Metrics_US', 'DD_Samsung_Errors', 'DD_Failed_Pods', 'DD_403_Errors',
+        'DD_Red_CAT', 'DD_Red_Comcast',
+        'DD_Red_Metrics_US', 'DD_Samsung_Errors', 'DD_CAT_Errors', 'DD_Comcast_Errors', 'DD_Failed_Pods', 'DD_403_Errors',
         'P0_Streaming', 'P0_CVR_Streaming', 'P0_ADT_Streaming', 'P0_Streaming_US',
     ];
     if (legacy.some(function (t) { return selectedTools.includes(t); })) {
@@ -872,6 +877,34 @@ function renderToolCheckboxSections(container, sections, groupedTools, idPrefix)
     });
 }
 
+function pagerDutyToolsSelected(selectedTools) {
+    return selectedTools.some(function (t) {
+        return /^MCP:pagerduty_/i.test(t) || /^pagerduty_/i.test(t);
+    });
+}
+
+let pdUiShift = '';
+let pdUiMissingRca = false;
+
+function updatePagerDutyFiltersUi() {
+    const container = document.getElementById('pagerduty-filters-container');
+    const rcaBtn = document.getElementById('pd-ui-missing-rca-btn');
+    if (!container) return;
+    const checkboxes = document.querySelectorAll('input[type=checkbox][name=tool]:checked');
+    const selectedTools = Array.from(checkboxes).map(function (cb) { return cb.value; });
+    const show = pagerDutyToolsSelected(selectedTools);
+    container.style.display = show ? 'block' : 'none';
+    document.querySelectorAll('.pd-ui-shift-btn').forEach(function (btn) {
+        const active = btn.getAttribute('data-shift') === pdUiShift;
+        btn.style.background = active ? '#dbeafe' : '#fff';
+        btn.style.fontWeight = active ? '700' : '600';
+    });
+    if (rcaBtn) {
+        rcaBtn.style.background = pdUiMissingRca ? '#fef3c7' : '#fff';
+        rcaBtn.style.fontWeight = pdUiMissingRca ? '700' : '600';
+    }
+}
+
 // Function to show/hide timerange selector based on selected tools
 function setupTimeRangeSelector() {
     const timerangeContainer = document.getElementById('timerange-container');
@@ -886,6 +919,7 @@ function setupTimeRangeSelector() {
         if (timerangeContainer) {
             timerangeContainer.style.display = showTimeRange ? 'block' : 'none';
         }
+        updatePagerDutyFiltersUi();
 
         const p0Only = splunkP0OnlyToolSelection(selectedTools);
         const trSel = document.getElementById('timerange-select');
@@ -902,6 +936,20 @@ function setupTimeRangeSelector() {
     
     // Initial check
     updateTimeRangeVisibility();
+    const rcaBtn = document.getElementById('pd-ui-missing-rca-btn');
+    document.querySelectorAll('.pd-ui-shift-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const mode = btn.getAttribute('data-shift') || '';
+            pdUiShift = pdUiShift === mode ? '' : mode;
+            updatePagerDutyFiltersUi();
+        });
+    });
+    if (rcaBtn) {
+        rcaBtn.addEventListener('click', function () {
+            pdUiMissingRca = !pdUiMissingRca;
+            updatePagerDutyFiltersUi();
+        });
+    }
 }
 
 // Show spinner and counter while the query runs
@@ -1145,7 +1193,7 @@ const HOME_ENV_HUB_TIMERANGE = 24;
 const HOME_ENV_HUB_REFRESH_MS = 360000; // 6 minutes
 const HUB_SUMMARY_CACHE_TTL_MS = 350000; // slightly under 6 min home refresh
 /** Home index only: which hub cards to show (order preserved). */
-const HOME_ENV_HUB_SLUGS = ['production', 'samsung', 'adt'];
+const HOME_ENV_HUB_SLUGS = ['production', 'samsung', 'adt', 'cat', 'comcast'];
 
 function filterHomeEnvironmentHubEnvironments(envs) {
     const order = HOME_ENV_HUB_SLUGS;
@@ -3120,7 +3168,13 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ input: inputText, tools: selectedTools, timerange: timerange })
+            body: JSON.stringify({
+                input: inputText,
+                tools: selectedTools,
+                timerange: timerange,
+                pagerduty_shift: pdUiShift,
+                pagerduty_missing_rca: pdUiMissingRca,
+            })
         })
             .then(res => {
                 if (!res.ok) throw new Error(`Server error: ${res.status}`);

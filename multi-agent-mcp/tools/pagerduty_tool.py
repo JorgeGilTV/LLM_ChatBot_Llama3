@@ -4,6 +4,17 @@ import html
 from datetime import datetime, timedelta
 
 from tools.service_query import extract_service_name_from_query
+from tools.pagerduty_team import (
+    PAGERDUTY_SHIFTS,
+    enrich_incidents_custom_fields,
+    fetch_all_incidents,
+    fetch_incidents_touched_by_team,
+    incident_root_cause,
+    normalize_pagerduty_shift,
+    pagerduty_incidents_lookback_days,
+    pagerduty_shift_label,
+    pagerduty_user_ids_for_filter,
+)
 
 _PD_FUZZY_PART_BLOCKLIST = frozenset(
     {
@@ -72,17 +83,30 @@ def _incident_matches_service(incident: dict, service_name: str) -> bool:
     return False
 
 
-def get_pagerduty_incidents(query=""):
+def get_pagerduty_incidents(
+    query="",
+    shift: str = "",
+    team_only: bool = False,
+    missing_root_cause: bool = False,
+):
     """
     Fetches incidents from PagerDuty API
-    
+
     Args:
         query: Search string to filter incidents (service name, incident ID, etc.)
-    
+        shift: shift1 | shift2 | shift3 — filter to that shift's on-call crew
+        team_only: Legacy — when shift empty, union of all shift crews
+        missing_root_cause: When True, only incidents with empty root_cause custom field
+
     Returns:
         HTML formatted string with incident data
     """
-    print(f"🚨 Fetching PagerDuty incidents for: {query}")
+    active_shift = normalize_pagerduty_shift(shift)
+    filter_ids = pagerduty_user_ids_for_filter(active_shift or None, team_only=team_only)
+    print(
+        f"🚨 Fetching PagerDuty incidents for: {query!r} "
+        f"(shift={active_shift or 'all'}, missing_rca={missing_root_cause})"
+    )
     filter_service = extract_service_name_from_query(query)
     if (query or "").strip() and filter_service != (query or "").strip().lower():
         print(f"   → Service filter: {filter_service}")
@@ -102,49 +126,32 @@ def get_pagerduty_incidents(query=""):
     # API endpoint for incidents
     url = "https://api.pagerduty.com/incidents"
     
-    # Add date range filter (last 7 days)
-    since = (datetime.utcnow() - timedelta(days=7)).isoformat()
+    # Date range (default 15 days — PAGERDUTY_INCIDENTS_LOOKBACK_DAYS)
+    lookback_days = pagerduty_incidents_lookback_days()
+    since = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
     
     try:
-        # Fetch ALL incidents using pagination
-        all_incidents = []
-        offset = 0
-        limit = 100
-        more = True
-        
-        while more:
-            params = {
-                "sort_by": "created_at:desc",
-                "limit": limit,
-                "offset": offset,
-                "statuses[]": ["triggered", "acknowledged", "resolved"],
-                "since": since
-            }
+        if filter_ids:
+            shift_label = pagerduty_shift_label(active_shift) if active_shift else "all shifts"
+            all_incidents = fetch_incidents_touched_by_team(
+                api_token, days=lookback_days, user_ids=filter_ids
+            )
+            print(
+                f"✅ PagerDuty ({shift_label}): "
+                f"{len(all_incidents)} incident(s) touched in last {lookback_days} days"
+            )
+        else:
+            all_incidents = fetch_all_incidents(api_token, days=lookback_days)
+            print(f"✅ Fetched {len(all_incidents)} total incidents from PagerDuty ({lookback_days}d)")
 
-            response = requests.get(url, headers=headers, params=params, timeout=15)
-            
-            if response.status_code != 200:
-                return f"<p style='color: #f56565;'>⚠️ PagerDuty API Error {response.status_code}: {response.reason}</p>"
-            
-            data = response.json()
-            batch_incidents = data.get("incidents", [])
-            all_incidents.extend(batch_incidents)
-            
-            # Check if there are more incidents to fetch
-            more = data.get("more", False)
-            offset += limit
-            
-            # Continue fetching all incidents without artificial limits
-            if offset >= 10000:  # Safety limit to prevent truly infinite loops
-                print(f"⚠️ Reached safety limit of 10000 incidents")
-                break
-        
-        filter_service = extract_service_name_from_query(query)
+        all_incidents = enrich_incidents_custom_fields(api_token, all_incidents)
+
         incidents = all_incidents
-        print(f"✅ Fetched {len(incidents)} total incidents from PagerDuty")
-
+        if missing_root_cause:
+            incidents = [i for i in incidents if not incident_root_cause(i)[0]]
+            print(f"🔍 Missing root cause filter: {len(incidents)} incident(s)")
         if filter_service:
-            incidents = [i for i in all_incidents if _incident_matches_service(i, filter_service)]
+            incidents = [i for i in incidents if _incident_matches_service(i, filter_service)]
             print(
                 f"🔍 Display filter for service '{filter_service}': "
                 f"{len(incidents)} of {len(all_incidents)} incidents"
@@ -155,7 +162,7 @@ def get_pagerduty_incidents(query=""):
                 return (
                     f"<p style='color: #fbbf24;'>ℹ️ No incidents matched service "
                     f"<strong>{html.escape(filter_service)}</strong> "
-                    f"(searched {len(all_incidents)} incidents in the last 7 days).</p>"
+                    f"(searched {len(all_incidents)} incidents in the last {lookback_days} days).</p>"
                 )
             return f"<p style='color: #fbbf24;'>ℹ️ No incidents found{' for: <strong>' + html.escape(query) + '</strong>' if query else ''}.</p>"
         
@@ -180,7 +187,48 @@ def get_pagerduty_incidents(query=""):
                 pass
         
         # Build HTML output with summary
-        html_output = f"<h2 style='color: #10b981;'>🚨 PagerDuty Alerts - Last 7 Days</h2>"
+        safe_query = html.escape(query or "")
+        safe_shift = html.escape(active_shift)
+        shift_buttons = ""
+        for mode in PAGERDUTY_SHIFTS:
+            label = pagerduty_shift_label(mode)
+            on = active_shift == mode
+            shift_buttons += (
+                f"<button type='button' class='pd-filter-btn{' pd-filter-btn--on' if on else ''}' "
+                f"data-pd-filter='{mode}' style='padding:6px 12px;border-radius:6px;border:1px solid #cbd5e0;"
+                f"background:{'#dbeafe' if on else '#fff'};cursor:pointer;font-size:12px;font-weight:600;'>"
+                f"👥 {html.escape(label)}</button>"
+            )
+        html_output = f"""<div class="pd-query-wrap" data-pd-query="{safe_query}" data-pd-shift="{safe_shift}">
+        <div class="pd-query-toolbar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px 0;">
+            {shift_buttons}
+            <button type="button" class="pd-filter-btn{' pd-filter-btn--on' if missing_root_cause else ''}" data-pd-filter="missing_rca" style="padding:6px 12px;border-radius:6px;border:1px solid #cbd5e0;background:{'#fef3c7' if missing_root_cause else '#fff'};cursor:pointer;font-size:12px;font-weight:600;">
+                ⚠️ Missing root cause
+            </button>
+            <span style="font-size:11px;color:#64748b;">Shift = crew filter · click again to show all · last {lookback_days} days</span>
+        </div>
+        <div id="pd-query-results">"""
+        html_output += f"<h2 style='color: #10b981;'>🚨 PagerDuty Alerts - Last {lookback_days} Days</h2>"
+        if active_shift:
+            html_output += (
+                f"<p style='margin: 0 0 8px 0; font-size: 12px; color: #64748b;'>"
+                f"Showing incidents touched by <strong>{html.escape(pagerduty_shift_label(active_shift))}</strong></p>"
+            )
+        elif team_only and filter_ids:
+            html_output += (
+                f"<p style='margin: 0 0 8px 0; font-size: 12px; color: #64748b;'>"
+                f"Showing incidents touched by <strong>any configured shift crew</strong></p>"
+            )
+        else:
+            html_output += (
+                "<p style='margin: 0 0 8px 0; font-size: 12px; color: #64748b;'>"
+                "Showing <strong>all account</strong> incidents</p>"
+            )
+        if missing_root_cause:
+            html_output += (
+                "<p style='margin: 0 0 8px 0; font-size: 12px; color: #b45309;'>"
+                "Filtered to incidents <strong>without</strong> Root cause filled</p>"
+            )
         html_output += f"<div style='background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>"
         html_output += f"<h3 style='margin: 0 0 10px 0;'>📊 Summary</h3>"
         if filter_service:
@@ -188,7 +236,7 @@ def get_pagerduty_incidents(query=""):
                 f"<p style='margin: 5px 0; font-size: 12px; color: #64748b;'>"
                 f"Showing <strong>{len(incidents)}</strong> incident(s) for "
                 f"<strong>{html.escape(filter_service)}</strong> "
-                f"(from {len(all_incidents)} fetched in last 7 days)</p>"
+                f"(from {len(all_incidents)} fetched in last {lookback_days} days)</p>"
             )
         html_output += f"<p style='margin: 5px 0;'><strong>Total Incidents:</strong> {len(incidents)}</p>"
         html_output += f"<p style='margin: 5px 0; color: #ef4444;'><strong>🔴 Triggered:</strong> {len(triggered)}</p>"
@@ -223,7 +271,8 @@ def get_pagerduty_incidents(query=""):
                     <th style='padding: 10px; text-align: left;'>Service</th>
                     <th style='padding: 10px; text-align: left;'>Urgency</th>
                     <th style='padding: 10px; text-align: left;'>Created</th>
-                    <th style='padding: 10px; text-align: left;'>Assigned To</th>
+                    <th style='padding: 10px; text-align: left;'>NOC Team</th>
+                    <th style='padding: 10px; text-align: left;'>Root Cause</th>
                 </tr>
             </thead>
             <tbody>
@@ -257,12 +306,27 @@ def get_pagerduty_incidents(query=""):
             except:
                 created_str = created_at
             
-            # Get assigned user
-            assignments = incident.get("assignments", [])
-            if assignments:
-                assignee = html.escape(assignments[0].get("assignee", {}).get("summary", "Unassigned"))
+            # NOC team member(s) who touched this incident (team mode) or current assignee
+            touched = incident.get("_team_touched_by") or []
+            if touched:
+                assignee = html.escape(", ".join(touched))
             else:
-                assignee = "Unassigned"
+                assignments = incident.get("assignments", [])
+                if assignments:
+                    assignee = html.escape(
+                        assignments[0].get("assignee", {}).get("summary", "Unassigned")
+                    )
+                else:
+                    assignee = "—"
+
+            has_rca, rca_text = incident_root_cause(incident)
+            if has_rca:
+                rca_cell = (
+                    f"<span style='color:#166534;font-weight:600;' title='{html.escape(rca_text)}'>"
+                    f"✅ {html.escape(rca_text[:80])}{'…' if len(rca_text) > 80 else ''}</span>"
+                )
+            else:
+                rca_cell = "<span style='color:#b45309;font-weight:600;'>⚠️ Empty</span>"
             
             # Create incident URL
             incident_url = incident.get("html_url", "#")
@@ -288,12 +352,72 @@ def get_pagerduty_incidents(query=""):
                     </td>
                     <td style='padding: 8px; white-space: nowrap;'>{created_str}</td>
                     <td style='padding: 8px;'>{assignee}</td>
+                    <td style='padding: 8px; max-width: 220px;'>{rca_cell}</td>
                 </tr>
             """
         
         html_output += """
             </tbody>
         </table>
+        </div>
+        </div>
+        <script>
+        (function () {
+            const wrap = document.currentScript && document.currentScript.previousElementSibling;
+            const root = wrap && wrap.classList && wrap.classList.contains('pd-query-wrap')
+                ? wrap
+                : document.querySelector('.pd-query-wrap:last-of-type');
+            if (!root) return;
+            let pdShift = root.getAttribute('data-pd-shift') || '';
+            let missingRca = """ + ("true" if missing_root_cause else "false") + """;
+            const q = root.getAttribute('data-pd-query') || '';
+            function reloadPd() {
+                const params = new URLSearchParams({
+                    query: q,
+                    shift: pdShift || '',
+                    missing_rca: missingRca ? '1' : '0',
+                });
+                fetch('/api/pagerduty/incidents?' + params.toString())
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.error) throw new Error(data.error);
+                        const results = document.getElementById('pd-query-results');
+                        if (results && data.html) {
+                            const tmp = document.createElement('div');
+                            tmp.innerHTML = data.html;
+                            const fresh = tmp.querySelector('#pd-query-results');
+                            if (fresh) {
+                                results.innerHTML = fresh.innerHTML;
+                            }
+                            const outer = tmp.querySelector('.pd-query-wrap');
+                            if (outer) {
+                                pdShift = outer.getAttribute('data-pd-shift') || '';
+                                root.setAttribute('data-pd-shift', pdShift);
+                            }
+                            tmp.querySelectorAll('script').forEach(function (oldScript) {
+                                const s = document.createElement('script');
+                                if (oldScript.textContent) s.textContent = oldScript.textContent;
+                                document.body.appendChild(s);
+                                oldScript.remove();
+                            });
+                        }
+                    })
+                    .catch(function (e) { console.error('PagerDuty reload:', e); });
+            }
+            root.querySelectorAll('.pd-filter-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const f = btn.getAttribute('data-pd-filter');
+                    if (f === 'missing_rca') {
+                        missingRca = !missingRca;
+                    } else if (f && f.indexOf('shift') === 0) {
+                        pdShift = pdShift === f ? '' : f;
+                        root.setAttribute('data-pd-shift', pdShift);
+                    }
+                    reloadPd();
+                });
+            });
+        })();
+        </script>
         """
         
         return html_output

@@ -92,7 +92,7 @@ ENGINEERING_COLUMN_SLUGS_ADT: tuple[tuple[str, ...], ...] = (
 def engineering_column_layout(dd_env: str = "") -> list[list[str]]:
     """Return column slug lists for the Status Wall frontend."""
     env = (dd_env or "").strip()
-    if env == "adt_prod":
+    if env in ("adt_prod", "cat_prod", "comcast_prod"):
         return [list(col) for col in ENGINEERING_COLUMN_SLUGS_ADT]
     return [list(col) for col in ENGINEERING_COLUMN_SLUGS]
 
@@ -100,6 +100,8 @@ def engineering_column_layout(dd_env: str = "") -> list[list[str]]:
 # DD envs that use the org Status Wall engineering mosaic (team blocks + column layout).
 ENGINEERING_WALL_DD_ENVS: tuple[str, ...] = (
     "adt_prod",
+    "cat_prod",
+    "comcast_prod",
     "production",
     "goldendev",
     "goldenqa",
@@ -676,6 +678,8 @@ def merge_engineering_wall_statuses(
 _ORG_WALL_LEGACY_LIST_BY_ENV: dict[str, Path] = {
     "production": _REPO_ROOT / "lists" / "production_apm_127.txt",
     "adt_prod": _REPO_ROOT / "lists" / "adt_apm_services.txt",
+    "cat_prod": _REPO_ROOT / "lists" / "cat_apm_services.txt",
+    "comcast_prod": _REPO_ROOT / "lists" / "comcast_apm_services.txt",
 }
 
 
@@ -1137,6 +1141,8 @@ def load_bundled_lists_union() -> list[str]:
     names: list[str] = []
     for fname in (
         "adt_apm_services.txt",
+        "cat_apm_services.txt",
+        "comcast_apm_services.txt",
         "production_apm_127.txt",
         "samsung_apm_services.txt",
         "goldendev_apm_services.txt",

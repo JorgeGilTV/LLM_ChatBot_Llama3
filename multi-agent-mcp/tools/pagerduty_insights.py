@@ -4,7 +4,14 @@ import json
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-def get_pagerduty_insights(query=""):
+from tools.pagerduty_team import (
+    fetch_incidents_touched_by_team,
+    normalize_pagerduty_shift,
+    pagerduty_shift_label,
+    pagerduty_user_ids_for_filter,
+)
+
+def get_pagerduty_insights(query="", shift: str = "", team_only: bool = False):
     """
     Fetches incident activity insights from PagerDuty API
     
@@ -37,44 +44,52 @@ def get_pagerduty_insights(query=""):
     until = end_time.isoformat() + "Z"
     
     try:
-        # Get ALL incidents for analysis using pagination
         incidents_url = "https://api.pagerduty.com/incidents"
-        all_incidents = []
-        offset = 0
-        limit = 100
-        more = True
-        
-        while more:
-            incidents_params = {
-                "since": since,
-                "until": until,
-                "limit": limit,
-                "offset": offset,
-                "total": "true",
-                "time_zone": "UTC"
-            }
-            
-            incidents_response = requests.get(incidents_url, headers=headers, params=incidents_params, timeout=15)
-            
-            if incidents_response.status_code != 200:
-                return f"<p style='color: #f56565;'>⚠️ PagerDuty API Error {incidents_response.status_code}: {incidents_response.reason}</p>"
-            
-            incidents_data = incidents_response.json()
-            batch_incidents = incidents_data.get("incidents", [])
-            all_incidents.extend(batch_incidents)
-            
-            # Check if there are more incidents to fetch
-            more = incidents_data.get("more", False)
-            offset += limit
-            
-            # Continue fetching all incidents without artificial limits
-            if offset >= 10000:  # Safety limit to prevent truly infinite loops
-                print(f"⚠️ PagerDuty Insights: Reached safety limit of 10000 incidents")
-                break
-        
-        incidents = all_incidents
-        total_count = len(incidents)
-        print(f"✅ PagerDuty Insights: Fetched {total_count} total incidents")
+        active_shift = normalize_pagerduty_shift(shift)
+        filter_ids = pagerduty_user_ids_for_filter(active_shift or None, team_only=team_only)
+        if filter_ids:
+            days = 30
+            incidents = fetch_incidents_touched_by_team(
+                api_token, days=days, user_ids=filter_ids
+            )
+            total_count = len(incidents)
+            label = pagerduty_shift_label(active_shift) if active_shift else "all shifts"
+            print(f"✅ PagerDuty Insights ({label}): {total_count} incident(s) touched in last {days} days")
+        else:
+            all_incidents = []
+            offset = 0
+            limit = 100
+            more = True
+
+            while more:
+                incidents_params = {
+                    "since": since,
+                    "until": until,
+                    "limit": limit,
+                    "offset": offset,
+                    "total": "true",
+                    "time_zone": "UTC"
+                }
+
+                incidents_response = requests.get(incidents_url, headers=headers, params=incidents_params, timeout=15)
+
+                if incidents_response.status_code != 200:
+                    return f"<p style='color: #f56565;'>⚠️ PagerDuty API Error {incidents_response.status_code}: {incidents_response.reason}</p>"
+
+                incidents_data = incidents_response.json()
+                batch_incidents = incidents_data.get("incidents", [])
+                all_incidents.extend(batch_incidents)
+
+                more = incidents_data.get("more", False)
+                offset += limit
+
+                if offset >= 10000:
+                    print(f"⚠️ PagerDuty Insights: Reached safety limit of 10000 incidents")
+                    break
+
+            incidents = all_incidents
+            total_count = len(incidents)
+            print(f"✅ PagerDuty Insights: Fetched {total_count} total incidents")
         
         # Get services list for additional context
         services_url = "https://api.pagerduty.com/services"
@@ -173,8 +188,21 @@ def get_pagerduty_insights(query=""):
         hours_data = [hour_counts.get(h, 0) for h in range(24)]
         
         # Build HTML output
+        team_note = ""
+        if active_shift:
+            team_note = (
+                f"<p style='margin: 0 0 15px 0; font-size: 13px; color: #64748b;'>"
+                f"Filtered to <strong>{pagerduty_shift_label(active_shift)}</strong> "
+                f"(incidents touched by that shift crew)</p>"
+            )
+        elif team_only and filter_ids:
+            team_note = (
+                "<p style='margin: 0 0 15px 0; font-size: 13px; color: #64748b;'>"
+                "Filtered to <strong>any configured shift crew</strong></p>"
+            )
         html_output = f"""
         <h2 style='color: #8b5cf6;'>🔍 PagerDuty Insights - Incident Activity Report</h2>
+        {team_note}
         
         <div style='background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); padding: 25px; border-radius: 12px; margin-bottom: 25px; color: white;'>
             <h3 style='margin: 0 0 20px 0; color: white;'>📊 Key Insights (Last 30 Days)</h3>

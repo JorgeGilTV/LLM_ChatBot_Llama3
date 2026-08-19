@@ -77,6 +77,10 @@ def _sm_infer_service_region(svc: dict, *, page_environment: str | None = None) 
         "adt_prod",
         "samsung",
         "samsung_prod",
+        "cat",
+        "cat_prod",
+        "comcast",
+        "comcast_prod",
     )
 
     def _default_unknown() -> str:
@@ -437,8 +441,8 @@ def _apm_status_wall_attach_eks(dd_env: str = "") -> bool:
     v = (os.getenv("APM_STATUS_WALL_ATTACH_EKS") or "1").strip().lower()
     if v in ("0", "false", "no", "off"):
         return False
-    # ADT wall is single-region (Oregon); per-tile EKS fan-out adds minutes and causes 504/timeouts.
-    if (dd_env or "").strip() == "adt_prod":
+    # Partner prod walls are single-region (Oregon); per-tile EKS fan-out adds minutes and causes 504/timeouts.
+    if (dd_env or "").strip() in ("adt_prod", "cat_prod", "comcast_prod"):
         return False
     return v in ("1", "true", "yes", "on", "")
 
@@ -1939,6 +1943,8 @@ _EKS_ENV_TAG_VARIANTS = {
     "qa": ["qa"],
     "samsung_prod": ["samsung_prod", "production", "prod"],
     "adt_prod": ["adt_prod"],
+    "cat_prod": ["cat_prod"],
+    "comcast_prod": ["comcast_prod"],
 }
 
 
@@ -2118,16 +2124,20 @@ HUB_ENV_ROWS = [
     {"slug": "qa", "label": "QA", "href": "/statusmonitor/qa", "mode": "qa"},
     {"slug": "samsung", "label": "Samsung", "href": "/statusmonitor/samsung", "mode": "samsung"},
     {"slug": "adt", "label": "ADT", "href": "/statusmonitor/adt", "mode": "adt"},
+    {"slug": "cat", "label": "CAT", "href": "/statusmonitor/cat", "mode": "cat"},
+    {"slug": "comcast", "label": "Comcast", "href": "/statusmonitor/comcast", "mode": "comcast"},
     {"slug": "redmetrics-us", "label": "RED Metrics US", "href": "/statusmonitor/redmetrics-us", "mode": "redmetrics-us"},
 ]
 
-# Home + hub cards for Production/Samsung/ADT use the same APM Status Wall pipeline
+# Home + hub cards for Production/Samsung/ADT/CAT/Comcast use the same APM Status Wall pipeline
 # (service scope, idle→green normalization, overall rollup) so colors match /apm-services.
-HUB_WALL_ALIGNED_SLUGS = frozenset({"production", "samsung", "adt"})
+HUB_WALL_ALIGNED_SLUGS = frozenset({"production", "samsung", "adt", "cat", "comcast"})
 HUB_SLUG_TO_WALL_DD_ENV = {
     "production": "production",
     "samsung": "samsung_prod",
     "adt": "adt_prod",
+    "cat": "cat_prod",
+    "comcast": "comcast_prod",
 }
 
 # Full-screen wall: fixed section order (not the same as hub card order).
@@ -2135,6 +2145,8 @@ WALL_DISPLAY_GROUPS = [
     {"mode": "production", "slug": "production", "label": "Production"},
     {"mode": "adt", "slug": "adt", "label": "ADT"},
     {"mode": "samsung", "slug": "samsung", "label": "Samsung specific services"},
+    {"mode": "cat", "slug": "cat", "label": "CAT"},
+    {"mode": "comcast", "slug": "comcast", "label": "Comcast"},
     {"mode": "goldenqa", "slug": "goldenqa", "label": "GoldenQA"},
     {"mode": "goldendev", "slug": "goldendev", "label": "GoldenDev"},
     {"mode": "qa", "slug": "qa", "label": "QA"},
@@ -2182,6 +2194,10 @@ def _sm_bundled_status_monitor_service_list(environment: str) -> list | None:
         path = _bundled_goldenqa_apm_path()
     elif e == "adt":
         path = _bundled_adt_apm_path()
+    elif e == "cat":
+        path = _bundled_cat_apm_path()
+    elif e == "comcast":
+        path = _bundled_comcast_apm_path()
     elif e == "samsung":
         path = _bundled_samsung_apm_path()
     elif e == "qa":
@@ -2228,6 +2244,8 @@ def _sm_page_environment_to_wall_dd_env(environment: str | None) -> str | None:
         "goldendev": "goldendev",
         "goldenqa": "goldenqa",
         "adt": "adt_prod",
+        "cat": "cat_prod",
+        "comcast": "comcast_prod",
         "samsung": "samsung_prod",
         "qa": "qa",
     }.get(e)
@@ -2423,6 +2441,10 @@ def _sm_resolve_services_and_environments(environment):
         return b, [environment]
     if b is not None and environment == "adt":
         return b, ["adt_prod"]
+    if b is not None and environment == "cat":
+        return b, ["cat_prod"]
+    if b is not None and environment == "comcast":
+        return b, ["comcast_prod"]
     if b is not None and environment == "samsung":
         return b, [_sm_wall_dd_env_to_dd_tag("samsung_prod")]
     if environment == "samsung":
@@ -2437,6 +2459,16 @@ def _sm_resolve_services_and_environments(environment):
         dynamic_services = get_services_from_dashboard("cum-ivw-92c", cache_key="adt_dashboard_v2")
         services = dynamic_services if dynamic_services else list(ADT_MONITOR_SERVICES)
         return services, ["adt_prod"]
+    if environment == "cat":
+        services, _src = resolve_software_catalog_wall_service_names("cat_prod")
+        if services:
+            return services, ["cat_prod"]
+        return list(ADT_MONITOR_SERVICES), ["cat_prod"]
+    if environment == "comcast":
+        services, _src = resolve_software_catalog_wall_service_names("comcast_prod")
+        if services:
+            return services, ["comcast_prod"]
+        return list(ADT_MONITOR_SERVICES), ["comcast_prod"]
     if environment == "redmetrics-us":
         dynamic_services = get_services_from_dashboard("qiz-7xc-fqr", cache_key="redmetrics_us_dashboard")
         services = dynamic_services if dynamic_services else list(GENERAL_MONITOR_SERVICES)
@@ -2638,6 +2670,8 @@ _PD_STREAMING_EP_SVC_RULES = (
     ("cvr", "cvr"),
     ("adt", "adt"),
     ("samsung", "samsung"),
+    ("cat", "cat"),
+    ("comcast", "comcast"),
 )
 
 
@@ -2832,6 +2866,10 @@ def _sm_apply_pagerduty_correlation(
                     )
                 elif "adt" in title or "adt" in service_summary or "partnerprod" in title or "partnerprod" in service_summary:
                     detected_environments.append("adt_prod")
+                elif "comcast" in title or "comcast" in service_summary:
+                    detected_environments.append("comcast_prod")
+                elif re.search(r"\bcat\b", title) or re.search(r"\bcat\b", service_summary):
+                    detected_environments.append("cat_prod")
             if not detected_environments:
                 detected_environments = environments.copy()
             matched_services = []
@@ -3700,7 +3738,7 @@ def status_monitor_wall_data(timerange: int = 1, force_refresh: bool = False) ->
             overall = "healthy"
 
         ser = [_wall_serialize_status(s, dd_site, mode, timerange) for s in statuses]
-        if mode in ("adt", "samsung"):
+        if mode in ("adt", "samsung", "cat", "comcast"):
             region_columns = [
                 {
                     "key": "oregon_all",
@@ -3764,7 +3802,7 @@ def _software_catalog_fallback_service_names() -> list:
 def _software_catalog_wall_use_dd_apm_list(dd_env: str) -> bool:
     """Use GET /api/v2/apm/services?filter[env]=… (same source as Datadog Software UI)."""
     env = (dd_env or "").strip()
-    if env not in ("production", "adt_prod"):
+    if env not in SOFTWARE_CATALOG_WALL_APM_ENVS:
         return False
     raw = (os.getenv("SOFTWARE_CATALOG_WALL_DD_APM_LIST") or "").strip().lower()
     if raw in ("0", "false", "no", "off"):
@@ -4030,6 +4068,24 @@ def _bundled_adt_apm_path() -> str:
     )
 
 
+def _bundled_cat_apm_path() -> str:
+    """Path to committed list of APM `service` names for env:cat_prod (CAT)."""
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "lists", "cat_apm_services.txt"
+        )
+    )
+
+
+def _bundled_comcast_apm_path() -> str:
+    """Path to committed list of APM `service` names for env:comcast_prod (Comcast)."""
+    return os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "lists", "comcast_apm_services.txt"
+        )
+    )
+
+
 def _bundled_qa_apm_path() -> str:
     """Path to committed list of APM `service` names for env:qa."""
     return os.path.normpath(
@@ -4076,6 +4132,8 @@ SOFTWARE_CATALOG_WALL_APM_ENVS: tuple[str, ...] = (
     "production",
     "samsung_prod",
     "adt_prod",
+    "cat_prod",
+    "comcast_prod",
 )
 
 # APM Golden tab only: goldendev then goldenqa.
@@ -4091,6 +4149,8 @@ def _apm_wall_group_label(dd_env: str) -> str:
         "production": "Production",
         "samsung_prod": "Samsung",
         "adt_prod": "ADT",
+        "cat_prod": "CAT",
+        "comcast_prod": "Comcast",
         "qa": "QA",
         "goldendev": "Golden dev",
         "goldenqa": "Golden QA",
@@ -4130,6 +4190,10 @@ def normalize_software_catalog_wall_dd_env(raw: str | None) -> str:
         return "qa"
     if s in ("samsung", "samsung_prod", "samsung-prod", "samsungprod"):
         return "samsung_prod"
+    if s in ("cat", "cat_prod", "cat-prod", "catprod"):
+        return "cat_prod"
+    if s in ("comcast", "comcast_prod", "comcast-prod", "comcastprod"):
+        return "comcast_prod"
     if s in ("golden", "golden_tab", "golden-envs", "golden_envs"):
         return "golden"
     return "production"
@@ -4193,7 +4257,7 @@ def resolve_software_catalog_wall_service_names(
     dd_api = os.getenv("DATADOG_API_KEY")
     dd_app = os.getenv("DATADOG_APP_KEY")
     dd_site = os.getenv("DATADOG_SITE", "arlo.datadoghq.com")
-    if dd_api and dd_app and _dd_env in ("production", "adt_prod"):
+    if dd_api and dd_app and _software_catalog_wall_use_dd_apm_list(_dd_env):
         dd_apm = _resolve_software_catalog_wall_from_dd_apm(
             _dd_env, dd_api, dd_app, dd_site
         )
@@ -4348,6 +4412,38 @@ def resolve_software_catalog_wall_service_names(
                             deduped.append(n.strip())
                     return deduped, "bundled_adt"
 
+    if _dd_env == "cat_prod" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_CAT", "1").strip().lower() not in (
+        "0", "false", "no", "off",
+    )):
+        cat_p = _bundled_cat_apm_path()
+        if os.path.isfile(cat_p):
+            cnames: list = []
+            try:
+                with open(cat_p, encoding="utf-8") as f:
+                    cnames = [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith("#")]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {cat_p!r}: {e}")
+            else:
+                if cnames:
+                    print(f"🧭 Software catalog wall: {len(cnames)} service(s) from bundled cat_apm_services.txt")
+                    return sorted(set(cnames), key=str.lower), "bundled_cat"
+
+    if _dd_env == "comcast_prod" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_COMCAST", "1").strip().lower() not in (
+        "0", "false", "no", "off",
+    )):
+        comcast_p = _bundled_comcast_apm_path()
+        if os.path.isfile(comcast_p):
+            xnames: list = []
+            try:
+                with open(comcast_p, encoding="utf-8") as f:
+                    xnames = [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith("#")]
+            except OSError as e:
+                print(f"⚠️ APM wall bundled list {comcast_p!r}: {e}")
+            else:
+                if xnames:
+                    print(f"🧭 Software catalog wall: {len(xnames)} service(s) from bundled comcast_apm_services.txt")
+                    return sorted(set(xnames), key=str.lower), "bundled_comcast"
+
     if _dd_env == "qa" and (os.getenv("SOFTWARE_CATALOG_USE_BUNDLED_QA", "1").strip().lower() not in (
         "0",
         "false",
@@ -4455,6 +4551,16 @@ def resolve_software_catalog_wall_service_names(
         print(
             f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
             f"ADT+GENERAL union (fallback) — rellena o habilita lists/adt_apm_services.txt"
+        )
+    elif _dd_env == "cat_prod":
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback) — rellena o habilita lists/cat_apm_services.txt"
+        )
+    elif _dd_env == "comcast_prod":
+        print(
+            f"🧭 Software catalog wall: {len(fallback)} service(s) from built-in "
+            f"ADT+GENERAL union (fallback) — rellena o habilita lists/comcast_apm_services.txt"
         )
     elif _dd_env == "qa":
         print(

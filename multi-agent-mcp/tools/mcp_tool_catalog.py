@@ -44,9 +44,13 @@ MCP_TOOL_CATEGORIES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
             "datadog_red_metrics",
             "datadog_red_adt",
             "datadog_red_samsung",
+            "datadog_red_cat",
+            "datadog_red_comcast",
             "datadog_red_metrics_us",
             "datadog_errors",
             "datadog_samsung_errors",
+            "datadog_cat_errors",
+            "datadog_comcast_errors",
             "datadog_failed_pods",
             "datadog_403_errors",
         ),
@@ -81,6 +85,8 @@ MCP_TOOL_CATEGORIES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
             "pagerduty_analytics",
             "pagerduty_insights",
             "pagerduty_samsung_board",
+            "pagerduty_cat_board",
+            "pagerduty_comcast_board",
         ),
     ),
     (
@@ -144,9 +150,13 @@ MCP_TIMERANGE_TOOLS: frozenset[str] = frozenset(
         "datadog_red_metrics",
         "datadog_red_adt",
         "datadog_red_samsung",
+        "datadog_red_cat",
+        "datadog_red_comcast",
         "datadog_red_metrics_us",
         "datadog_errors",
         "datadog_samsung_errors",
+        "datadog_cat_errors",
+        "datadog_comcast_errors",
         "datadog_failed_pods",
         "datadog_403_errors",
         "splunk_p0_streaming",
@@ -232,11 +242,14 @@ def build_mcp_tool_arguments(
     user_query: str = "",
     timerange_hours: int = 4,
     service_filter: str = "",
+    pagerduty_filters: dict | None = None,
 ) -> dict:
     """Build MCP JSON args from GocView query + timerange selector."""
     q = (user_query or "").strip()
     svc = (service_filter or "").strip()
     tr = max(1, int(timerange_hours or 4))
+
+    pd = pagerduty_filters or {}
 
     if tool_name == "datadog_maintenance_windows":
         return {"question": q or "maintenance windows next 24 hours"}
@@ -269,12 +282,16 @@ def build_mcp_tool_arguments(
             "datadog_red_metrics",
             "datadog_red_adt",
             "datadog_red_samsung",
+            "datadog_red_cat",
+            "datadog_red_comcast",
             "datadog_red_metrics_us",
         ):
             return {"service": svc or q, "timerange": f"{tr}h"}
         if tool_name in (
             "datadog_errors",
             "datadog_samsung_errors",
+            "datadog_cat_errors",
+            "datadog_comcast_errors",
             "datadog_failed_pods",
             "datadog_403_errors",
         ):
@@ -286,8 +303,21 @@ def build_mcp_tool_arguments(
     if tool_name == "service_owners":
         return {"service": svc or q}
     if tool_name == "pagerduty_incidents":
-        return {"query": svc or q}
+        return {
+            "query": svc or q,
+            "shift": str(pd.get("shift") or "").strip().lower(),
+            "team_only": bool(pd.get("team_only")),
+            "missing_root_cause": bool(pd.get("missing_root_cause")),
+        }
+    if tool_name in ("pagerduty_analytics", "pagerduty_insights"):
+        return {
+            "query": svc or q,
+            "shift": str(pd.get("shift") or "").strip().lower(),
+            "team_only": bool(pd.get("team_only")),
+        }
     if tool_name == "pagerduty_samsung_board":
+        return {"query": q}
+    if tool_name in ("pagerduty_cat_board", "pagerduty_comcast_board"):
         return {"query": q}
     if tool_name == "arlo_public_status":
         return {"query": q}

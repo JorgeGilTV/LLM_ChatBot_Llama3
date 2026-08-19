@@ -34,6 +34,14 @@
           "description": "Get Datadog RED metrics for ADT dashboard"
         },
         {
+          "name": "datadog_red_cat",
+          "description": "Get Datadog RED metrics for CAT partner dashboard"
+        },
+        {
+          "name": "datadog_red_comcast",
+          "description": "Get Datadog RED metrics for Comcast partner dashboard"
+        },
+        {
           "name": "datadog_errors",
           "description": "Show services with errors"
         },

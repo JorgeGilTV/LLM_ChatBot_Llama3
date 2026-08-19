@@ -2282,12 +2282,14 @@ Guidelines:
 - For Confluence searches: use cql parameter on atlassian-rovo__searchConfluenceUsingCql
 - For Datadog service lookup: datadog_services + datadog_search with query=service name
 - For Datadog metrics/errors for one service: datadog_errors + datadog_red_metrics with service= name
-- For org-wide Datadog: datadog_red_metrics, datadog_red_adt, datadog_red_samsung, datadog_red_metrics_us, datadog_errors
+- For org-wide Datadog: datadog_red_metrics, datadog_red_adt, datadog_red_samsung, datadog_red_cat, datadog_red_comcast, datadog_red_metrics_us, datadog_errors
 - For Datadog maintenance windows / downtimes: use datadog_maintenance_windows with question
 - For GRM deployments / release calendar: use grm_deployments with question
 - For Arlo public status page (status.arlo.com): use arlo_public_status
 - For NOC KT / knowledge transfer table: use noc_kt_search with query
 - For Samsung PagerDuty external status board: use pagerduty_samsung_board
+- For CAT PagerDuty external status board: use pagerduty_cat_board
+- For Comcast PagerDuty external status board: use pagerduty_comcast_board
 - For shift handoff report: use shift_report with mode shift1|shift2|shift3 (slow, several minutes)
 - For status monitor hub / all environments health: use status_monitor_summary
 - For SHM / customer satisfaction / iOS Android app ratings / CSAT / NPS: use shm_metrics (NOT MintMCP amplitude__* tools). Data comes from shmview.arlocloud.com KPI history + Tableau.
@@ -2685,7 +2687,7 @@ Respond in JSON format with:
 Guidelines:
 - For Jira searches: use jql parameter like 'text ~ "keywords"' or 'summary ~ "keywords"'
 - For Confluence searches: use cql parameter
-- For Datadog metrics/dashboards: use datadog_red_metrics, datadog_red_samsung, datadog_red_metrics_us, datadog_errors
+- For Datadog metrics/dashboards: use datadog_red_metrics, datadog_red_samsung, datadog_red_cat, datadog_red_comcast, datadog_red_metrics_us, datadog_errors
 - For Datadog maintenance windows / downtimes: use datadog_maintenance_windows with question param
 - For GRM deployments / calendar: use grm_deployments with question param
 - For Arlo public status: use arlo_public_status

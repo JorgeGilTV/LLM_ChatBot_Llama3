@@ -104,6 +104,12 @@ from tools.read_versions import read_versions
 from tools.deployed_fw_versions import read_deployed_fw_versions
 from tools.deployments_calendar import get_grm_deployments
 from tools.datadog_dashboards import read_datadog_dashboards, read_datadog_errors_only, read_datadog_adt, read_datadog_adt_errors_only, read_datadog_samsung, read_datadog_samsung_errors_only, read_datadog_redmetrics_us, read_datadog_all_errors, read_datadog_failed_pods, read_datadog_403_errors, search_datadog_dashboards, search_datadog_services
+from tools.partner_monitor_tools import (
+    read_datadog_cat,
+    read_datadog_cat_errors_only,
+    read_datadog_comcast,
+    read_datadog_comcast_errors_only,
+)
 from tools.splunk_tool import (
     read_splunk_p0_dashboard,
     read_splunk_p0_cvr_dashboard,
@@ -143,9 +149,13 @@ TOOLS = {
     "DD_Red_Metrics": {"description": "List and search Datadog dashboards", "function": read_datadog_dashboards},
     "DD_Red_ADT": {"description": "Show RED Metrics - ADT dashboard from Datadog", "function": read_datadog_adt},
     "DD_Red_Samsung": {"description": "Show RED Metrics - Samsung network dashboard from Datadog", "function": read_datadog_samsung},
+    "DD_Red_CAT": {"description": "Show RED Metrics - CAT partner network dashboard from Datadog", "function": read_datadog_cat},
+    "DD_Red_Comcast": {"description": "Show RED Metrics - Comcast partner network dashboard from Datadog", "function": read_datadog_comcast},
     "DD_Red_Metrics_US": {"description": "Show RED Metrics - US region dashboard from Datadog", "function": read_datadog_redmetrics_us},
     "DD_Errors": {"description": "Show services with errors > 0 from RED Metrics & ADT dashboards", "function": read_datadog_all_errors},
     "DD_Samsung_Errors": {"description": "Show Samsung network services with errors > 0", "function": read_datadog_samsung_errors_only},
+    "DD_CAT_Errors": {"description": "Show CAT partner network services with errors > 0", "function": read_datadog_cat_errors_only},
+    "DD_Comcast_Errors": {"description": "Show Comcast partner network services with errors > 0", "function": read_datadog_comcast_errors_only},
     "DD_Failed_Pods": {"description": "Monitor Kubernetes pods with failures (ImagePullBackOff, CrashLoop) causing 4xx/5xx errors", "function": read_datadog_failed_pods},
     "DD_403_Errors": {"description": "Monitor 403 Forbidden errors from APM traces (Artifactory, authentication issues)", "function": read_datadog_403_errors},
     "P0_Streaming": {"description": "Show P0 Streaming dashboard from Splunk", "function": read_splunk_p0_dashboard},
@@ -175,7 +185,12 @@ _TOOLS_WITH_TIMERANGE = frozenset(
         "DD_Errors",
         "DD_Red_ADT",
         "DD_Red_Samsung",
+        "DD_Red_CAT",
+        "DD_Red_Comcast",
         "DD_Red_Metrics_US",
+        "DD_Samsung_Errors",
+        "DD_CAT_Errors",
+        "DD_Comcast_Errors",
         "DD_Failed_Pods",
         "DD_403_Errors",
         "P0_Streaming",
@@ -380,6 +395,18 @@ def statusmonitor_adt_page():
     return render_template('statusmonitor.html', environment='adt')
 
 
+@flask_app.route('/statusmonitor/cat')
+def statusmonitor_cat_page():
+    """Serve the status monitor dashboard page for CAT partner services only"""
+    return render_template('statusmonitor.html', environment='cat')
+
+
+@flask_app.route('/statusmonitor/comcast')
+def statusmonitor_comcast_page():
+    """Serve the status monitor dashboard page for Comcast partner services only"""
+    return render_template('statusmonitor.html', environment='comcast')
+
+
 @flask_app.route('/statusmonitor/redmetrics-us')
 def statusmonitor_redmetrics_us_page():
     """Serve the status monitor dashboard page for RED Metrics US services"""
@@ -514,7 +541,7 @@ def api_aws_connect_monitor():
 def apm_services_page():
     """
     APM Status Wall: default `all` = every APM `env` as its own block; or one
-    (production, goldendev, goldenqa, adt_prod, samsung_prod) via `?dd_env=…`.
+    (production, goldendev, goldenqa, adt_prod, samsung_prod, cat_prod, comcast_prod) via `?dd_env=…`.
     The `qa` env is not part of the Main tab aggregate or dropdown; `dd_env=qa` still works for a focused API/query.
     See SOFTWARE_CATALOG_* and lists/*_apm_services.txt.
     """
@@ -687,7 +714,7 @@ def api_statusmonitor_software_catalog_wall():
     """
     JSON for /apm-services: APM Status Wall. Body: dd_env
     = all (default) for main envs, golden for Golden tab (goldendev + goldenqa),
-    or one of production|goldendev|goldenqa|adt_prod|samsung_prod|qa (qa not in Main “all” list).
+    or one of production|goldendev|goldenqa|adt_prod|samsung_prod|cat_prod|comcast_prod|qa (qa not in Main “all” list).
     """
     try:
         from tools.status_monitor import (
@@ -1227,6 +1254,11 @@ def api_run():
     input_text = data.get('input', '')
     selected_tools = list(data.get('tools', []) or ['Suggestions'])
     timerange = data.get('timerange', 4)  # Default to 4 hours
+    pagerduty_filters = {
+        "shift": str(data.get("pagerduty_shift") or "").strip().lower(),
+        "team_only": bool(data.get("pagerduty_team_only")),
+        "missing_root_cause": bool(data.get("pagerduty_missing_rca")),
+    }
     start = time.time()
 
     from tools.mcp_tool_suggest import augment_suggested_tools_for_query, is_service_health_question
@@ -1361,6 +1393,7 @@ Examples:
                     user_query=input_text,
                     timerange_hours=timerange,
                     service_filter=svc,
+                    pagerduty_filters=pagerduty_filters,
                 )
                 args["_flask_session"] = session
                 res = invoke_tool(mcp_name, args, info["function"])
@@ -1697,6 +1730,25 @@ def _adt_status_dashboard_id():
     return s
 
 
+def _partner_status_dashboard_id(env_key: str) -> str | None:
+    """External status board id for partner env widgets (CAT, Comcast, etc.)."""
+    v = os.getenv(f"{env_key.upper()}_STATUS_DASHBOARD_ID")
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s or s.lower() in ("off", "false", "no", "0", "none", "*"):
+        return None
+    return s
+
+
+def _cat_status_dashboard_id():
+    return _partner_status_dashboard_id("CAT")
+
+
+def _comcast_status_dashboard_id():
+    return _partner_status_dashboard_id("COMCAST")
+
+
 def _pagerduty_monitor_payload(dashboard_id):
     """
     Same PagerDuty logic as the status monitor semaphore: get_pagerduty_status_counts /
@@ -1747,6 +1799,29 @@ def _jsonify_pagerduty_monitor(data: dict):
 def api_pagerduty_monitor():
     """All-account PagerDuty incidents (no external status board filter)."""
     return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(None))
+
+
+@flask_app.route('/api/pagerduty/incidents')
+def api_pagerduty_incidents():
+    """PagerDuty incidents table for query UI (shift / missing RCA toggles)."""
+    from tools.pagerduty_tool import get_pagerduty_incidents
+    from tools.pagerduty_team import normalize_pagerduty_shift
+
+    query = (request.args.get("query") or "").strip()
+    shift = normalize_pagerduty_shift(request.args.get("shift"))
+    team_only = (request.args.get("team_only") or "0").strip().lower() in ("1", "true", "yes", "on")
+    missing_rca = (request.args.get("missing_rca") or "0").strip().lower() in ("1", "true", "yes", "on")
+    try:
+        html = get_pagerduty_incidents(
+            query,
+            shift=shift,
+            team_only=team_only,
+            missing_root_cause=missing_rca,
+        )
+        return jsonify({"html": html})
+    except Exception as e:
+        logging.error(f"api_pagerduty_incidents: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @flask_app.route('/api/pagerduty/samsung-monitor')
@@ -1801,6 +1876,36 @@ def api_pagerduty_adt_monitor():
                 "error": "ADT status disabled",
                 "disabled": True,
                 "hint": "Set ADT_STATUS_DASHBOARD_ID (default PK1QF1G) or remove it to use the default.",
+            }
+        )
+    return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(bid))
+
+
+@flask_app.route('/api/pagerduty/cat-monitor')
+def api_pagerduty_cat_monitor():
+    """CAT external status board: scoped to CAT_STATUS_DASHBOARD_ID."""
+    bid = _cat_status_dashboard_id()
+    if not bid:
+        return jsonify(
+            {
+                "error": "CAT status disabled",
+                "disabled": True,
+                "hint": "Set CAT_STATUS_DASHBOARD_ID to the PagerDuty external status board id.",
+            }
+        )
+    return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(bid))
+
+
+@flask_app.route('/api/pagerduty/comcast-monitor')
+def api_pagerduty_comcast_monitor():
+    """Comcast external status board: scoped to COMCAST_STATUS_DASHBOARD_ID."""
+    bid = _comcast_status_dashboard_id()
+    if not bid:
+        return jsonify(
+            {
+                "error": "Comcast status disabled",
+                "disabled": True,
+                "hint": "Set COMCAST_STATUS_DASHBOARD_ID to the PagerDuty external status board id.",
             }
         )
     return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(bid))

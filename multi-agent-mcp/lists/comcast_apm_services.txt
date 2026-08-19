@@ -1,0 +1,3 @@
+# APM service names for env:comcast_prod
+# Primary source: Datadog GET /api/v2/apm/services?filter[env]=comcast_prod (SOFTWARE_CATALOG_WALL_DD_APM_LIST)
+# Optional offline copy: populate this file and set SOFTWARE_CATALOG_USE_BUNDLED_COMCAST=1

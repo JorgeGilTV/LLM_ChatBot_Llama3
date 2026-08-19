@@ -75,9 +75,13 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
         "datadog_red_metrics",
         "datadog_red_adt",
         "datadog_red_samsung",
+        "datadog_red_cat",
+        "datadog_red_comcast",
         "datadog_red_metrics_us",
         "datadog_errors",
         "datadog_samsung_errors",
+        "datadog_cat_errors",
+        "datadog_comcast_errors",
         "datadog_failed_pods",
         "datadog_403_errors",
     )
@@ -136,6 +140,12 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
         )
 
     if name == "pagerduty_samsung_board":
+        return func(
+            dashboard_id=text_arg(args, "dashboard_id"),
+            query=text_arg(args, "query", "service"),
+        )
+
+    if name in ("pagerduty_cat_board", "pagerduty_comcast_board"):
         return func(
             dashboard_id=text_arg(args, "dashboard_id"),
             query=text_arg(args, "query", "service"),
@@ -218,6 +228,9 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
     if name == "pagerduty_incidents":
         return func(
             text_arg(args, "query", "service", "status"),
+            shift=str(args.get("shift") or "").strip().lower(),
+            team_only=bool(args.get("team_only")),
+            missing_root_cause=bool(args.get("missing_root_cause")),
         )
 
     if name == "service_owners":
@@ -231,6 +244,12 @@ def invoke_tool(name: str, arguments: dict[str, Any], func: Callable[..., Any]) 
         "pagerduty_insights",
         "oncall_schedule",
     ):
+        if name in ("pagerduty_analytics", "pagerduty_insights"):
+            return func(
+                text_arg(args, "query", "service"),
+                shift=str(args.get("shift") or "").strip().lower(),
+                team_only=bool(args.get("team_only")),
+            )
         return func(text_arg(args, "query", "service"))
 
     return func(service_or_query(args))

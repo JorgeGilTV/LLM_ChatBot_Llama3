@@ -12,7 +12,11 @@ from tools.mcp_phase3_tools import (
     parse_shift_mode_from_question,
 )
 from tools.noc_kt import extract_noc_kt_query, is_noc_kt_question
-from tools.pagerduty_samsung_scrape import is_pagerduty_samsung_board_question
+from tools.pagerduty_samsung_scrape import (
+    is_pagerduty_cat_board_question,
+    is_pagerduty_comcast_board_question,
+    is_pagerduty_samsung_board_question,
+)
 from tools.read_arlo_status import is_arlo_public_status_question
 
 
@@ -89,6 +93,24 @@ _FAST_ROUTE_BUILDERS: list[Callable[[str], McpFastRoute | None]] = [
         "📟 Samsung PagerDuty board → pagerduty_samsung_board (local MCP)",
     )
     if is_pagerduty_samsung_board_question(q)
+    else None,
+    lambda q: McpFastRoute(
+        "pagerduty_cat_board",
+        {"query": q},
+        "🤖 GocBedrock Response (CAT PagerDuty Board)",
+        "linear-gradient(135deg, #ea580c 0%, #c2410c 100%)",
+        "📟 CAT PagerDuty board → pagerduty_cat_board (local MCP)",
+    )
+    if is_pagerduty_cat_board_question(q)
+    else None,
+    lambda q: McpFastRoute(
+        "pagerduty_comcast_board",
+        {"query": q},
+        "🤖 GocBedrock Response (Comcast PagerDuty Board)",
+        "linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)",
+        "📟 Comcast PagerDuty board → pagerduty_comcast_board (local MCP)",
+    )
+    if is_pagerduty_comcast_board_question(q)
     else None,
 ]
 

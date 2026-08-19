@@ -610,11 +610,11 @@ def apm_services_page():
         datadog_software_href=datadog_software_href,
         wall_incremental_apm=True,
         wall_apm_parallel_main_envs=[
+            "production",
             "samsung_prod",
             "adt_prod",
             "comcast_prod",
             "cat_prod",
-            "production",
         ],
         wall_apm_parallel_golden_envs=list(SOFTWARE_CATALOG_WALL_GOLDEN_ENVS),
         wall_apm_env_labels=wall_apm_env_labels,

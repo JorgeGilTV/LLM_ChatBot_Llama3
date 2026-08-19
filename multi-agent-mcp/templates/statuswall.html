@@ -1901,10 +1901,34 @@
             }
         }
 
-        function prepareIncrementalWallRoot(root, envOrder, retainExistingWidgets) {
-            if (!root) return;
+        function swDismissWallLoading() {
             var loading = document.getElementById('sw-loading');
             if (loading) loading.remove();
+        }
+
+        function swDefaultParallelMainEnvs() {
+            return ['samsung_prod', 'adt_prod', 'comcast_prod', 'cat_prod', 'production'];
+        }
+
+        function swResolveIncrementalEnvList(ddEnvChoice) {
+            if (SW_APM_TAB === 'golden') {
+                if (Array.isArray(WALL_APM_PARALLEL_GOLDEN) && WALL_APM_PARALLEL_GOLDEN.length) {
+                    return WALL_APM_PARALLEL_GOLDEN.slice();
+                }
+                return [];
+            }
+            if (ddEnvChoice === 'all') {
+                if (Array.isArray(WALL_APM_PARALLEL_MAIN) && WALL_APM_PARALLEL_MAIN.length) {
+                    return WALL_APM_PARALLEL_MAIN.slice();
+                }
+                return swDefaultParallelMainEnvs();
+            }
+            return [];
+        }
+
+        function prepareIncrementalWallRoot(root, envOrder, retainExistingWidgets) {
+            if (!root) return;
+            swDismissWallLoading();
             if (!retainExistingWidgets) {
                 root.textContent = '';
                 for (var i = 0; i < envOrder.length; i++) {
@@ -3534,8 +3558,7 @@
 
         function mountWallFragment(frag) {
             const root = document.getElementById('sw-root');
-            const loading = document.getElementById('sw-loading');
-            if (loading) loading.remove();
+            swDismissWallLoading();
             root.textContent = '';
             root.appendChild(frag);
             bindWallTipGlobalHandlersOnce();
@@ -3882,30 +3905,38 @@
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
             const rootEl = document.getElementById('sw-root');
-            const useIncremental =
-                WALL_INCREMENTAL_APM &&
-                ((SW_APM_TAB === 'golden' &&
-                    Array.isArray(WALL_APM_PARALLEL_GOLDEN) &&
-                    WALL_APM_PARALLEL_GOLDEN.length > 0) ||
-                    (SW_APM_TAB !== 'golden' &&
-                        ddEnvChoice === 'all' &&
-                        Array.isArray(WALL_APM_PARALLEL_MAIN) &&
-                        WALL_APM_PARALLEL_MAIN.length > 0));
-            const envList =
-                useIncremental
-                    ? (SW_APM_TAB === 'golden' ? WALL_APM_PARALLEL_GOLDEN : WALL_APM_PARALLEL_MAIN)
-                    : [];
+            let envList = swResolveIncrementalEnvList(ddEnvChoice);
+            let useIncremental =
+                WALL_INCREMENTAL_APM !== false &&
+                ((SW_APM_TAB === 'golden' && envList.length > 0) ||
+                    (SW_APM_TAB !== 'golden' && ddEnvChoice === 'all' && envList.length > 0));
+            if (!useIncremental && ddEnvChoice === 'all' && SW_APM_TAB !== 'golden') {
+                envList = swDefaultParallelMainEnvs();
+                useIncremental = true;
+            }
             const viewKey = useIncremental
                 ? 'inc:' + envList.join(',')
                 : 'single:' + String(body.dd_env || '');
             const viewChanged = wallLastViewKey !== '' && wallLastViewKey !== viewKey;
             wallLastViewKey = viewKey;
             const retainExistingWidgets = wallDomEverPainted && !viewChanged;
+            swDismissWallLoading();
             if (rootEl) {
                 if (useIncremental) {
                     rootEl.classList.add('sw-root--all-envs');
+                    if (!retainExistingWidgets) {
+                        prepareIncrementalWallRoot(rootEl, envList, false);
+                    }
                 } else {
                     rootEl.classList.remove('sw-root--all-envs');
+                    if (!retainExistingWidgets) {
+                        rootEl.textContent = '';
+                        const wait = document.createElement('div');
+                        wait.className = 'sw-meta';
+                        wait.style.padding = '24px 16px';
+                        wait.textContent = 'Loading APM metrics…';
+                        rootEl.appendChild(wait);
+                    }
                 }
             }
             statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
@@ -3975,45 +4006,68 @@
             }
         }
 
-        document.getElementById('sw-refresh').addEventListener('click', function() {
-            loadWall({ forceRefresh: true });
-        });
-        const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
-
-        var _swApmEnv = document.getElementById('sw-apm-dd-env');
-        if (_swApmEnv) {
-            _swApmEnv.addEventListener('change', function() {
-                swApmUpdateDatadogLink();
-                swUpdateHistoryForDdEnv(_swApmEnv.value);
-                loadWall({ forceRefresh: true });
-            });
-        }
-
-        document.getElementById('sw-slack').addEventListener('click', function() {
-            if (typeof SlackShare === 'undefined') {
-                alert('Slack: could not load slack_share.js');
-                return;
+        function swInitWallPage() {
+            try {
+                document.getElementById('sw-refresh').addEventListener('click', function() {
+                    loadWall({ forceRefresh: true });
+                });
+            } catch (e) {
+                console.error('Wall init: refresh button', e);
             }
-            var st = document.getElementById('sw-status');
-            var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
-            var title = WALL_SLACK_TITLE;
-            if (line) title += ' · ' + line;
-            SlackShare.sendFromSelector('#sw-root', {
-                page_title: title,
-            });
-        });
-        document.getElementById('sw-timerange').addEventListener('change', loadWall);
-        if (document.getElementById('sw-apm-dd-env')) {
-            swApmUpdateDatadogLink();
+            const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
+
+            try {
+                var _swApmEnv = document.getElementById('sw-apm-dd-env');
+                if (_swApmEnv) {
+                    _swApmEnv.addEventListener('change', function() {
+                        swApmUpdateDatadogLink();
+                        swUpdateHistoryForDdEnv(_swApmEnv.value);
+                        loadWall({ forceRefresh: true });
+                    });
+                }
+            } catch (e) {
+                console.error('Wall init: apm env select', e);
+            }
+
+            try {
+                document.getElementById('sw-slack').addEventListener('click', function() {
+                    if (typeof SlackShare === 'undefined') {
+                        alert('Slack: could not load slack_share.js');
+                        return;
+                    }
+                    var st = document.getElementById('sw-status');
+                    var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
+                    var title = WALL_SLACK_TITLE;
+                    if (line) title += ' · ' + line;
+                    SlackShare.sendFromSelector('#sw-root', {
+                        page_title: title,
+                    });
+                });
+            } catch (e) {
+                console.error('Wall init: slack button', e);
+            }
+
+            try {
+                document.getElementById('sw-timerange').addEventListener('change', loadWall);
+            } catch (e) {
+                console.error('Wall init: timerange select', e);
+            }
+
+            if (document.getElementById('sw-apm-dd-env')) {
+                swApmUpdateDatadogLink();
+            }
+            loadWall();
+            setInterval(loadWall, WALL_REFRESH_MS);
         }
+
         window.addEventListener('pageshow', function(ev) {
             if (ev && ev.persisted) {
                 wallDomEverPainted = false;
                 wallLastViewKey = '';
+                loadWall();
             }
         });
-        loadWall();
-        setInterval(loadWall, WALL_REFRESH_MS);
+        swInitWallPage();
     </script>
 </body>
 </html>

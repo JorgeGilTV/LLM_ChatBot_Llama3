@@ -1,5 +1,5 @@
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, render_template, Response, session, redirect
+from flask import Flask, request, jsonify, send_from_directory, send_file, render_template, Response, session, redirect, make_response
 from flask_cors import CORS
 import time
 import sys
@@ -597,7 +597,8 @@ def apm_services_page():
         + tuple(SOFTWARE_CATALOG_WALL_GOLDEN_ENVS)
     }
     _wall_title = "Status Wall"
-    return render_template(
+    resp = make_response(
+        render_template(
         "statuswall.html",
         wall_title=_wall_title,
         wall_api="/api/statusmonitor/software-catalog-wall",
@@ -610,15 +611,18 @@ def apm_services_page():
         datadog_software_href=datadog_software_href,
         wall_incremental_apm=True,
         wall_apm_parallel_main_envs=[
-            "production",
             "samsung_prod",
             "adt_prod",
             "comcast_prod",
             "cat_prod",
+            "production",
         ],
         wall_apm_parallel_golden_envs=list(SOFTWARE_CATALOG_WALL_GOLDEN_ENVS),
         wall_apm_env_labels=wall_apm_env_labels,
+        )
     )
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
 
 
 @flask_app.route('/api/statusmonitor', methods=['POST'])

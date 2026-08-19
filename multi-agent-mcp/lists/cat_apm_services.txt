@@ -1,3 +1,72 @@
-# APM service names for env:cat_prod
-# Primary source: Datadog GET /api/v2/apm/services?filter[env]=cat_prod (SOFTWARE_CATALOG_WALL_DD_APM_LIST)
-# Optional offline copy: populate this file and set SOFTWARE_CATALOG_USE_BUNDLED_CAT=1
+# APM service names for env:cat (Status Wall slug: cat_prod)
+# Synced from Datadog GET /api/v2/apm/services?filter[env]=cat
+# Count: 68
+
+advisor
+arlo-partner-cat-sipserver-app
+backend-arloautomation-leader
+backend-arlosafeapi
+backend-arlosafelocations
+backend-hmsalexaapi
+backend-hmsam
+backend-hmsapi
+backend-hmsautomation
+backend-hmsautomation-job
+backend-hmsclientauth
+backend-hmscsapi
+backend-hmscspubsub
+backend-hmsdeviceauth
+backend-hmsdeviceevents
+backend-hmsdevicemanagement
+backend-hmsdeviceshadow
+backend-hmsentityauth
+backend-hmsfeeds
+backend-hmsgoogleapi
+backend-hmsguard
+backend-hmshomekit-app
+backend-hmshomekit-scheduler
+backend-hmsifttt
+backend-hmsnotification
+backend-hmspayment
+backend-hmspubsub
+backend-hmsreportingservice
+backend-hmsstreamingapi
+backend-hmsvideoverification
+backend-hmsweb-device
+backend-hmsweb-media
+backend-hmsweb-web
+backend-inapppayments
+backend-log-server
+backend-mediamigrationscheduler
+backend-partner-notifications
+backend-partnercloud
+backend-partnerplatform
+broker-service
+collector
+device-authentication
+device-location
+diagtool_mvc
+directory
+discovery
+geolocation
+history
+hmsweb
+logger
+messaging
+mqtt-auth
+nginx-clientapi
+nginx-deviceapi
+nginx-partnerapi-partnercat
+oauth
+oauth-proxy
+oc-notification-app
+ocapi
+org.apache.catalina.startup.bootstrap
+partner-proxy
+policy
+presence
+registration
+root-servlet
+secret-manager
+support
+supporttool

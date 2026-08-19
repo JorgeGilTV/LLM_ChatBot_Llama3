@@ -1943,8 +1943,8 @@ _EKS_ENV_TAG_VARIANTS = {
     "qa": ["qa"],
     "samsung_prod": ["samsung_prod", "production", "prod"],
     "adt_prod": ["adt_prod"],
-    "cat_prod": ["cat_prod"],
-    "comcast_prod": ["comcast_prod"],
+    "cat_prod": ["cat", "cat_prod"],
+    "comcast_prod": ["comcast", "comcast_prod"],
 }
 
 
@@ -2252,10 +2252,28 @@ def _sm_page_environment_to_wall_dd_env(environment: str | None) -> str | None:
 
 
 def _sm_wall_dd_env_to_dd_tag(wall_dd_env: str) -> str:
-    if wall_dd_env == "samsung_prod":
+    """Map Status Wall slug (e.g. cat_prod) to Datadog APM `env` tag (e.g. cat)."""
+    env = (wall_dd_env or "").strip()
+    if env == "samsung_prod":
         tag = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip()
         return tag or "samsung_prod"
-    return wall_dd_env
+    if env == "cat_prod":
+        tag = (os.getenv("CAT_DD_ENV") or "cat").strip()
+        return tag or "cat"
+    if env == "comcast_prod":
+        tag = (os.getenv("COMCAST_DD_ENV") or "comcast").strip()
+        return tag or "comcast"
+    return env
+
+
+def _sm_wall_dde_to_page_slug(wall_dde: str) -> str:
+    """Map wall dd_env to /statusmonitor/<slug> and PagerDuty correlation slug."""
+    return {
+        "samsung_prod": "samsung",
+        "adt_prod": "adt",
+        "cat_prod": "cat",
+        "comcast_prod": "comcast",
+    }.get((wall_dde or "").strip(), (wall_dde or "").strip())
 
 
 def _apm_wall_finalize_statuses(
@@ -2442,9 +2460,9 @@ def _sm_resolve_services_and_environments(environment):
     if b is not None and environment == "adt":
         return b, ["adt_prod"]
     if b is not None and environment == "cat":
-        return b, ["cat_prod"]
+        return b, [_sm_wall_dd_env_to_dd_tag("cat_prod")]
     if b is not None and environment == "comcast":
-        return b, ["comcast_prod"]
+        return b, [_sm_wall_dd_env_to_dd_tag("comcast_prod")]
     if b is not None and environment == "samsung":
         return b, [_sm_wall_dd_env_to_dd_tag("samsung_prod")]
     if environment == "samsung":
@@ -2460,15 +2478,17 @@ def _sm_resolve_services_and_environments(environment):
         services = dynamic_services if dynamic_services else list(ADT_MONITOR_SERVICES)
         return services, ["adt_prod"]
     if environment == "cat":
+        cat_tag = _sm_wall_dd_env_to_dd_tag("cat_prod")
         services, _src = resolve_software_catalog_wall_service_names("cat_prod")
         if services:
-            return services, ["cat_prod"]
-        return list(ADT_MONITOR_SERVICES), ["cat_prod"]
+            return services, [cat_tag]
+        return list(ADT_MONITOR_SERVICES), [cat_tag]
     if environment == "comcast":
+        comcast_tag = _sm_wall_dd_env_to_dd_tag("comcast_prod")
         services, _src = resolve_software_catalog_wall_service_names("comcast_prod")
         if services:
-            return services, ["comcast_prod"]
-        return list(ADT_MONITOR_SERVICES), ["comcast_prod"]
+            return services, [comcast_tag]
+        return list(ADT_MONITOR_SERVICES), [comcast_tag]
     if environment == "redmetrics-us":
         dynamic_services = get_services_from_dashboard("qiz-7xc-fqr", cache_key="redmetrics_us_dashboard")
         services = dynamic_services if dynamic_services else list(GENERAL_MONITOR_SERVICES)
@@ -3878,8 +3898,9 @@ def _resolve_software_catalog_wall_from_dd_apm(
     """Live APM service list for org-wall envs (production, adt_prod)."""
     if not _software_catalog_wall_use_dd_apm_list(dd_env):
         return None
+    dd_tag = _sm_wall_dd_env_to_dd_tag(dd_env)
     apm_names = _fetch_datadog_apm_service_names_for_env(
-        dd_api, dd_app, dd_site, dd_env
+        dd_api, dd_app, dd_site, dd_tag
     )
     if not apm_names:
         return None
@@ -4619,13 +4640,9 @@ def _software_catalog_wall_payload_for_single_env(
 
     current_time = int(time.time())
     from_time = current_time - (timerange * 3600)
-    if dde == "samsung_prod":
-        sam_e = (os.getenv("SAMSUNG_DD_ENV") or "samsung_prod").strip() or "samsung_prod"
-        environments = [sam_e]
-    else:
-        environments = [dde]
-    pd_slug = "samsung" if dde == "samsung_prod" else dde
-    wall_mode = "samsung" if dde == "samsung_prod" else dde
+    environments = [_sm_wall_dd_env_to_dd_tag(dde)]
+    pd_slug = _sm_wall_dde_to_page_slug(dde)
+    wall_mode = pd_slug
 
     pd_api_key = os.getenv("PAGERDUTY_API_TOKEN")
     if pre_pd is not None:

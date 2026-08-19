@@ -1685,8 +1685,8 @@
                 <option value="production"{% if (wall_dd_env|default('production')) == 'production' %} selected{% endif %}>production</option>
                 <option value="samsung_prod"{% if (wall_dd_env|default('production')) == 'samsung_prod' %} selected{% endif %}>Samsung (samsung_prod)</option>
                 <option value="adt_prod"{% if (wall_dd_env|default('production')) == 'adt_prod' %} selected{% endif %}>ADT (adt_prod)</option>
-                <option value="cat_prod"{% if (wall_dd_env|default('production')) == 'cat_prod' %} selected{% endif %}>CAT (cat_prod)</option>
-                <option value="comcast_prod"{% if (wall_dd_env|default('production')) == 'comcast_prod' %} selected{% endif %}>Comcast (comcast_prod)</option>
+                <option value="cat_prod"{% if (wall_dd_env|default('production')) == 'cat_prod' %} selected{% endif %}>CAT (cat)</option>
+                <option value="comcast_prod"{% if (wall_dd_env|default('production')) == 'comcast_prod' %} selected{% endif %}>Comcast (comcast)</option>
             </select>
             {% else %}
             <span class="sw-meta sw-apm-golden-hint" style="margin-left:12px;font-size:16px;">goldendev · goldenqa</span>

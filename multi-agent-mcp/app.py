@@ -554,7 +554,7 @@ def apm_services_page():
     import re
 
     tab = (request.args.get("tab") or "").strip().lower()
-    q_raw = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "production").strip()
+    q_raw = (request.args.get("dd_env") or os.environ.get("APM_STATUS_WALL_DD_ENV") or "all").strip()
     if tab == "golden":
         wall_dd_env = normalize_software_catalog_wall_dd_env("golden")
     else:

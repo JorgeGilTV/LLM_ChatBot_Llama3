@@ -676,24 +676,6 @@
         .sw-group {
             margin-bottom: 12px;
         }
-        /* All-env grid: Production full width, then Samsung|ADT, then CAT|Comcast */
-        #sw-root.sw-root--all-envs {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            align-items: start;
-        }
-        #sw-root.sw-root--all-envs > .sw-group {
-            margin-bottom: 0;
-        }
-        #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
-            grid-column: 1 / -1;
-        }
-        @media (max-width: 720px) {
-            #sw-root.sw-root--all-envs {
-                grid-template-columns: 1fr;
-            }
-        }
         .sw-group--apm-pending .sw-group-head {
             margin: 0;
             padding: 8px 12px;
@@ -3501,14 +3483,9 @@
             envList,
             statusEl,
             myGen,
-            retainExistingWidgets,
-            allEnvGrid
+            retainExistingWidgets
         ) {
             const root = document.getElementById('sw-root');
-            if (root) {
-                if (allEnvGrid) root.classList.add('sw-root--all-envs');
-                else root.classList.remove('sw-root--all-envs');
-            }
             prepareIncrementalWallRoot(root, envList, retainExistingWidgets);
             if (retainExistingWidgets && root) {
                 root.classList.add('sw-root--refreshing');
@@ -3710,12 +3687,6 @@
             const viewChanged = wallLastViewKey !== '' && wallLastViewKey !== viewKey;
             wallLastViewKey = viewKey;
             const retainExistingWidgets = wallDomEverPainted && !viewChanged;
-            const allEnvGrid =
-                useIncremental && SW_APM_TAB !== 'golden' && ddEl && ddEl.value === 'all';
-            const rootEl = document.getElementById('sw-root');
-            if (rootEl && !useIncremental) {
-                rootEl.classList.remove('sw-root--all-envs');
-            }
             statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
 
             try {
@@ -3726,8 +3697,7 @@
                         envList,
                         statusEl,
                         myGen,
-                        retainExistingWidgets,
-                        allEnvGrid
+                        retainExistingWidgets
                     );
                     if (myGen !== wallLoadGeneration) return;
                     wallDomEverPainted = true;

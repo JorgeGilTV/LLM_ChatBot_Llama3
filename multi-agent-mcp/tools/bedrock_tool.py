@@ -2,7 +2,48 @@ import os
 import json
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
+
+# Errors that mean "these credentials were rejected", as opposed to a throttle,
+# a missing model access grant or any other server-side failure.
+_AUTH_ERROR_CODES = {
+    "AccessDeniedException",
+    "UnrecognizedClientException",
+    "InvalidSignatureException",
+    "ExpiredToken",
+    "ExpiredTokenException",
+    "InvalidClientTokenId",
+}
+
+
+def _error_code(err: ClientError) -> str:
+    return err.response.get("Error", {}).get("Code", "Unknown")
+
+
+def _invoke_model(region, config, model_id, request_body, bearer_token):
+    """Invoke Bedrock with the ABSK API key when given, otherwise with the ambient AWS credentials.
+
+    boto3 only picks up the API key from AWS_BEARER_TOKEN_BEDROCK, and that variable takes
+    precedence over SigV4, so it is scoped to this call and restored afterwards to keep a stale
+    key (possibly left behind by another module) from shadowing valid AWS credentials.
+    """
+    previous = os.environ.get("AWS_BEARER_TOKEN_BEDROCK")
+    if bearer_token:
+        os.environ["AWS_BEARER_TOKEN_BEDROCK"] = bearer_token
+    else:
+        os.environ.pop("AWS_BEARER_TOKEN_BEDROCK", None)
+    try:
+        # A fresh Session (not the cached default one) re-resolves credentials on every call,
+        # so a key or credentials updated at runtime take effect without restarting the app.
+        client = boto3.Session().client("bedrock-runtime", region_name=region, config=config)
+        response = client.invoke_model(modelId=model_id, body=json.dumps(request_body))
+        return json.loads(response["body"].read())
+    finally:
+        if previous is None:
+            os.environ.pop("AWS_BEARER_TOKEN_BEDROCK", None)
+        else:
+            os.environ["AWS_BEARER_TOKEN_BEDROCK"] = previous
+
 
 def ask_bedrock(
     prompt: str,
@@ -25,10 +66,8 @@ def ask_bedrock(
     try:
         # Get AWS Bedrock API key from environment
         # BEDROCK_API_KEY is the special Bedrock API key (starts with ABSK)
-        bedrock_api_key = os.getenv("BEDROCK_API_KEY")
-        
-        if not bedrock_api_key:
-            return "Error: BEDROCK_API_KEY is not defined in env file."
+        # Optional: without it the call is signed with the ambient AWS credentials instead.
+        bedrock_api_key = (os.getenv("BEDROCK_API_KEY") or "").strip()
         
         # If MCP access is enabled, augment the prompt with MCP tools
         if enable_mcp_access:
@@ -74,10 +113,6 @@ User prompt: {prompt}
 
 IMPORTANT: Return ONLY the HTML content, without wrapping it in markdown code blocks."""
         
-        # Set the API key as environment variable for boto3
-        # AWS Bedrock API keys (ABSK) are recognized by boto3 via AWS_BEARER_TOKEN_BEDROCK
-        os.environ['AWS_BEARER_TOKEN_BEDROCK'] = bedrock_api_key
-        
         region = os.getenv("AWS_REGION", "us-east-1")
         
         # Configure timeouts for long-running Bedrock operations
@@ -86,14 +121,6 @@ IMPORTANT: Return ONLY the HTML content, without wrapping it in markdown code bl
             connect_timeout=60,      # 60s to establish connection
             read_timeout=300,        # 5 minutes to read full response (for long generations)
             retries={'max_attempts': 2, 'mode': 'standard'}
-        )
-        
-        # Initialize Bedrock Runtime client
-        # boto3 will automatically use AWS_BEARER_TOKEN_BEDROCK for authentication
-        bedrock_runtime = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=region,
-            config=config
         )
         
         # Inference Profile ID for Claude Sonnet 4.6 (latest model as of Feb 2026)
@@ -113,14 +140,38 @@ IMPORTANT: Return ONLY the HTML content, without wrapping it in markdown code bl
             "temperature": temperature
         }
         
-        # Call Bedrock API
-        response = bedrock_runtime.invoke_model(
-            modelId=model_id,
-            body=json.dumps(request_body)
-        )
+        # Call Bedrock API with the ABSK key first, falling back to the AWS credentials
+        # (env vars, ~/.aws, EC2/ECS/EKS role) when the key is missing or rejected.
+        response_body = None
+        key_error = None
         
-        # Parse response
-        response_body = json.loads(response['body'].read())
+        if bedrock_api_key:
+            try:
+                response_body = _invoke_model(region, config, model_id, request_body, bedrock_api_key)
+            except ClientError as e:
+                if _error_code(e) not in _AUTH_ERROR_CODES:
+                    raise
+                key_error = e
+                print("⚠️  Bedrock: BEDROCK_API_KEY rejected, retrying with AWS credentials...")
+        
+        if response_body is None:
+            renew = (
+                "Renew BEDROCK_API_KEY in the Bedrock console or refresh the AWS credentials "
+                "with scripts/sync_aws_creds_to_dotenv.py."
+            )
+            try:
+                response_body = _invoke_model(region, config, model_id, request_body, None)
+            except NoCredentialsError:
+                if key_error is None:
+                    return f"Error: no BEDROCK_API_KEY and no AWS credentials available. {renew}"
+                return f"AWS Bedrock Error: BEDROCK_API_KEY was rejected and no AWS credentials are available. {renew}"
+            except ClientError as e:
+                if key_error is not None and _error_code(e) in _AUTH_ERROR_CODES:
+                    return (
+                        "AWS Bedrock Error: BEDROCK_API_KEY was rejected and the AWS credentials "
+                        f"were also rejected ({_error_code(e)}). {renew}"
+                    )
+                raise
         
         # Extract the text from the response
         if 'content' in response_body and len(response_body['content']) > 0:

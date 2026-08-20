@@ -676,6 +676,82 @@
         .sw-group {
             margin-bottom: 12px;
         }
+        /* All-env NOC mosaic: production full-width on top, partners in one row below */
+        #sw-root.sw-root--all-envs {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            align-items: start;
+        }
+        #sw-root.sw-root--all-envs > .sw-group {
+            margin-bottom: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(30, 58, 85, 0.55);
+            border-radius: 10px;
+            background: rgba(8, 15, 26, 0.35);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+        }
+        #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
+            grid-column: 1 / -1;
+            order: -10;
+            max-height: min(52vh, 520px);
+        }
+        #sw-root.sw-root--all-envs > .sw-group:not([data-sw-dd-env="production"]) {
+            max-height: min(36vh, 320px);
+        }
+        #sw-root.sw-root--all-envs > .sw-group > .sw-eng-layout,
+        #sw-root.sw-root--all-envs > .sw-group > .sw-compact-org-wrap,
+        #sw-root.sw-root--all-envs > .sw-group > .sw-region-grid,
+        #sw-root.sw-root--all-envs > .sw-group > .sw-splunk-embed-panel {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        #sw-root.sw-root--all-envs .sw-group-head {
+            flex-shrink: 0;
+            margin-bottom: 0;
+            padding: 7px 10px;
+            border-radius: 10px 10px 0 0;
+            gap: 6px 8px;
+        }
+        #sw-root.sw-root--all-envs .sw-group-title {
+            font-size: 13px;
+            font-weight: 800;
+        }
+        #sw-root.sw-root--all-envs .sw-group-head .sw-meta,
+        #sw-root.sw-root--all-envs .sw-group-head .sw-overall-pill,
+        #sw-root.sw-root--all-envs .sw-group-head .sw-badge {
+            font-size: 10px;
+        }
+        #sw-root.sw-root--all-envs .sw-eng-layout {
+            padding: 6px 6px 8px;
+        }
+        #sw-root.sw-root--all-envs .sw-group--all-env-panel .sw-compact-org-wrap {
+            padding: 4px 6px 6px;
+        }
+        #sw-root.sw-root--all-envs .sw-group--all-env-panel .sw-tiles--org-wall {
+            gap: 4px;
+        }
+        body.sw-theme-apm-light #sw-root.sw-root--all-envs > .sw-group {
+            background: rgba(248, 250, 252, 0.92);
+            border-color: rgba(148, 163, 184, 0.45);
+        }
+        @media (max-width: 1100px) {
+            #sw-root.sw-root--all-envs {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
+                max-height: min(48vh, 460px);
+            }
+        }
+        @media (max-width: 720px) {
+            #sw-root.sw-root--all-envs {
+                grid-template-columns: 1fr;
+            }
+        }
         .sw-group--apm-pending .sw-group-head {
             margin: 0;
             padding: 8px 12px;
@@ -3251,9 +3327,13 @@
             return layout;
         }
 
-        function buildApmGroupSection(g, monitors) {
+        function buildApmGroupSection(g, monitors, opts) {
+            opts = opts || {};
             const section = document.createElement('section');
             section.className = 'sw-group';
+            if (opts.allEnvPanel) {
+                section.classList.add('sw-group--all-env-panel');
+            }
             if (g.mode) {
                 section.dataset.swDdEnv = String(g.mode);
             }
@@ -3267,6 +3347,19 @@
             const title = document.createElement('div');
             title.className = 'sw-group-title';
             title.textContent = g.label;
+            if (opts.allEnvPanel && g.mode) {
+                title.style.cursor = 'pointer';
+                title.title = 'Open ' + g.label + ' only';
+                title.addEventListener('click', function(ev) {
+                    ev.preventDefault();
+                    var sel = document.getElementById('sw-apm-dd-env');
+                    if (!sel) return;
+                    sel.value = String(g.mode);
+                    swApmUpdateDatadogLink();
+                    swUpdateHistoryForDdEnv(sel.value);
+                    loadWall({ forceRefresh: true });
+                });
+            }
             head.appendChild(title);
 
             appendMonitorPills(head, monitors);
@@ -3314,7 +3407,12 @@
             }
 
             const engSections = g.engineering_sections;
-            if (engSections && engSections.length) {
+            const modeLc = String(g.mode || '').toLowerCase();
+            const useEngMosaic =
+                engSections &&
+                engSections.length &&
+                !(opts.allEnvPanel && modeLc !== 'production');
+            if (useEngMosaic) {
                 section.classList.add('sw-group--eng-mosaic');
                 const sectionIdPrefix = section.id ? section.id : '';
                 section.appendChild(
@@ -3336,10 +3434,22 @@
                     let columns = g.region_columns;
                     const slugLc = String(g.slug || '').toLowerCase();
                     const useSimpleGrid =
-                        slugLc.indexOf('samsung') >= 0 || !columns || !columns.length;
+                        opts.allEnvPanel ||
+                        slugLc.indexOf('samsung') >= 0 ||
+                        !columns ||
+                        !columns.length;
                     if (useSimpleGrid) {
                         const n = allSvcs.length;
-                        const tileCols = Math.min(6, Math.max(2, n));
+                        let tileCols;
+                        if (opts.allEnvPanel) {
+                            if (modeLc === 'production') {
+                                tileCols = Math.min(10, Math.max(6, Math.ceil(n / 16)));
+                            } else {
+                                tileCols = Math.min(4, Math.max(2, Math.ceil(n / 6)));
+                            }
+                        } else {
+                            tileCols = Math.min(6, Math.max(2, n));
+                        }
                         section.appendChild(buildCompactOrgWallGrid(allSvcs, { tileColumns: tileCols }));
                     } else {
                         columns = filterNonEmptyRegionColumns(columns);
@@ -3483,9 +3593,14 @@
             envList,
             statusEl,
             myGen,
-            retainExistingWidgets
+            retainExistingWidgets,
+            mosaicLayout
         ) {
             const root = document.getElementById('sw-root');
+            if (root) {
+                if (mosaicLayout) root.classList.add('sw-root--all-envs');
+                else root.classList.remove('sw-root--all-envs');
+            }
             prepareIncrementalWallRoot(root, envList, retainExistingWidgets);
             if (retainExistingWidgets && root) {
                 root.classList.add('sw-root--refreshing');
@@ -3556,7 +3671,11 @@
                                 return;
                             }
                             try {
-                                const sec = buildApmGroupSection(g, monitors || data.monitors || null);
+                                const sec = buildApmGroupSection(
+                                    g,
+                                    monitors || data.monitors || null,
+                                    mosaicLayout ? { allEnvPanel: true } : null
+                                );
                                 sec.dataset.swDdEnv = env;
                                 replaceSlot(env, sec);
                                 swInitWallTilePackResize();
@@ -3667,6 +3786,7 @@
             }
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
+            const rootEl = document.getElementById('sw-root');
             const useIncremental =
                 WALL_INCREMENTAL_APM &&
                 ((SW_APM_TAB === 'golden' &&
@@ -3687,6 +3807,11 @@
             const viewChanged = wallLastViewKey !== '' && wallLastViewKey !== viewKey;
             wallLastViewKey = viewKey;
             const retainExistingWidgets = wallDomEverPainted && !viewChanged;
+            const mosaicLayout =
+                useIncremental && SW_APM_TAB !== 'golden' && ddEl && ddEl.value === 'all';
+            if (rootEl && !useIncremental) {
+                rootEl.classList.remove('sw-root--all-envs');
+            }
             statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
 
             try {
@@ -3697,7 +3822,8 @@
                         envList,
                         statusEl,
                         myGen,
-                        retainExistingWidgets
+                        retainExistingWidgets,
+                        mosaicLayout
                     );
                     if (myGen !== wallLoadGeneration) return;
                     wallDomEverPainted = true;

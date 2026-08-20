@@ -772,6 +772,14 @@
             color: rgba(248, 250, 252, 0.9);
             opacity: 1;
         }
+        .sw-group--apm-pending .sw-apm-pending-body {
+            padding: 12px 14px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        body.sw-theme-apm-light .sw-group--apm-pending .sw-apm-pending-body {
+            color: #64748b;
+        }
         .sw-group-head {
             display: flex;
             flex-wrap: wrap;
@@ -1786,6 +1794,12 @@
         /** Tracks all-vs-single env mode so we never append onto stale sections missing data-sw-dd-env. */
         let wallLastViewKey = '';
 
+        function swDismissWallLoading() {
+            var loading = document.getElementById('sw-loading');
+            if (loading) loading.remove();
+        }
+        swDismissWallLoading();
+
         function swEnvFromGroupSlug(slug) {
             if (!slug) return '';
             var s = String(slug);
@@ -1858,8 +1872,7 @@
 
         function prepareIncrementalWallRoot(root, envOrder, retainExistingWidgets) {
             if (!root) return;
-            var loading = document.getElementById('sw-loading');
-            if (loading) loading.remove();
+            swDismissWallLoading();
             if (!retainExistingWidgets) {
                 root.textContent = '';
                 for (var i = 0; i < envOrder.length; i++) {
@@ -1948,7 +1961,7 @@
                 u.searchParams.delete('tab');
                 u.searchParams.delete('dd_env');
                 if (v === 'all') {
-                    /* default: no ?dd_env (server treats as all) */
+                    u.searchParams.set('dd_env', 'all');
                 } else {
                     u.searchParams.set('dd_env', v);
                     if (u.searchParams.get('dd_env') === 'production') {
@@ -1967,6 +1980,8 @@
                     sp.delete('dd_env');
                     if (v !== 'all') {
                         sp.set('dd_env', v);
+                    } else {
+                        sp.set('dd_env', 'all');
                     }
                     if (sp.get('dd_env') === 'production') {
                         sp.delete('dd_env');
@@ -3491,8 +3506,7 @@
 
         function mountWallFragment(frag) {
             const root = document.getElementById('sw-root');
-            const loading = document.getElementById('sw-loading');
-            if (loading) loading.remove();
+            swDismissWallLoading();
             root.textContent = '';
             root.appendChild(frag);
             bindWallTipGlobalHandlersOnce();
@@ -3516,17 +3530,23 @@
         const WALL_APM_PARALLEL_GOLDEN = {{ wall_apm_parallel_golden_envs|default([])|tojson }};
         const WALL_APM_ENV_LABELS = {{ wall_apm_env_labels|default({})|tojson }};
 
-        async function swPostWallBody(postBody) {
-            const maxAttempts = 3;
-            const retryDelayMs = 5000;
+        async function swPostWallBody(postBody, opts) {
+            opts = opts || {};
+            const maxAttempts = opts.incremental ? 2 : 3;
+            const retryDelayMs = opts.incremental ? 2000 : 5000;
+            const timeoutMs = opts.timeoutMs || (opts.incremental ? 180000 : 0);
             let lastErr = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    const res = await fetch(WALL_DATA_URL, {
+                    const fetchOpts = {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(postBody),
-                    });
+                    };
+                    if (timeoutMs > 0 && typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+                        fetchOpts.signal = AbortSignal.timeout(timeoutMs);
+                    }
+                    const res = await fetch(WALL_DATA_URL, fetchOpts);
                     const text = await res.text();
                     if (res.status === 504) {
                         throw new Error('HTTP 504 — Gateway Time-out');
@@ -3558,7 +3578,9 @@
                     const retryable =
                         msg.indexOf('504') >= 0 ||
                         /Gateway Time-?out/i.test(msg) ||
-                        /Failed to fetch/i.test(msg);
+                        /Failed to fetch/i.test(msg) ||
+                        /timed out/i.test(msg) ||
+                        /AbortError/i.test(msg);
                     if (retryable && attempt < maxAttempts) {
                         await new Promise(function(r) { setTimeout(r, retryDelayMs * attempt); });
                         continue;
@@ -3584,6 +3606,10 @@
             head.appendChild(title);
             head.appendChild(meta);
             section.appendChild(head);
+            const body = document.createElement('div');
+            body.className = 'sw-apm-pending-body';
+            body.textContent = 'Fetching APM metrics…';
+            section.appendChild(body);
             return section;
         }
 
@@ -3640,11 +3666,14 @@
 
             await Promise.all(
                 envList.map(function(env) {
-                    return swPostWallBody({
-                        timerange: timerange,
-                        force_refresh: forceRefresh,
-                        dd_env: env,
-                    })
+                    return swPostWallBody(
+                        {
+                            timerange: timerange,
+                            force_refresh: forceRefresh,
+                            dd_env: env,
+                        },
+                        { incremental: true, timeoutMs: 180000 }
+                    )
                         .then(function(data) {
                             if (myGen !== wallLoadGeneration) return;
                             if (!monitors && data.monitors) monitors = data.monitors;
@@ -3671,20 +3700,45 @@
                                 return;
                             }
                             try {
-                                const sec = buildApmGroupSection(
-                                    g,
-                                    monitors || data.monitors || null,
-                                    mosaicLayout ? { allEnvPanel: true } : null
-                                );
-                                sec.dataset.swDdEnv = env;
-                                replaceSlot(env, sec);
-                                swInitWallTilePackResize();
-                                swSchedulePackAllWallTileGrids();
-                                doneOk++;
-                                const src = data.source || {};
-                                totInScope += Number(src.services_in_scope || 0);
-                                totTiles += Number(src.tiles_shown || 0);
-                                if (doneOk === 1) swScrollToHashIfAny();
+                                const monitorsForSec = monitors || data.monitors || null;
+                                requestAnimationFrame(function() {
+                                    if (myGen !== wallLoadGeneration) return;
+                                    try {
+                                        const sec = buildApmGroupSection(
+                                            g,
+                                            monitorsForSec,
+                                            mosaicLayout ? { allEnvPanel: true } : null
+                                        );
+                                        sec.dataset.swDdEnv = env;
+                                        replaceSlot(env, sec);
+                                        swInitWallTilePackResize();
+                                        swSchedulePackAllWallTileGrids();
+                                        doneOk++;
+                                        const src = data.source || {};
+                                        totInScope += Number(src.services_in_scope || 0);
+                                        totTiles += Number(src.tiles_shown || 0);
+                                        if (doneOk === 1) swScrollToHashIfAny();
+                                    } catch (re) {
+                                        console.error('APM wall incremental render', env, re);
+                                        failed++;
+                                        const errSec = document.createElement('section');
+                                        errSec.className = 'sw-group';
+                                        errSec.dataset.swDdEnv = env;
+                                        const h = document.createElement('div');
+                                        h.className = 'sw-group-head';
+                                        const ti = document.createElement('div');
+                                        ti.className = 'sw-group-title';
+                                        ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
+                                        const er = document.createElement('span');
+                                        er.className = 'sw-meta err';
+                                        er.textContent = 'Render failed';
+                                        h.appendChild(ti);
+                                        h.appendChild(er);
+                                        errSec.appendChild(h);
+                                        replaceSlot(env, errSec);
+                                    }
+                                    bumpStatus();
+                                });
                             } catch (re) {
                                 console.error('APM wall incremental render', env, re);
                                 failed++;
@@ -3703,8 +3757,9 @@
                                 h.appendChild(er);
                                 errSec.appendChild(h);
                                 replaceSlot(env, errSec);
+                                bumpStatus();
                             }
-                            bumpStatus();
+                            return;
                         })
                         .catch(function(err) {
                             if (myGen !== wallLoadGeneration) return;
@@ -3772,6 +3827,7 @@
         async function loadWall(options) {
             wallLoadGeneration++;
             const myGen = wallLoadGeneration;
+            swDismissWallLoading();
             const forceRefresh = options && options.forceRefresh === true;
             const trEl = document.getElementById('sw-timerange');
             const timerange = trEl ? parseInt(trEl.value, 10) : 1;
@@ -3811,6 +3867,18 @@
                 useIncremental && SW_APM_TAB !== 'golden' && ddEl && ddEl.value === 'all';
             if (rootEl && !useIncremental) {
                 rootEl.classList.remove('sw-root--all-envs');
+            }
+            if (rootEl && useIncremental && !retainExistingWidgets) {
+                if (mosaicLayout) rootEl.classList.add('sw-root--all-envs');
+                else rootEl.classList.remove('sw-root--all-envs');
+                prepareIncrementalWallRoot(rootEl, envList, false);
+            } else if (rootEl && !useIncremental && !retainExistingWidgets) {
+                rootEl.textContent = '';
+                const wait = document.createElement('div');
+                wait.className = 'sw-meta';
+                wait.style.padding = '24px 16px';
+                wait.textContent = 'Loading APM metrics…';
+                rootEl.appendChild(wait);
             }
             statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
 
@@ -3881,45 +3949,68 @@
             }
         }
 
-        document.getElementById('sw-refresh').addEventListener('click', function() {
-            loadWall({ forceRefresh: true });
-        });
-        const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
-
-        var _swApmEnv = document.getElementById('sw-apm-dd-env');
-        if (_swApmEnv) {
-            _swApmEnv.addEventListener('change', function() {
-                swApmUpdateDatadogLink();
-                swUpdateHistoryForDdEnv(_swApmEnv.value);
-                loadWall({ forceRefresh: true });
-            });
-        }
-
-        document.getElementById('sw-slack').addEventListener('click', function() {
-            if (typeof SlackShare === 'undefined') {
-                alert('Slack: could not load slack_share.js');
-                return;
+        function swBootWallPage() {
+            loadWall();
+            try {
+                document.getElementById('sw-refresh').addEventListener('click', function() {
+                    loadWall({ forceRefresh: true });
+                });
+            } catch (e) {
+                console.error('Wall init: refresh', e);
             }
-            var st = document.getElementById('sw-status');
-            var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
-            var title = WALL_SLACK_TITLE;
-            if (line) title += ' · ' + line;
-            SlackShare.sendFromSelector('#sw-root', {
-                page_title: title,
-            });
-        });
-        document.getElementById('sw-timerange').addEventListener('change', loadWall);
-        if (document.getElementById('sw-apm-dd-env')) {
-            swApmUpdateDatadogLink();
+            const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
+
+            try {
+                var _swApmEnv = document.getElementById('sw-apm-dd-env');
+                if (_swApmEnv) {
+                    _swApmEnv.addEventListener('change', function() {
+                        swApmUpdateDatadogLink();
+                        swUpdateHistoryForDdEnv(_swApmEnv.value);
+                        loadWall({ forceRefresh: true });
+                    });
+                }
+            } catch (e) {
+                console.error('Wall init: apm env', e);
+            }
+
+            try {
+                document.getElementById('sw-slack').addEventListener('click', function() {
+                    if (typeof SlackShare === 'undefined') {
+                        alert('Slack: could not load slack_share.js');
+                        return;
+                    }
+                    var st = document.getElementById('sw-status');
+                    var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
+                    var title = WALL_SLACK_TITLE;
+                    if (line) title += ' · ' + line;
+                    SlackShare.sendFromSelector('#sw-root', {
+                        page_title: title,
+                    });
+                });
+            } catch (e) {
+                console.error('Wall init: slack', e);
+            }
+
+            try {
+                document.getElementById('sw-timerange').addEventListener('change', loadWall);
+            } catch (e) {
+                console.error('Wall init: timerange', e);
+            }
+
+            if (document.getElementById('sw-apm-dd-env')) {
+                swApmUpdateDatadogLink();
+            }
+            setInterval(loadWall, WALL_REFRESH_MS);
         }
+
         window.addEventListener('pageshow', function(ev) {
             if (ev && ev.persisted) {
                 wallDomEverPainted = false;
                 wallLastViewKey = '';
+                loadWall();
             }
         });
-        loadWall();
-        setInterval(loadWall, WALL_REFRESH_MS);
+        swBootWallPage();
     </script>
 </body>
 </html>

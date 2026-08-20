@@ -676,76 +676,18 @@
         .sw-group {
             margin-bottom: 12px;
         }
-        /* All-env NOC mosaic: production full-width on top, partners in one row below */
+        /* All-env grid: Production full width, then Samsung|ADT, then CAT|Comcast */
         #sw-root.sw-root--all-envs {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
             align-items: start;
         }
         #sw-root.sw-root--all-envs > .sw-group {
             margin-bottom: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            border: 1px solid rgba(30, 58, 85, 0.55);
-            border-radius: 10px;
-            background: rgba(8, 15, 26, 0.35);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
         }
         #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
             grid-column: 1 / -1;
-            order: -10;
-            max-height: min(52vh, 520px);
-        }
-        #sw-root.sw-root--all-envs > .sw-group:not([data-sw-dd-env="production"]) {
-            max-height: min(36vh, 320px);
-        }
-        #sw-root.sw-root--all-envs > .sw-group > .sw-eng-layout,
-        #sw-root.sw-root--all-envs > .sw-group > .sw-compact-org-wrap,
-        #sw-root.sw-root--all-envs > .sw-group > .sw-region-grid,
-        #sw-root.sw-root--all-envs > .sw-group > .sw-splunk-embed-panel {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow-x: hidden;
-            overflow-y: auto;
-        }
-        #sw-root.sw-root--all-envs .sw-group-head {
-            flex-shrink: 0;
-            margin-bottom: 0;
-            padding: 7px 10px;
-            border-radius: 10px 10px 0 0;
-            gap: 6px 8px;
-        }
-        #sw-root.sw-root--all-envs .sw-group-title {
-            font-size: 13px;
-            font-weight: 800;
-        }
-        #sw-root.sw-root--all-envs .sw-group-head .sw-meta,
-        #sw-root.sw-root--all-envs .sw-group-head .sw-overall-pill,
-        #sw-root.sw-root--all-envs .sw-group-head .sw-badge {
-            font-size: 10px;
-        }
-        #sw-root.sw-root--all-envs .sw-eng-layout {
-            padding: 6px 6px 8px;
-        }
-        #sw-root.sw-root--all-envs .sw-group--all-env-panel .sw-compact-org-wrap {
-            padding: 4px 6px 6px;
-        }
-        #sw-root.sw-root--all-envs .sw-group--all-env-panel .sw-tiles--org-wall {
-            gap: 4px;
-        }
-        body.sw-theme-apm-light #sw-root.sw-root--all-envs > .sw-group {
-            background: rgba(248, 250, 252, 0.92);
-            border-color: rgba(148, 163, 184, 0.45);
-        }
-        @media (max-width: 1100px) {
-            #sw-root.sw-root--all-envs {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-            #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
-                max-height: min(48vh, 460px);
-            }
         }
         @media (max-width: 720px) {
             #sw-root.sw-root--all-envs {
@@ -771,14 +713,6 @@
             font-style: normal;
             color: rgba(248, 250, 252, 0.9);
             opacity: 1;
-        }
-        .sw-group--apm-pending .sw-apm-pending-body {
-            padding: 12px 14px;
-            font-size: 12px;
-            color: #94a3b8;
-        }
-        body.sw-theme-apm-light .sw-group--apm-pending .sw-apm-pending-body {
-            color: #64748b;
         }
         .sw-group-head {
             display: flex;
@@ -1794,12 +1728,6 @@
         /** Tracks all-vs-single env mode so we never append onto stale sections missing data-sw-dd-env. */
         let wallLastViewKey = '';
 
-        function swDismissWallLoading() {
-            var loading = document.getElementById('sw-loading');
-            if (loading) loading.remove();
-        }
-        swDismissWallLoading();
-
         function swEnvFromGroupSlug(slug) {
             if (!slug) return '';
             var s = String(slug);
@@ -1872,7 +1800,8 @@
 
         function prepareIncrementalWallRoot(root, envOrder, retainExistingWidgets) {
             if (!root) return;
-            swDismissWallLoading();
+            var loading = document.getElementById('sw-loading');
+            if (loading) loading.remove();
             if (!retainExistingWidgets) {
                 root.textContent = '';
                 for (var i = 0; i < envOrder.length; i++) {
@@ -1961,7 +1890,7 @@
                 u.searchParams.delete('tab');
                 u.searchParams.delete('dd_env');
                 if (v === 'all') {
-                    u.searchParams.set('dd_env', 'all');
+                    /* default: no ?dd_env (server treats as all) */
                 } else {
                     u.searchParams.set('dd_env', v);
                     if (u.searchParams.get('dd_env') === 'production') {
@@ -1980,8 +1909,6 @@
                     sp.delete('dd_env');
                     if (v !== 'all') {
                         sp.set('dd_env', v);
-                    } else {
-                        sp.set('dd_env', 'all');
                     }
                     if (sp.get('dd_env') === 'production') {
                         sp.delete('dd_env');
@@ -3342,13 +3269,9 @@
             return layout;
         }
 
-        function buildApmGroupSection(g, monitors, opts) {
-            opts = opts || {};
+        function buildApmGroupSection(g, monitors) {
             const section = document.createElement('section');
             section.className = 'sw-group';
-            if (opts.allEnvPanel) {
-                section.classList.add('sw-group--all-env-panel');
-            }
             if (g.mode) {
                 section.dataset.swDdEnv = String(g.mode);
             }
@@ -3362,19 +3285,6 @@
             const title = document.createElement('div');
             title.className = 'sw-group-title';
             title.textContent = g.label;
-            if (opts.allEnvPanel && g.mode) {
-                title.style.cursor = 'pointer';
-                title.title = 'Open ' + g.label + ' only';
-                title.addEventListener('click', function(ev) {
-                    ev.preventDefault();
-                    var sel = document.getElementById('sw-apm-dd-env');
-                    if (!sel) return;
-                    sel.value = String(g.mode);
-                    swApmUpdateDatadogLink();
-                    swUpdateHistoryForDdEnv(sel.value);
-                    loadWall({ forceRefresh: true });
-                });
-            }
             head.appendChild(title);
 
             appendMonitorPills(head, monitors);
@@ -3422,12 +3332,7 @@
             }
 
             const engSections = g.engineering_sections;
-            const modeLc = String(g.mode || '').toLowerCase();
-            const useEngMosaic =
-                engSections &&
-                engSections.length &&
-                !(opts.allEnvPanel && modeLc !== 'production');
-            if (useEngMosaic) {
+            if (engSections && engSections.length) {
                 section.classList.add('sw-group--eng-mosaic');
                 const sectionIdPrefix = section.id ? section.id : '';
                 section.appendChild(
@@ -3449,22 +3354,10 @@
                     let columns = g.region_columns;
                     const slugLc = String(g.slug || '').toLowerCase();
                     const useSimpleGrid =
-                        opts.allEnvPanel ||
-                        slugLc.indexOf('samsung') >= 0 ||
-                        !columns ||
-                        !columns.length;
+                        slugLc.indexOf('samsung') >= 0 || !columns || !columns.length;
                     if (useSimpleGrid) {
                         const n = allSvcs.length;
-                        let tileCols;
-                        if (opts.allEnvPanel) {
-                            if (modeLc === 'production') {
-                                tileCols = Math.min(10, Math.max(6, Math.ceil(n / 16)));
-                            } else {
-                                tileCols = Math.min(4, Math.max(2, Math.ceil(n / 6)));
-                            }
-                        } else {
-                            tileCols = Math.min(6, Math.max(2, n));
-                        }
+                        const tileCols = Math.min(6, Math.max(2, n));
                         section.appendChild(buildCompactOrgWallGrid(allSvcs, { tileColumns: tileCols }));
                     } else {
                         columns = filterNonEmptyRegionColumns(columns);
@@ -3506,7 +3399,8 @@
 
         function mountWallFragment(frag) {
             const root = document.getElementById('sw-root');
-            swDismissWallLoading();
+            const loading = document.getElementById('sw-loading');
+            if (loading) loading.remove();
             root.textContent = '';
             root.appendChild(frag);
             bindWallTipGlobalHandlersOnce();
@@ -3530,23 +3424,17 @@
         const WALL_APM_PARALLEL_GOLDEN = {{ wall_apm_parallel_golden_envs|default([])|tojson }};
         const WALL_APM_ENV_LABELS = {{ wall_apm_env_labels|default({})|tojson }};
 
-        async function swPostWallBody(postBody, opts) {
-            opts = opts || {};
-            const maxAttempts = opts.incremental ? 2 : 3;
-            const retryDelayMs = opts.incremental ? 2000 : 5000;
-            const timeoutMs = opts.timeoutMs || (opts.incremental ? 180000 : 0);
+        async function swPostWallBody(postBody) {
+            const maxAttempts = 3;
+            const retryDelayMs = 5000;
             let lastErr = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    const fetchOpts = {
+                    const res = await fetch(WALL_DATA_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(postBody),
-                    };
-                    if (timeoutMs > 0 && typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
-                        fetchOpts.signal = AbortSignal.timeout(timeoutMs);
-                    }
-                    const res = await fetch(WALL_DATA_URL, fetchOpts);
+                    });
                     const text = await res.text();
                     if (res.status === 504) {
                         throw new Error('HTTP 504 — Gateway Time-out');
@@ -3578,9 +3466,7 @@
                     const retryable =
                         msg.indexOf('504') >= 0 ||
                         /Gateway Time-?out/i.test(msg) ||
-                        /Failed to fetch/i.test(msg) ||
-                        /timed out/i.test(msg) ||
-                        /AbortError/i.test(msg);
+                        /Failed to fetch/i.test(msg);
                     if (retryable && attempt < maxAttempts) {
                         await new Promise(function(r) { setTimeout(r, retryDelayMs * attempt); });
                         continue;
@@ -3606,10 +3492,6 @@
             head.appendChild(title);
             head.appendChild(meta);
             section.appendChild(head);
-            const body = document.createElement('div');
-            body.className = 'sw-apm-pending-body';
-            body.textContent = 'Fetching APM metrics…';
-            section.appendChild(body);
             return section;
         }
 
@@ -3620,11 +3502,11 @@
             statusEl,
             myGen,
             retainExistingWidgets,
-            mosaicLayout
+            allEnvGrid
         ) {
             const root = document.getElementById('sw-root');
             if (root) {
-                if (mosaicLayout) root.classList.add('sw-root--all-envs');
+                if (allEnvGrid) root.classList.add('sw-root--all-envs');
                 else root.classList.remove('sw-root--all-envs');
             }
             prepareIncrementalWallRoot(root, envList, retainExistingWidgets);
@@ -3666,14 +3548,11 @@
 
             await Promise.all(
                 envList.map(function(env) {
-                    return swPostWallBody(
-                        {
-                            timerange: timerange,
-                            force_refresh: forceRefresh,
-                            dd_env: env,
-                        },
-                        { incremental: true, timeoutMs: 180000 }
-                    )
+                    return swPostWallBody({
+                        timerange: timerange,
+                        force_refresh: forceRefresh,
+                        dd_env: env,
+                    })
                         .then(function(data) {
                             if (myGen !== wallLoadGeneration) return;
                             if (!monitors && data.monitors) monitors = data.monitors;
@@ -3700,45 +3579,16 @@
                                 return;
                             }
                             try {
-                                const monitorsForSec = monitors || data.monitors || null;
-                                requestAnimationFrame(function() {
-                                    if (myGen !== wallLoadGeneration) return;
-                                    try {
-                                        const sec = buildApmGroupSection(
-                                            g,
-                                            monitorsForSec,
-                                            mosaicLayout ? { allEnvPanel: true } : null
-                                        );
-                                        sec.dataset.swDdEnv = env;
-                                        replaceSlot(env, sec);
-                                        swInitWallTilePackResize();
-                                        swSchedulePackAllWallTileGrids();
-                                        doneOk++;
-                                        const src = data.source || {};
-                                        totInScope += Number(src.services_in_scope || 0);
-                                        totTiles += Number(src.tiles_shown || 0);
-                                        if (doneOk === 1) swScrollToHashIfAny();
-                                    } catch (re) {
-                                        console.error('APM wall incremental render', env, re);
-                                        failed++;
-                                        const errSec = document.createElement('section');
-                                        errSec.className = 'sw-group';
-                                        errSec.dataset.swDdEnv = env;
-                                        const h = document.createElement('div');
-                                        h.className = 'sw-group-head';
-                                        const ti = document.createElement('div');
-                                        ti.className = 'sw-group-title';
-                                        ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
-                                        const er = document.createElement('span');
-                                        er.className = 'sw-meta err';
-                                        er.textContent = 'Render failed';
-                                        h.appendChild(ti);
-                                        h.appendChild(er);
-                                        errSec.appendChild(h);
-                                        replaceSlot(env, errSec);
-                                    }
-                                    bumpStatus();
-                                });
+                                const sec = buildApmGroupSection(g, monitors || data.monitors || null);
+                                sec.dataset.swDdEnv = env;
+                                replaceSlot(env, sec);
+                                swInitWallTilePackResize();
+                                swSchedulePackAllWallTileGrids();
+                                doneOk++;
+                                const src = data.source || {};
+                                totInScope += Number(src.services_in_scope || 0);
+                                totTiles += Number(src.tiles_shown || 0);
+                                if (doneOk === 1) swScrollToHashIfAny();
                             } catch (re) {
                                 console.error('APM wall incremental render', env, re);
                                 failed++;
@@ -3757,9 +3607,8 @@
                                 h.appendChild(er);
                                 errSec.appendChild(h);
                                 replaceSlot(env, errSec);
-                                bumpStatus();
                             }
-                            return;
+                            bumpStatus();
                         })
                         .catch(function(err) {
                             if (myGen !== wallLoadGeneration) return;
@@ -3827,7 +3676,6 @@
         async function loadWall(options) {
             wallLoadGeneration++;
             const myGen = wallLoadGeneration;
-            swDismissWallLoading();
             const forceRefresh = options && options.forceRefresh === true;
             const trEl = document.getElementById('sw-timerange');
             const timerange = trEl ? parseInt(trEl.value, 10) : 1;
@@ -3842,7 +3690,6 @@
             }
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
-            const rootEl = document.getElementById('sw-root');
             const useIncremental =
                 WALL_INCREMENTAL_APM &&
                 ((SW_APM_TAB === 'golden' &&
@@ -3863,22 +3710,11 @@
             const viewChanged = wallLastViewKey !== '' && wallLastViewKey !== viewKey;
             wallLastViewKey = viewKey;
             const retainExistingWidgets = wallDomEverPainted && !viewChanged;
-            const mosaicLayout =
+            const allEnvGrid =
                 useIncremental && SW_APM_TAB !== 'golden' && ddEl && ddEl.value === 'all';
+            const rootEl = document.getElementById('sw-root');
             if (rootEl && !useIncremental) {
                 rootEl.classList.remove('sw-root--all-envs');
-            }
-            if (rootEl && useIncremental && !retainExistingWidgets) {
-                if (mosaicLayout) rootEl.classList.add('sw-root--all-envs');
-                else rootEl.classList.remove('sw-root--all-envs');
-                prepareIncrementalWallRoot(rootEl, envList, false);
-            } else if (rootEl && !useIncremental && !retainExistingWidgets) {
-                rootEl.textContent = '';
-                const wait = document.createElement('div');
-                wait.className = 'sw-meta';
-                wait.style.padding = '24px 16px';
-                wait.textContent = 'Loading APM metrics…';
-                rootEl.appendChild(wait);
             }
             statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
 
@@ -3891,7 +3727,7 @@
                         statusEl,
                         myGen,
                         retainExistingWidgets,
-                        mosaicLayout
+                        allEnvGrid
                     );
                     if (myGen !== wallLoadGeneration) return;
                     wallDomEverPainted = true;
@@ -3949,68 +3785,45 @@
             }
         }
 
-        function swBootWallPage() {
-            loadWall();
-            try {
-                document.getElementById('sw-refresh').addEventListener('click', function() {
-                    loadWall({ forceRefresh: true });
-                });
-            } catch (e) {
-                console.error('Wall init: refresh', e);
-            }
-            const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
+        document.getElementById('sw-refresh').addEventListener('click', function() {
+            loadWall({ forceRefresh: true });
+        });
+        const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
 
-            try {
-                var _swApmEnv = document.getElementById('sw-apm-dd-env');
-                if (_swApmEnv) {
-                    _swApmEnv.addEventListener('change', function() {
-                        swApmUpdateDatadogLink();
-                        swUpdateHistoryForDdEnv(_swApmEnv.value);
-                        loadWall({ forceRefresh: true });
-                    });
-                }
-            } catch (e) {
-                console.error('Wall init: apm env', e);
-            }
-
-            try {
-                document.getElementById('sw-slack').addEventListener('click', function() {
-                    if (typeof SlackShare === 'undefined') {
-                        alert('Slack: could not load slack_share.js');
-                        return;
-                    }
-                    var st = document.getElementById('sw-status');
-                    var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
-                    var title = WALL_SLACK_TITLE;
-                    if (line) title += ' · ' + line;
-                    SlackShare.sendFromSelector('#sw-root', {
-                        page_title: title,
-                    });
-                });
-            } catch (e) {
-                console.error('Wall init: slack', e);
-            }
-
-            try {
-                document.getElementById('sw-timerange').addEventListener('change', loadWall);
-            } catch (e) {
-                console.error('Wall init: timerange', e);
-            }
-
-            if (document.getElementById('sw-apm-dd-env')) {
+        var _swApmEnv = document.getElementById('sw-apm-dd-env');
+        if (_swApmEnv) {
+            _swApmEnv.addEventListener('change', function() {
                 swApmUpdateDatadogLink();
-            }
-            setInterval(loadWall, WALL_REFRESH_MS);
+                swUpdateHistoryForDdEnv(_swApmEnv.value);
+                loadWall({ forceRefresh: true });
+            });
         }
 
+        document.getElementById('sw-slack').addEventListener('click', function() {
+            if (typeof SlackShare === 'undefined') {
+                alert('Slack: could not load slack_share.js');
+                return;
+            }
+            var st = document.getElementById('sw-status');
+            var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
+            var title = WALL_SLACK_TITLE;
+            if (line) title += ' · ' + line;
+            SlackShare.sendFromSelector('#sw-root', {
+                page_title: title,
+            });
+        });
+        document.getElementById('sw-timerange').addEventListener('change', loadWall);
+        if (document.getElementById('sw-apm-dd-env')) {
+            swApmUpdateDatadogLink();
+        }
         window.addEventListener('pageshow', function(ev) {
             if (ev && ev.persisted) {
                 wallDomEverPainted = false;
                 wallLastViewKey = '';
-                loadWall();
             }
         });
-        swBootWallPage();
+        loadWall();
+        setInterval(loadWall, WALL_REFRESH_MS);
     </script>
 </body>
 </html>

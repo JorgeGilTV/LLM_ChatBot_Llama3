@@ -676,135 +676,14 @@
         .sw-group {
             margin-bottom: 12px;
         }
-        /* All-env NOC view: production full-width on top, partners in one row below */
-        #sw-root.sw-root--all-envs {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
-            align-items: start;
-            --sw-tile-col-min: 4.35rem;
-            --sw-tile-row-unit: 1.05rem;
-        }
-        #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
-            grid-column: 1 / -1;
-            order: -10;
-            max-height: min(52vh, 520px);
-        }
-        #sw-root.sw-root--all-envs > .sw-group:not([data-sw-dd-env="production"]) {
-            max-height: min(34vh, 300px);
-            min-height: 0;
-        }
-        @media (max-width: 1100px) {
-            #sw-root.sw-root--all-envs {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-            #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
-                max-height: min(48vh, 460px);
-            }
-        }
-        @media (max-width: 720px) {
-            #sw-root.sw-root--all-envs {
-                grid-template-columns: 1fr;
-            }
-            #sw-root.sw-root--all-envs > .sw-group[data-sw-dd-env="production"] {
-                max-height: min(44vh, 420px);
-            }
-            #sw-root.sw-root--all-envs > .sw-group:not([data-sw-dd-env="production"]) {
-                max-height: min(30vh, 260px);
-            }
-        }
-        #sw-root.sw-root--all-envs > .sw-group {
-            margin-bottom: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            border: 1px solid rgba(30, 58, 85, 0.55);
-            border-radius: 10px;
-            background: rgba(8, 15, 26, 0.35);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-        }
-        #sw-root.sw-root--all-envs > .sw-group.sw-group--all-env-panel .sw-compact-org-wrap {
-            padding: 4px 6px 6px;
-        }
-        #sw-root.sw-root--all-envs > .sw-group.sw-group--all-env-panel .sw-tiles--org-wall {
-            gap: 4px;
-        }
-        body.sw-theme-apm-light #sw-root.sw-root--all-envs > .sw-group {
-            background: rgba(248, 250, 252, 0.92);
-            border-color: rgba(148, 163, 184, 0.45);
-        }
-        #sw-root.sw-root--all-envs > .sw-group > .sw-eng-layout,
-        #sw-root.sw-root--all-envs > .sw-group > .sw-compact-org-wrap,
-        #sw-root.sw-root--all-envs > .sw-group > .sw-region-grid,
-        #sw-root.sw-root--all-envs > .sw-group > .sw-splunk-embed-panel {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow-x: hidden;
-            overflow-y: auto;
-        }
-        #sw-root.sw-root--all-envs .sw-group-head {
-            flex-shrink: 0;
-            margin-bottom: 0;
-            padding: 7px 10px;
-            border-radius: 10px 10px 0 0;
-            gap: 6px 8px;
-        }
-        #sw-root.sw-root--all-envs .sw-group-title {
-            font-size: 13px;
-            font-weight: 800;
-        }
-        #sw-root.sw-root--all-envs .sw-group-head .sw-meta,
-        #sw-root.sw-root--all-envs .sw-group-head .sw-overall-pill,
-        #sw-root.sw-root--all-envs .sw-group-head .sw-badge {
-            font-size: 10px;
-        }
-        #sw-root.sw-root--all-envs .sw-eng-layout {
-            padding: 6px 6px 8px;
-        }
-        #sw-root.sw-root--all-envs .sw-eng-block-head {
-            padding: 4px 6px;
-        }
-        #sw-root.sw-root--all-envs .sw-eng-head-title {
-            font-size: 11px;
-        }
         .sw-group--apm-pending .sw-group-head {
             margin: 0;
             padding: 8px 12px;
-            border-radius: 10px 10px 0 0;
+            border-radius: 0;
             background: linear-gradient(180deg, #162236 0%, #0e1626 40%, #080f1a 100%);
             border: none;
             border-bottom: 1px solid #1e3a55;
             box-shadow: 0 1px 0 rgba(37, 99, 180, 0.38);
-        }
-        .sw-group--apm-pending .sw-apm-pending-body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 28px 16px 32px;
-            min-height: 140px;
-            color: rgba(248, 250, 252, 0.88);
-            font-size: 13px;
-            font-weight: 600;
-        }
-        #sw-root.sw-root--all-envs .sw-group--apm-pending .sw-apm-pending-body {
-            min-height: 72px;
-            padding: 16px 12px 20px;
-        }
-        body.sw-theme-apm-light .sw-group--apm-pending .sw-apm-pending-body {
-            color: #475569;
-        }
-        .sw-apm-pending-spinner {
-            width: 28px;
-            height: 28px;
-            border: 3px solid rgba(148, 163, 184, 0.35);
-            border-top-color: #38bdf8;
-            border-radius: 50%;
-            animation: sw-apm-spin 0.85s linear infinite;
-        }
-        @keyframes sw-apm-spin {
-            to { transform: rotate(360deg); }
         }
         .sw-group--apm-pending .sw-group-title {
             color: #ffffff;
@@ -1802,8 +1681,8 @@
             {% if (wall_apm_tab|default('main')) == 'main' %}
             <label for="sw-apm-dd-env" style="margin-left:10px">APM env</label>
             <select id="sw-apm-dd-env" title="All main envs, or one APM tag">
-                <option value="all"{% if (wall_dd_env|default('all')) == 'all' %} selected{% endif %}>All (main envs)</option>
-                <option value="production"{% if (wall_dd_env|default('all')) == 'production' %} selected{% endif %}>production</option>
+                <option value="all"{% if (wall_dd_env|default('production')) == 'all' %} selected{% endif %}>All (main envs)</option>
+                <option value="production"{% if (wall_dd_env|default('production')) == 'production' %} selected{% endif %}>production</option>
                 <option value="samsung_prod"{% if (wall_dd_env|default('production')) == 'samsung_prod' %} selected{% endif %}>Samsung (samsung_prod)</option>
                 <option value="adt_prod"{% if (wall_dd_env|default('production')) == 'adt_prod' %} selected{% endif %}>ADT (adt_prod)</option>
                 <option value="cat_prod"{% if (wall_dd_env|default('production')) == 'cat_prod' %} selected{% endif %}>CAT (cat)</option>
@@ -1901,34 +1780,10 @@
             }
         }
 
-        function swDismissWallLoading() {
-            var loading = document.getElementById('sw-loading');
-            if (loading) loading.remove();
-        }
-
-        function swDefaultParallelMainEnvs() {
-            return ['samsung_prod', 'adt_prod', 'comcast_prod', 'cat_prod', 'production'];
-        }
-
-        function swResolveIncrementalEnvList(ddEnvChoice) {
-            if (SW_APM_TAB === 'golden') {
-                if (Array.isArray(WALL_APM_PARALLEL_GOLDEN) && WALL_APM_PARALLEL_GOLDEN.length) {
-                    return WALL_APM_PARALLEL_GOLDEN.slice();
-                }
-                return [];
-            }
-            if (ddEnvChoice === 'all') {
-                if (Array.isArray(WALL_APM_PARALLEL_MAIN) && WALL_APM_PARALLEL_MAIN.length) {
-                    return WALL_APM_PARALLEL_MAIN.slice();
-                }
-                return swDefaultParallelMainEnvs();
-            }
-            return [];
-        }
-
         function prepareIncrementalWallRoot(root, envOrder, retainExistingWidgets) {
             if (!root) return;
-            swDismissWallLoading();
+            var loading = document.getElementById('sw-loading');
+            if (loading) loading.remove();
             if (!retainExistingWidgets) {
                 root.textContent = '';
                 for (var i = 0; i < envOrder.length; i++) {
@@ -2017,7 +1872,7 @@
                 u.searchParams.delete('tab');
                 u.searchParams.delete('dd_env');
                 if (v === 'all') {
-                    u.searchParams.set('dd_env', 'all');
+                    /* default: no ?dd_env (server treats as all) */
                 } else {
                     u.searchParams.set('dd_env', v);
                     if (u.searchParams.get('dd_env') === 'production') {
@@ -2036,8 +1891,6 @@
                     sp.delete('dd_env');
                     if (v !== 'all') {
                         sp.set('dd_env', v);
-                    } else {
-                        sp.set('dd_env', 'all');
                     }
                     if (sp.get('dd_env') === 'production') {
                         sp.delete('dd_env');
@@ -3398,13 +3251,9 @@
             return layout;
         }
 
-        function buildApmGroupSection(g, monitors, opts) {
-            opts = opts || {};
+        function buildApmGroupSection(g, monitors) {
             const section = document.createElement('section');
             section.className = 'sw-group';
-            if (opts.allEnvPanel) {
-                section.classList.add('sw-group--all-env-panel');
-            }
             if (g.mode) {
                 section.dataset.swDdEnv = String(g.mode);
             }
@@ -3418,19 +3267,6 @@
             const title = document.createElement('div');
             title.className = 'sw-group-title';
             title.textContent = g.label;
-            if (opts.allEnvPanel && g.mode) {
-                title.style.cursor = 'pointer';
-                title.title = 'Open ' + g.label + ' only';
-                title.addEventListener('click', function(ev) {
-                    ev.preventDefault();
-                    var sel = document.getElementById('sw-apm-dd-env');
-                    if (!sel) return;
-                    sel.value = String(g.mode);
-                    swApmUpdateDatadogLink();
-                    swUpdateHistoryForDdEnv(sel.value);
-                    loadWall({ forceRefresh: true });
-                });
-            }
             head.appendChild(title);
 
             appendMonitorPills(head, monitors);
@@ -3478,7 +3314,7 @@
             }
 
             const engSections = g.engineering_sections;
-            if (engSections && engSections.length && !opts.allEnvPanel) {
+            if (engSections && engSections.length) {
                 section.classList.add('sw-group--eng-mosaic');
                 const sectionIdPrefix = section.id ? section.id : '';
                 section.appendChild(
@@ -3499,24 +3335,11 @@
                 } else {
                     let columns = g.region_columns;
                     const slugLc = String(g.slug || '').toLowerCase();
-                    const modeLc = String(g.mode || '').toLowerCase();
                     const useSimpleGrid =
-                        opts.allEnvPanel ||
-                        slugLc.indexOf('samsung') >= 0 ||
-                        !columns ||
-                        !columns.length;
+                        slugLc.indexOf('samsung') >= 0 || !columns || !columns.length;
                     if (useSimpleGrid) {
                         const n = allSvcs.length;
-                        let tileCols;
-                        if (opts.allEnvPanel) {
-                            if (modeLc === 'production') {
-                                tileCols = Math.min(12, Math.max(8, Math.ceil(n / 14)));
-                            } else {
-                                tileCols = Math.min(4, Math.max(2, Math.ceil(n / 6)));
-                            }
-                        } else {
-                            tileCols = Math.min(6, Math.max(2, n));
-                        }
+                        const tileCols = Math.min(6, Math.max(2, n));
                         section.appendChild(buildCompactOrgWallGrid(allSvcs, { tileColumns: tileCols }));
                     } else {
                         columns = filterNonEmptyRegionColumns(columns);
@@ -3558,7 +3381,8 @@
 
         function mountWallFragment(frag) {
             const root = document.getElementById('sw-root');
-            swDismissWallLoading();
+            const loading = document.getElementById('sw-loading');
+            if (loading) loading.remove();
             root.textContent = '';
             root.appendChild(frag);
             bindWallTipGlobalHandlersOnce();
@@ -3582,23 +3406,17 @@
         const WALL_APM_PARALLEL_GOLDEN = {{ wall_apm_parallel_golden_envs|default([])|tojson }};
         const WALL_APM_ENV_LABELS = {{ wall_apm_env_labels|default({})|tojson }};
 
-        async function swPostWallBody(postBody, opts) {
-            opts = opts || {};
-            const maxAttempts = opts.incremental ? 2 : 3;
-            const retryDelayMs = opts.incremental ? 2000 : 5000;
-            const timeoutMs = opts.timeoutMs || (opts.incremental ? 180000 : 0);
+        async function swPostWallBody(postBody) {
+            const maxAttempts = 3;
+            const retryDelayMs = 5000;
             let lastErr = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    const fetchOpts = {
+                    const res = await fetch(WALL_DATA_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(postBody),
-                    };
-                    if (timeoutMs > 0 && typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
-                        fetchOpts.signal = AbortSignal.timeout(timeoutMs);
-                    }
-                    const res = await fetch(WALL_DATA_URL, fetchOpts);
+                    });
                     const text = await res.text();
                     if (res.status === 504) {
                         throw new Error('HTTP 504 — Gateway Time-out');
@@ -3630,9 +3448,7 @@
                     const retryable =
                         msg.indexOf('504') >= 0 ||
                         /Gateway Time-?out/i.test(msg) ||
-                        /Failed to fetch/i.test(msg) ||
-                        /timed out/i.test(msg) ||
-                        /AbortError/i.test(msg);
+                        /Failed to fetch/i.test(msg);
                     if (retryable && attempt < maxAttempts) {
                         await new Promise(function(r) { setTimeout(r, retryDelayMs * attempt); });
                         continue;
@@ -3653,89 +3469,12 @@
             title.className = 'sw-group-title';
             title.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
             const meta = document.createElement('span');
-            meta.className = 'sw-meta sw-apm-pending-meta';
+            meta.className = 'sw-meta';
             meta.textContent = 'Loading…';
             head.appendChild(title);
             head.appendChild(meta);
             section.appendChild(head);
-            const body = document.createElement('div');
-            body.className = 'sw-apm-pending-body';
-            const spin = document.createElement('div');
-            spin.className = 'sw-apm-pending-spinner';
-            spin.setAttribute('aria-hidden', 'true');
-            const note = document.createElement('p');
-            note.className = 'sw-apm-pending-note';
-            note.style.margin = '0';
-            note.textContent = 'Fetching APM metrics…';
-            body.appendChild(spin);
-            body.appendChild(note);
-            section.appendChild(body);
             return section;
-        }
-
-        function swResolveDdEnvChoice(ddEl, body) {
-            if (SW_APM_TAB === 'golden') return 'golden';
-            if (ddEl && ddEl.value) return String(ddEl.value);
-            if (body && body.dd_env) return String(body.dd_env);
-            if (WALL_DD_ENV) return String(WALL_DD_ENV);
-            return 'all';
-        }
-
-        function swPaintIncrementalEnvSlot(env, data, monitors, root, envList, myGen) {
-            if (myGen !== wallLoadGeneration) return { ok: false };
-            const groups = data.groups || [];
-            const g = groups[0];
-            if (!g) {
-                const errSec = document.createElement('section');
-                errSec.className = 'sw-group';
-                errSec.dataset.swDdEnv = env;
-                const h = document.createElement('div');
-                h.className = 'sw-group-head';
-                const ti = document.createElement('div');
-                ti.className = 'sw-group-title';
-                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
-                const er = document.createElement('span');
-                er.className = 'sw-meta err';
-                er.textContent = 'No data';
-                h.appendChild(ti);
-                h.appendChild(er);
-                errSec.appendChild(h);
-                replaceWallEnvSlot(root, env, errSec, envList);
-                return { ok: false };
-            }
-            try {
-                const sec = buildApmGroupSection(g, monitors || data.monitors || null, {
-                    allEnvPanel: true,
-                });
-                sec.dataset.swDdEnv = env;
-                replaceWallEnvSlot(root, env, sec, envList);
-                swInitWallTilePackResize();
-                swSchedulePackAllWallTileGrids();
-                const src = data.source || {};
-                return {
-                    ok: true,
-                    inScope: Number(src.services_in_scope || 0),
-                    tiles: Number(src.tiles_shown || 0),
-                };
-            } catch (re) {
-                console.error('APM wall incremental render', env, re);
-                const errSec = document.createElement('section');
-                errSec.className = 'sw-group';
-                errSec.dataset.swDdEnv = env;
-                const h = document.createElement('div');
-                h.className = 'sw-group-head';
-                const ti = document.createElement('div');
-                ti.className = 'sw-group-title';
-                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
-                const er = document.createElement('span');
-                er.className = 'sw-meta err';
-                er.textContent = 'Render failed';
-                h.appendChild(ti);
-                h.appendChild(er);
-                errSec.appendChild(h);
-                replaceWallEnvSlot(root, env, errSec, envList);
-                return { ok: false };
-            }
         }
 
         async function loadWallApmIncremental(
@@ -3748,7 +3487,6 @@
         ) {
             const root = document.getElementById('sw-root');
             prepareIncrementalWallRoot(root, envList, retainExistingWidgets);
-            wallDomEverPainted = true;
             if (retainExistingWidgets && root) {
                 root.classList.add('sw-root--refreshing');
                 root.dataset.swRefreshGen = String(myGen);
@@ -3766,7 +3504,7 @@
                 if (myGen !== wallLoadGeneration) return;
                 let line;
                 if (doneOk + failed < total) {
-                    line = 'Loading ' + total + ' environments: ' + doneOk + ' ready';
+                    line = 'Loading ' + total + ' environment(s): ' + doneOk + ' ready';
                     if (failed) line += ', ' + failed + ' error(s)';
                     line += ' · range ' + timerange + 'h';
                 } else {
@@ -3774,95 +3512,123 @@
                     line = 'Updated ' + t + ' · range ' + timerange + 'h';
                     if (totInScope) line += ' · ' + totInScope + ' services in scope';
                     if (totTiles) line += ' · ' + totTiles + ' operational tiles';
-                    line += ' · ' + total + ' env panels · auto-refresh 6 min';
+                    line += ' · incremental · auto-refresh 6 min';
                 }
                 statusEl.textContent = line;
             }
             bumpStatus();
 
-            function finishIncrementalCleanup() {
+            function replaceSlot(env, newChild) {
                 if (myGen !== wallLoadGeneration) return;
-                dedupeIncrementalWallRoot(root, envList);
-                if (
-                    retainExistingWidgets &&
-                    root &&
-                    root.dataset.swRefreshGen === String(myGen)
-                ) {
-                    root.classList.remove('sw-root--refreshing');
-                    delete root.dataset.swRefreshGen;
-                }
-                if (doneOk === 0 && failed === total) {
-                    statusEl.classList.add('err');
-                } else {
-                    statusEl.classList.remove('err');
-                }
+                replaceWallEnvSlot(root, env, newChild, envList);
             }
 
-            const tasks = envList.map(function(env) {
-                return swPostWallBody(
-                    {
+            await Promise.all(
+                envList.map(function(env) {
+                    return swPostWallBody({
                         timerange: timerange,
                         force_refresh: forceRefresh,
                         dd_env: env,
-                    },
-                    { incremental: true, timeoutMs: 180000 }
-                )
-                    .then(function(data) {
-                        if (myGen !== wallLoadGeneration) return;
-                        if (!monitors && data.monitors) monitors = data.monitors;
-                        return new Promise(function(resolve) {
-                            requestAnimationFrame(function() {
-                                const painted = swPaintIncrementalEnvSlot(
-                                    env,
-                                    data,
-                                    monitors,
-                                    root,
-                                    envList,
-                                    myGen
-                                );
-                                if (painted.ok) {
-                                    doneOk++;
-                                    totInScope += painted.inScope || 0;
-                                    totTiles += painted.tiles || 0;
-                                    if (doneOk === 1) swScrollToHashIfAny();
-                                } else {
-                                    failed++;
-                                }
-                                bumpStatus();
-                                resolve();
-                            });
-                        });
                     })
-                    .catch(function(err) {
-                        if (myGen !== wallLoadGeneration) return;
-                        failed++;
-                        const errSec = document.createElement('section');
-                        errSec.className = 'sw-group';
-                        errSec.dataset.swDdEnv = env;
-                        const head = document.createElement('div');
-                        head.className = 'sw-group-head';
-                        const ti = document.createElement('div');
-                        ti.className = 'sw-group-title';
-                        ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
-                        const er = document.createElement('span');
-                        er.className = 'sw-meta err';
-                        var em = (err && err.message) ? String(err.message) : String(err);
-                        if (em.indexOf('504') >= 0 || /Gateway Time-?out/i.test(em)) {
-                            em = 'HTTP 504 (timeout) — try again or raise proxy timeout';
-                        } else if (/timed out|AbortError/i.test(em)) {
-                            em = 'Timed out — try Refresh or pick one env';
-                        }
-                        er.textContent = 'Error: ' + em;
-                        head.appendChild(ti);
-                        head.appendChild(er);
-                        errSec.appendChild(head);
-                        replaceWallEnvSlot(root, env, errSec, envList);
-                        bumpStatus();
-                    });
-            });
+                        .then(function(data) {
+                            if (myGen !== wallLoadGeneration) return;
+                            if (!monitors && data.monitors) monitors = data.monitors;
+                            const groups = data.groups || [];
+                            const g = groups[0];
+                            if (!g) {
+                                failed++;
+                                const errSec = document.createElement('section');
+                                errSec.className = 'sw-group';
+                                errSec.dataset.swDdEnv = env;
+                                const h = document.createElement('div');
+                                h.className = 'sw-group-head';
+                                const ti = document.createElement('div');
+                                ti.className = 'sw-group-title';
+                                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
+                                const er = document.createElement('span');
+                                er.className = 'sw-meta err';
+                                er.textContent = 'No data';
+                                h.appendChild(ti);
+                                h.appendChild(er);
+                                errSec.appendChild(h);
+                                replaceSlot(env, errSec);
+                                bumpStatus();
+                                return;
+                            }
+                            try {
+                                const sec = buildApmGroupSection(g, monitors || data.monitors || null);
+                                sec.dataset.swDdEnv = env;
+                                replaceSlot(env, sec);
+                                swInitWallTilePackResize();
+                                swSchedulePackAllWallTileGrids();
+                                doneOk++;
+                                const src = data.source || {};
+                                totInScope += Number(src.services_in_scope || 0);
+                                totTiles += Number(src.tiles_shown || 0);
+                                if (doneOk === 1) swScrollToHashIfAny();
+                            } catch (re) {
+                                console.error('APM wall incremental render', env, re);
+                                failed++;
+                                const errSec = document.createElement('section');
+                                errSec.className = 'sw-group';
+                                errSec.dataset.swDdEnv = env;
+                                const h = document.createElement('div');
+                                h.className = 'sw-group-head';
+                                const ti = document.createElement('div');
+                                ti.className = 'sw-group-title';
+                                ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
+                                const er = document.createElement('span');
+                                er.className = 'sw-meta err';
+                                er.textContent = 'Render failed';
+                                h.appendChild(ti);
+                                h.appendChild(er);
+                                errSec.appendChild(h);
+                                replaceSlot(env, errSec);
+                            }
+                            bumpStatus();
+                        })
+                        .catch(function(err) {
+                            if (myGen !== wallLoadGeneration) return;
+                            failed++;
+                            const errSec = document.createElement('section');
+                            errSec.className = 'sw-group';
+                            errSec.dataset.swDdEnv = env;
+                            const head = document.createElement('div');
+                            head.className = 'sw-group-head';
+                            const ti = document.createElement('div');
+                            ti.className = 'sw-group-title';
+                            ti.textContent = (WALL_APM_ENV_LABELS && WALL_APM_ENV_LABELS[env]) ? WALL_APM_ENV_LABELS[env] : env;
+                            const er = document.createElement('span');
+                            er.className = 'sw-meta err';
+                            var em = (err && err.message) ? String(err.message) : String(err);
+                            if (em.indexOf('504') >= 0 || /Gateway Time-?out/i.test(em)) {
+                                em = 'HTTP 504 (timeout) — try again or raise proxy timeout';
+                            }
+                            er.textContent = 'Error: ' + em;
+                            head.appendChild(ti);
+                            head.appendChild(er);
+                            errSec.appendChild(head);
+                            replaceSlot(env, errSec);
+                            bumpStatus();
+                        });
+                })
+            );
 
-            await Promise.allSettled(tasks);
-            finishIncrementalCleanup();
+            if (myGen !== wallLoadGeneration) return;
+            dedupeIncrementalWallRoot(root, envList);
+            if (
+                retainExistingWidgets &&
+                root &&
+                root.dataset.swRefreshGen === String(myGen)
+            ) {
+                root.classList.remove('sw-root--refreshing');
+                delete root.dataset.swRefreshGen;
+            }
+            if (doneOk === 0 && failed === total) {
+                statusEl.classList.add('err');
+            } else {
+                statusEl.classList.remove('err');
+            }
         }
 
         function swApmUpdateDatadogLink() {
@@ -3891,12 +3657,9 @@
             const trEl = document.getElementById('sw-timerange');
             const timerange = trEl ? parseInt(trEl.value, 10) : 1;
             const ddEl = document.getElementById('sw-apm-dd-env');
-            const ddEnvChoice = swResolveDdEnvChoice(ddEl, null);
             const body = { timerange, force_refresh: forceRefresh };
             if (SW_APM_TAB === 'golden') {
                 body.dd_env = 'golden';
-            } else if (ddEnvChoice === 'all') {
-                body.dd_env = 'all';
             } else if (ddEl) {
                 body.dd_env = ddEl.value;
             } else if (WALL_DD_ENV) {
@@ -3904,41 +3667,26 @@
             }
             const statusEl = document.getElementById('sw-status');
             statusEl.classList.remove('err');
-            const rootEl = document.getElementById('sw-root');
-            let envList = swResolveIncrementalEnvList(ddEnvChoice);
-            let useIncremental =
-                WALL_INCREMENTAL_APM !== false &&
-                ((SW_APM_TAB === 'golden' && envList.length > 0) ||
-                    (SW_APM_TAB !== 'golden' && ddEnvChoice === 'all' && envList.length > 0));
-            if (!useIncremental && ddEnvChoice === 'all' && SW_APM_TAB !== 'golden') {
-                envList = swDefaultParallelMainEnvs();
-                useIncremental = true;
-            }
+            const useIncremental =
+                WALL_INCREMENTAL_APM &&
+                ((SW_APM_TAB === 'golden' &&
+                    Array.isArray(WALL_APM_PARALLEL_GOLDEN) &&
+                    WALL_APM_PARALLEL_GOLDEN.length > 0) ||
+                    (SW_APM_TAB !== 'golden' &&
+                        ddEl &&
+                        ddEl.value === 'all' &&
+                        Array.isArray(WALL_APM_PARALLEL_MAIN) &&
+                        WALL_APM_PARALLEL_MAIN.length > 0));
+            const envList =
+                useIncremental
+                    ? (SW_APM_TAB === 'golden' ? WALL_APM_PARALLEL_GOLDEN : WALL_APM_PARALLEL_MAIN)
+                    : [];
             const viewKey = useIncremental
                 ? 'inc:' + envList.join(',')
                 : 'single:' + String(body.dd_env || '');
             const viewChanged = wallLastViewKey !== '' && wallLastViewKey !== viewKey;
             wallLastViewKey = viewKey;
             const retainExistingWidgets = wallDomEverPainted && !viewChanged;
-            swDismissWallLoading();
-            if (rootEl) {
-                if (useIncremental) {
-                    rootEl.classList.add('sw-root--all-envs');
-                    if (!retainExistingWidgets) {
-                        prepareIncrementalWallRoot(rootEl, envList, false);
-                    }
-                } else {
-                    rootEl.classList.remove('sw-root--all-envs');
-                    if (!retainExistingWidgets) {
-                        rootEl.textContent = '';
-                        const wait = document.createElement('div');
-                        wait.className = 'sw-meta';
-                        wait.style.padding = '24px 16px';
-                        wait.textContent = 'Loading APM metrics…';
-                        rootEl.appendChild(wait);
-                    }
-                }
-            }
             statusEl.textContent = retainExistingWidgets ? 'Refreshing…' : 'Loading…';
 
             try {
@@ -3952,6 +3700,7 @@
                         retainExistingWidgets
                     );
                     if (myGen !== wallLoadGeneration) return;
+                    wallDomEverPainted = true;
                     return;
                 }
 
@@ -4006,68 +3755,45 @@
             }
         }
 
-        function swInitWallPage() {
-            try {
-                document.getElementById('sw-refresh').addEventListener('click', function() {
-                    loadWall({ forceRefresh: true });
-                });
-            } catch (e) {
-                console.error('Wall init: refresh button', e);
-            }
-            const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
+        document.getElementById('sw-refresh').addEventListener('click', function() {
+            loadWall({ forceRefresh: true });
+        });
+        const WALL_SLACK_TITLE = {{ (wall_slack_title|default('Status wall — all environments'))|tojson }};
 
-            try {
-                var _swApmEnv = document.getElementById('sw-apm-dd-env');
-                if (_swApmEnv) {
-                    _swApmEnv.addEventListener('change', function() {
-                        swApmUpdateDatadogLink();
-                        swUpdateHistoryForDdEnv(_swApmEnv.value);
-                        loadWall({ forceRefresh: true });
-                    });
-                }
-            } catch (e) {
-                console.error('Wall init: apm env select', e);
-            }
-
-            try {
-                document.getElementById('sw-slack').addEventListener('click', function() {
-                    if (typeof SlackShare === 'undefined') {
-                        alert('Slack: could not load slack_share.js');
-                        return;
-                    }
-                    var st = document.getElementById('sw-status');
-                    var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
-                    var title = WALL_SLACK_TITLE;
-                    if (line) title += ' · ' + line;
-                    SlackShare.sendFromSelector('#sw-root', {
-                        page_title: title,
-                    });
-                });
-            } catch (e) {
-                console.error('Wall init: slack button', e);
-            }
-
-            try {
-                document.getElementById('sw-timerange').addEventListener('change', loadWall);
-            } catch (e) {
-                console.error('Wall init: timerange select', e);
-            }
-
-            if (document.getElementById('sw-apm-dd-env')) {
+        var _swApmEnv = document.getElementById('sw-apm-dd-env');
+        if (_swApmEnv) {
+            _swApmEnv.addEventListener('change', function() {
                 swApmUpdateDatadogLink();
-            }
-            loadWall();
-            setInterval(loadWall, WALL_REFRESH_MS);
+                swUpdateHistoryForDdEnv(_swApmEnv.value);
+                loadWall({ forceRefresh: true });
+            });
         }
 
+        document.getElementById('sw-slack').addEventListener('click', function() {
+            if (typeof SlackShare === 'undefined') {
+                alert('Slack: could not load slack_share.js');
+                return;
+            }
+            var st = document.getElementById('sw-status');
+            var line = st ? st.textContent.trim().replace(/\|/g, '/') : '';
+            var title = WALL_SLACK_TITLE;
+            if (line) title += ' · ' + line;
+            SlackShare.sendFromSelector('#sw-root', {
+                page_title: title,
+            });
+        });
+        document.getElementById('sw-timerange').addEventListener('change', loadWall);
+        if (document.getElementById('sw-apm-dd-env')) {
+            swApmUpdateDatadogLink();
+        }
         window.addEventListener('pageshow', function(ev) {
             if (ev && ev.persisted) {
                 wallDomEverPainted = false;
                 wallLastViewKey = '';
-                loadWall();
             }
         });
-        swInitWallPage();
+        loadWall();
+        setInterval(loadWall, WALL_REFRESH_MS);
     </script>
 </body>
 </html>

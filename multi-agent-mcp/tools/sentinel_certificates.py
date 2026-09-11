@@ -19,7 +19,7 @@ import requests
 DEFAULT_SENTINEL_BASE = "https://sentinel.arlocloud.com"
 DEFAULT_EXPIRING_DAYS = 15
 DEFAULT_CACHE_SECS = 300
-_HTTP_TIMEOUT = (10, 45)
+_HTTP_TIMEOUT = (20, 60)
 _ERROR_STATUSES = frozenset({"error", "timeout", "failed"})
 
 KNOWN_BRANDS: tuple[tuple[str, str], ...] = (

@@ -1805,6 +1805,24 @@ def api_pagerduty_monitor():
     return _jsonify_pagerduty_monitor(_pagerduty_monitor_payload(None))
 
 
+@flask_app.route('/api/pagerduty/alert-status')
+def api_pagerduty_alert_status():
+    """Pie-chart data: PagerDuty incidents by 'Is Alert' custom field (true/false/empty)."""
+    from tools.pagerduty_alert_status import get_pagerduty_alert_status_counts
+
+    try:
+        days = int(request.args.get("days", "7"))
+    except ValueError:
+        days = 7
+    force_refresh = (request.args.get("force") or "0").strip().lower() in ("1", "true", "yes", "on")
+    try:
+        data = get_pagerduty_alert_status_counts(days=days, force_refresh=force_refresh)
+        return jsonify(data)
+    except Exception as e:
+        logging.error(f"api_pagerduty_alert_status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @flask_app.route('/api/pagerduty/incidents')
 def api_pagerduty_incidents():
     """PagerDuty incidents table for query UI (shift / missing RCA toggles)."""

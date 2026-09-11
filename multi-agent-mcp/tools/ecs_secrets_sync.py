@@ -1,6 +1,9 @@
 """
-Push secret env vars from the running app into the ECS task definition and redeploy.
-Requires AWS credentials + ECS_CLUSTER / ECS_SERVICE / TASK_FAMILY in the environment.
+Sync secrets from the running app and force an ECS redeploy.
+
+When AWS_SECRETS_MANAGER_SECRET_ID is set, values go into that JSON secret and
+the task definition only keeps a pointer (no API keys in the task env).
+Otherwise the previous behaviour remains: bake keys into the task definition.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ import os
 from typing import Any
 
 from tools.env_secrets import ALL_SECRET_KEYS, _read_env_values
+from tools.secrets_manager_sync import SKIP_KEYS as _SM_SKIP_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,12 @@ ECS_ENV_KEYS: frozenset[str] = ALL_SECRET_KEYS | frozenset(
         "MCP_SERVER_URL",
         "MINTMCP_URL",
         "MINTMCP_API_KEY",
+        "AWS_SECRETS_MANAGER_REGION",
+        "AWS_SECRETS_MANAGER_OVERWRITE",
+        "AWS_SECRETS_MANAGER_REQUIRED",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
     }
 )
 
@@ -80,10 +90,40 @@ def sync_task_env_and_redeploy() -> dict[str, Any]:
     if not env_map:
         return {"ecs_sync": "skipped", "reason": "No hay variables para sincronizar"}
 
-    try:
-        import boto3
-    except ImportError:
-        return {"ecs_sync": "error", "error": "boto3 no disponible"}
+    secret_id = (
+        os.getenv("AWS_SECRETS_MANAGER_SECRET_ID")
+        or os.getenv("AWS_SECRETS_MANAGER_SECRET_ARN")
+        or ""
+    ).strip()
+    sm_region = (
+        os.getenv("AWS_SECRETS_MANAGER_REGION") or _ecs_region()
+    ).strip()
+
+    sm_result: dict[str, Any] = {}
+    if secret_id:
+        payload = {k: v for k, v in env_map.items() if k not in _SM_SKIP_KEYS}
+        try:
+            from tools.secrets_manager_sync import put_secret_json
+
+            sm_result = put_secret_json(secret_id, sm_region, payload, merge=True)
+        except Exception as e:
+            logger.exception("secrets manager put failed")
+            return {"ecs_sync": "error", "error": f"Secrets Manager: {type(e).__name__}: {e}"}
+        pointer = {
+            "AWS_SECRETS_MANAGER_SECRET_ID": secret_id,
+            "AWS_SECRETS_MANAGER_REGION": sm_region,
+            "AWS_SECRETS_MANAGER_OVERWRITE": os.getenv("AWS_SECRETS_MANAGER_OVERWRITE") or "1",
+            "AWS_SECRETS_MANAGER_REQUIRED": os.getenv("AWS_SECRETS_MANAGER_REQUIRED") or "1",
+            "ECS_SYNC_SECRETS_ON_SAVE": os.getenv("ECS_SYNC_SECRETS_ON_SAVE") or "1",
+            "ECS_AWS_REGION": _ecs_region(),
+            "ECS_CLUSTER": cluster,
+            "ECS_SERVICE": service,
+            "TASK_FAMILY": family,
+            "GUNICORN_TIMEOUT": os.getenv("GUNICORN_TIMEOUT") or "900",
+        }
+        if os.getenv("AWS_REGION"):
+            pointer["AWS_REGION"] = os.getenv("AWS_REGION") or ""
+        env_map = {k: v for k, v in pointer.items() if v}
 
     try:
         ecs = _ecs_boto_client()
@@ -120,6 +160,7 @@ def sync_task_env_and_redeploy() -> dict[str, Any]:
             "service": service,
             "task_definition": f"{family}:{rev}",
             "env_keys": sorted(env_map.keys()),
+            "secrets_manager": sm_result,
             "deployment": upd["service"].get("taskDefinition"),
         }
     except Exception as e:

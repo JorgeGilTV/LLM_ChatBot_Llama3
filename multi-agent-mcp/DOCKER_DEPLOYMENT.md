@@ -212,23 +212,25 @@ Si el orquestador **no** inyecta cada variable por separado, esta imagen puede *
 | Variable | Descripción |
 |----------|-------------|
 | `AWS_SECRETS_MANAGER_SECRET_ID` | Nombre del secreto o ARN completo (obligatoria para activar la carga). |
-| `AWS_SECRETS_MANAGER_REGION` | Opcional; por defecto `AWS_REGION` / `AWS_DEFAULT_REGION` / `us-east-1`. |
-| `AWS_SECRETS_MANAGER_OVERWRITE` | `1` / `true`: las claves del JSON **pisan** variables ya definidas en el entorno (por defecto no pisan). |
-| `AWS_SECRETS_MANAGER_REQUIRED` | `1` / `true`: si falla la lectura del secreto, el proceso **termina** (útil en producción). |
+| `AWS_SECRETS_MANAGER_REGION` | Opcional; por defecto `AWS_REGION` / `AWS_DEFAULT_REGION` / `us-east-1`. En ECS gocview usa `us-west-2`. |
+| `AWS_SECRETS_MANAGER_OVERWRITE` | `1` / `true`: las claves del JSON **pisan** variables ya definidas (imprescindible si la task definition aún tiene claves viejas). |
+| `AWS_SECRETS_MANAGER_REQUIRED` | `1` / `true`: si falla la lectura del secreto, el proceso **termina** (usar en producción). |
 
 Credenciales de AWS: **perfil de instancia** (EC2), **rol de tarea** (ECS/Fargate), **variables** `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (solo si tu política lo permite), o `~/.aws` en desarrollo.
 
 **Alternativa sin este código**: en **ECS** puedes mapear cada clave del secreto a una variable de entorno con `secrets` en la definición de tarea; la app sigue igual y **no** necesita `AWS_SECRETS_MANAGER_SECRET_ID`.
 
-**Desde tu `.env` local** (sin subir a git): script de ayuda que convierte el `.env` a JSON y crea o actualiza el secreto en AWS:
+**Desde tu `.env` local** (sin subir a git): script que convierte el `.env` a JSON y crea o actualiza el secreto:
 
 ```bash
 cd multi-agent-mcp
-python old/scripts/push_env_to_secrets_manager.py --env-file .env --dry-run --pretty   # solo vista previa
-python old/scripts/push_env_to_secrets_manager.py --env-file .env --push --secret-id oneview/goc/prod --region us-east-1
+python3 scripts/push_env_to_secrets_manager.py --dry-run
+python3 scripts/push_env_to_secrets_manager.py --push --secret-id oneview/goc/prod --region us-west-2
 ```
 
-Requiere credenciales AWS (`aws configure`, `AWS_PROFILE`, o rol) con permiso `secretsmanager:CreateSecret` / `PutSecretValue` / `DescribeSecret`.
+El deploy ECS (`./deploy-ecs-gocview.sh`) por defecto **ya no copia el `.env` entero** a la task definition. Solo deja un puntero (`AWS_SECRETS_MANAGER_SECRET_ID`) y el rol de la tarea lee el JSON al arrancar. Para el modo antiguo: `USE_SECRETS_MANAGER=0 SYNC_SECRETS_TO_ECS=1 ./deploy-ecs-gocview.sh`.
+
+Requiere credenciales AWS (`aws login`, perfil, o rol) con `secretsmanager:CreateSecret` / `PutSecretValue` / `DescribeSecret`. El rol de la tarea ECS necesita `GetSecretValue` (y `PutSecretValue` si usas Guardar en `/secrets`).
 
 ### 3. Verificar Estado
 

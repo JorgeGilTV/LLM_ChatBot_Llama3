@@ -26,7 +26,11 @@ TASK_FAMILY="${TASK_FAMILY:-gocview}"
 IMAGE_NAME="${IMAGE_NAME:-oneview-goc-ai}"
 BUILD_PLATFORM="${BUILD_PLATFORM:-linux/arm64}"
 SYNC_AWS_CREDS_TO_ECS="${SYNC_AWS_CREDS_TO_ECS:-0}"
-SYNC_SECRETS_TO_ECS="${SYNC_SECRETS_TO_ECS:-1}"
+# 1 = inject every key from .env into the task env (legacy). Prefer Secrets Manager.
+SYNC_SECRETS_TO_ECS="${SYNC_SECRETS_TO_ECS:-0}"
+USE_SECRETS_MANAGER="${USE_SECRETS_MANAGER:-1}"
+SECRETS_MANAGER_SECRET_ID="${SECRETS_MANAGER_SECRET_ID:-oneview/goc/prod}"
+SECRETS_MANAGER_REGION="${SECRETS_MANAGER_REGION:-us-west-2}"
 TASK_ROLE_ARN="${TASK_ROLE_ARN:-arn:aws:iam::${ACCOUNT_ID}:role/gocview-task-role}"
 # ArloChat MCP (ALB interno us-east-1; legacy)
 ARLOCHAT_MCP_URL="${ARLOCHAT_MCP_URL:-http://internal-arlochat-mcp-alb-880426873.us-east-1.elb.amazonaws.com:8080}"
@@ -185,7 +189,40 @@ if [[ "${SYNC_AWS_CREDS_TO_ECS}" == "1" ]]; then
 fi
 
 SECRETS_ENV_JQ='[]'
-if [[ "${SYNC_SECRETS_TO_ECS}" == "1" && -f .env ]]; then
+if [[ "${USE_SECRETS_MANAGER}" == "1" ]]; then
+  if ! aws secretsmanager describe-secret --region "$SECRETS_MANAGER_REGION" \
+      --secret-id "$SECRETS_MANAGER_SECRET_ID" >/dev/null 2>&1; then
+    echo "Error: Secrets Manager secret '${SECRETS_MANAGER_SECRET_ID}' not found in ${SECRETS_MANAGER_REGION}." >&2
+    echo "Create it first:" >&2
+    echo "  python3 scripts/push_env_to_secrets_manager.py --push --secret-id ${SECRETS_MANAGER_SECRET_ID} --region ${SECRETS_MANAGER_REGION}" >&2
+    echo "Or deploy the old way: USE_SECRETS_MANAGER=0 SYNC_SECRETS_TO_ECS=1 ./deploy-ecs-gocview.sh" >&2
+    exit 1
+  fi
+  DOT_AWS_REGION="$(read_dotenv_value AWS_REGION .env || true)"
+  SECRETS_ENV_JQ="$(
+    jq -cn \
+      --arg sid "$SECRETS_MANAGER_SECRET_ID" \
+      --arg sreg "$SECRETS_MANAGER_REGION" \
+      --arg cluster "$ECS_CLUSTER" \
+      --arg service "$ECS_SERVICE" \
+      --arg family "$TASK_FAMILY" \
+      --arg gt "$GUNICORN_TIMEOUT" \
+      --arg awsreg "${DOT_AWS_REGION}" \
+      '[
+        {name:"AWS_SECRETS_MANAGER_SECRET_ID", value:$sid},
+        {name:"AWS_SECRETS_MANAGER_REGION", value:$sreg},
+        {name:"AWS_SECRETS_MANAGER_OVERWRITE", value:"1"},
+        {name:"AWS_SECRETS_MANAGER_REQUIRED", value:"1"},
+        {name:"ECS_SYNC_SECRETS_ON_SAVE", value:"1"},
+        {name:"ECS_AWS_REGION", value:"us-west-2"},
+        {name:"ECS_CLUSTER", value:$cluster},
+        {name:"ECS_SERVICE", value:$service},
+        {name:"TASK_FAMILY", value:$family},
+        {name:"GUNICORN_TIMEOUT", value:$gt}
+      ] + (if ($awsreg|length)>0 then [{name:"AWS_REGION", value:$awsreg}] else [] end)'
+  )"
+  echo "==> ECS task env: Secrets Manager pointer only (${SECRETS_MANAGER_SECRET_ID} in ${SECRETS_MANAGER_REGION})"
+elif [[ "${SYNC_SECRETS_TO_ECS}" == "1" && -f .env ]]; then
   SECRETS_ENV_JQ="$(
     python3 - <<'PY'
 import json
@@ -263,7 +300,8 @@ aws ecs describe-task-definition --region "$AWS_REGION" --task-definition "$TASK
     "DD_CAT_DASHBOARD_ID","DD_COMCAST_DASHBOARD_ID","DATADOG_CAT_DASHBOARD_ID","DATADOG_COMCAST_DASHBOARD_ID",
     "SHIFT1_OUTLOOK_NOC_MEMBERS","SHIFT2_OUTLOOK_NOC_MEMBERS","SHIFT3_OUTLOOK_NOC_MEMBERS","SLACK_BOT_TOKEN","SLACK_WEBHOOK_URL","ATLASSIAN_EMAIL",
     "CONFLUENCE_TOKEN","CONFLUENCE_ATLASSIAN_HOST","GRAFANA_URL","GRAFANA_API_KEY","GEMINI_API_KEY",
-    "ANTHROPIC_API_KEY","SNOW_USER","SNOW_PASSWORD","SNOW_SESSION_COOKIE","SNOW_USER_TOKEN","SNOW_INSTANCE","AWS_SECRETS_MANAGER_SECRET_ID",
+    "ANTHROPIC_API_KEY","SNOW_USER","SNOW_PASSWORD","SNOW_SESSION_COOKIE","SNOW_USER_TOKEN","SNOW_INSTANCE",
+    "AWS_SECRETS_MANAGER_SECRET_ID","AWS_SECRETS_MANAGER_REGION","AWS_SECRETS_MANAGER_OVERWRITE","AWS_SECRETS_MANAGER_REQUIRED",
     "AMPLITUDE_API_KEY","AMPLITUDE_SECRET_KEY","AMPLITUDE_API_BASE_URL","AMPLITUDE_DASHBOARD_URL",
     "AMPLITUDE_HOME_URL","AMPLITUDE_UI_READY_CHART_URL_IOS","AMPLITUDE_UI_READY_CHART_URL_ANDROID",
     "AMPLITUDE_UI_READY_CHART_ID_ANDROID","AMPLITUDE_HTTP_TIMEOUT",

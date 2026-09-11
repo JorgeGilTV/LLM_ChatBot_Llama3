@@ -44,7 +44,7 @@ ENGINEERING_GROUP_ORDER: tuple[str, ...] = (
 # Org Status Wall: four columns (stacks top→bottom, left→right).
 ENGINEERING_COLUMN_SLUGS: tuple[tuple[str, ...], ...] = (
     (
-        "xcloud-engineering",
+        "engineering-platform-services",
         "platform-engineering",
     ),
     (
@@ -63,12 +63,12 @@ ENGINEERING_COLUMN_SLUGS: tuple[tuple[str, ...], ...] = (
         "client-engineering",
         "firmware",
     ),
-    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc"),
+    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "xcloud-engineering"),
 )
 
 # ADT org wall: Platform under Partner; Core Services under Other.
 ENGINEERING_COLUMN_SLUGS_ADT: tuple[tuple[str, ...], ...] = (
-    ("xcloud-engineering",),
+    ("engineering-platform-services",),
     (
         "partner-engineering",
         "platform-engineering",
@@ -85,7 +85,7 @@ ENGINEERING_COLUMN_SLUGS_ADT: tuple[tuple[str, ...], ...] = (
         "client-engineering",
         "firmware",
     ),
-    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "core-services"),
+    ("cicd", "smart-vision-streaming", "smart-vision", "oci", "noc", "core-services", "xcloud-engineering"),
 )
 
 
@@ -122,6 +122,7 @@ OWNER_SLUG_TO_LABEL: dict[str, str] = {
     "xcloud-engineering": "Xcloud Engineering",
     "partner-engineering": "Partner Engineering",
     "platform-engineering": "Platform Engineering",
+    "engineering-platform-services": "Engineering Platform Services",
     "smart-vision-streaming": "Smart Vision Streaming",
     "smart-vision-computer-vision": "Smart Vision",
     "subscription-engineering": "Subscription Engineering",

@@ -28,6 +28,7 @@ MCP_TOOL_CATEGORIES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
         "#0d9488",
         (
             "service_owners",
+            "sre_companion",
             "arlo_versions",
             "deployed_fw_versions",
             "piranha_employee_lookup",

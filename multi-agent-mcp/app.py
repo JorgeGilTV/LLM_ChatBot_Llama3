@@ -97,6 +97,7 @@ except ImportError as e:
         """
 
 from tools.service_owners import service_owners_search
+from tools.sre_companion import sre_companion_search
 from tools.noc_kt import noc_kt_search
 from tools.read_arlo_status import read_arlo_status
 from tools.oncall_support import confluence_oncall_today
@@ -140,6 +141,7 @@ TOOLS = {
     #"Wiki": {"description": "Read workarounds from Confluece", "function": read_tickets},
     "Wiki": {"description": "Read documents from Arlo confluence", "function": confluence_search},
     "Owners": {"description": "Verify who owns each service", "function": service_owners_search},
+    "SRE_Companion": {"description": "Find the SRE companion/reliability partner for a service or engineering area", "function": sre_companion_search},
     "Arlo_Versions": {"description": "Read version information from versions.arlocloud.com", "function": read_versions},
     "Deployed_FW_Versions": {"description": "Read deployed firmware/version matrix from deployed-fw-versions.arlocloud.com", "function": read_deployed_fw_versions},
     "Sentinel_SSL": {"description": "Monitor SSL/TLS certificates from sentinel.arlocloud.com — expired and expiring soon", "function": read_sentinel_certificates},

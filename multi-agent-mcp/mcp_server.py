@@ -38,6 +38,7 @@ from mcp.types import Tool, TextContent
 # Import all tool functions
 from tools.confluence_tool import confluence_search
 from tools.service_owners import service_owners_search
+from tools.sre_companion import sre_companion_search
 from tools.oncall_support import confluence_oncall_today
 from tools.read_versions import read_versions
 from tools.deployed_fw_versions import read_deployed_fw_versions
@@ -125,6 +126,20 @@ TOOL_REGISTRY = {
                 }
             },
             "required": ["service"]
+        }
+    },
+    "sre_companion": {
+        "description": "Find the SRE companion (reliability partner) for a service or engineering area, from the SRE Companion with Service Teams Confluence page",
+        "function": sre_companion_search,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service or engineering area name to look up the SRE companion for"
+                }
+            },
+            "required": []
         }
     },
     "arlo_versions": {

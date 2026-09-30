@@ -1586,7 +1586,7 @@ def download_docx():
         doc = Document()
         
         # Add title
-        title = doc.add_heading('OneView GOC AI Results', level=0)
+        title = doc.add_heading('Argus OneView Results', level=0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         # Add timestamp
@@ -1975,7 +1975,7 @@ def api_slack_send_results():
             blocks = [
                 {
                     "type": "header",
-                    "text": {"type": "plain_text", "text": "OneView GOC AI", "emoji": True},
+                    "text": {"type": "plain_text", "text": "Argus OneView", "emoji": True},
                 },
                 {"type": "divider"},
             ]
@@ -2435,7 +2435,7 @@ def api_slack_send_screenshot():
     if len(data) > max_bytes:
         return jsonify({"success": False, "error": "Image too large (max 8 MB)"}), 400
 
-    caption = (request.form.get("caption") or "").strip() or "OneView GOC AI — screenshot"
+    caption = (request.form.get("caption") or "").strip() or "Argus OneView — screenshot"
     caption = caption[:500]
 
     webhook = (os.getenv("SLACK_WEBHOOK_URL") or "").strip()
@@ -3903,7 +3903,7 @@ def api_deployments_upcoming():
 async def mcp_sse_endpoint():
     """
     MCP Server SSE endpoint
-    Exposes OneView GOC AI tools as MCP server for consumption by Claude Desktop, Cursor, etc.
+    Exposes Argus OneView tools as MCP server for consumption by Claude Desktop, Cursor, etc.
     """
     try:
         from mcp_server import get_mcp_server
@@ -3960,7 +3960,7 @@ def mcp_info():
     return jsonify({
         'name': 'oneview-goc-ai',
         'version': '3.0.0',
-        'description': 'OneView GOC AI - Unified monitoring and operations platform',
+        'description': 'Argus OneView - Unified monitoring and operations platform',
         'protocol': 'mcp',
         'transport': 'sse',
         'endpoint': '/mcp/sse',

@@ -1,4 +1,4 @@
-// Scripts.js — OneView GOC AI (main chat UI)
+// Scripts.js — Argus OneView (main chat UI)
 let counterInterval;
 let startTime;
 
@@ -3040,7 +3040,7 @@ function loadStatusMonitor(forceRefresh) {
 
 // Page load initialization
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Initializing OneView GOC AI v2.0...');
+    console.log('🚀 Initializing Argus OneView v2.0...');
     
     // Load saved theme
     loadSavedTheme();

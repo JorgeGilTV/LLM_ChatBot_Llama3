@@ -3,7 +3,7 @@
     "oneview-goc-ai": {
       "url": "http://localhost:8080/mcp/sse",
       "transport": "sse",
-      "name": "OneView GOC AI",
+      "name": "Argus OneView",
       "version": "3.0.0",
       "description": "Unified monitoring and operations platform for Arlo services",
       "author": "Arlo Technologies",

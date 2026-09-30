@@ -799,22 +799,20 @@ function toolSelectionNeedsTimerange(selectedTools) {
     return selectedTools.some(function (t) { return MCP_TIMERANGE_TOOLS.has(t); });
 }
 
-function getToolSectionLogo(sectionKey) {
-    const logos = {
-        ai: '🤖',
-        datadog: '<img src="/static/images/logos/datadog.svg" class="section-logo" alt="Datadog">',
-        splunk: '<img src="/static/images/logos/splunk.svg" class="section-logo" alt="Splunk">',
-        pagerduty: '<img src="/static/images/logos/pagerduty.svg" class="section-logo" alt="PagerDuty">',
-        confluence: '<img src="/static/images/logos/confluence.svg" class="section-logo" alt="Confluence">',
-        slack: '<img src="/static/images/logos/slack.svg" class="section-logo" alt="Slack">',
-        grafana: '📈',
-        services: '🧩',
-        noc_ops: '🛡️',
-        aws: '☁️',
-        shm: '📊',
-        other: '🔧',
-    };
-    return logos[sectionKey] || '🔧';
+const TOOL_SECTION_SHORT_TITLES = {
+    ai: 'AI/Synth',
+    confluence: 'Conf/Docs',
+    services: 'Serv/Vers',
+    pagerduty: 'PDuty',
+    noc_ops: 'Cal/Status',
+    security: 'SSL/Sec',
+    servicenow: 'SNow',
+    aws: 'AWS',
+    shm: 'SHM',
+};
+
+function getToolSectionTitle(section) {
+    return TOOL_SECTION_SHORT_TITLES[section.key] || section.title;
 }
 
 function renderToolCheckboxSections(container, sections, groupedTools, idPrefix) {
@@ -831,10 +829,8 @@ function renderToolCheckboxSections(container, sections, groupedTools, idPrefix)
         header.style.borderLeftColor = section.color;
         const dropdownId = 'dropdown-' + categoryId;
         const selectAllId = 'select-all-' + categoryId;
-        const logo = getToolSectionLogo(section.key);
         header.innerHTML =
-            '<span class="tool-dropdown-icon" onclick="toggleToolDropdown(\'' + dropdownId + '\', event)">' + logo + '</span>' +
-            '<span class="tool-dropdown-title" onclick="toggleToolDropdown(\'' + dropdownId + '\', event)">' + section.title + '</span>' +
+            '<span class="tool-dropdown-title" onclick="toggleToolDropdown(\'' + dropdownId + '\', event)" title="' + section.title + '">' + getToolSectionTitle(section) + '</span>' +
             '<span class="tool-dropdown-toggle" onclick="toggleToolDropdown(\'' + dropdownId + '\', event)">▼</span>';
         dropdownDiv.appendChild(header);
 

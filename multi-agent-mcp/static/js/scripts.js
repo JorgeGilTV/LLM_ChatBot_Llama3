@@ -1258,11 +1258,14 @@ function buildEnvHubKpiRow(e) {
     return '<div class="sm-hub-kpi-row">' + parts.join('') + '</div>';
 }
 
+const ENV_HUB_MAX_VISIBLE_ISSUES = 2;
+
 function buildEnvHubIssueList(e) {
-    const items = e.issue_services || [];
-    if (!items.length) {
+    const allItems = e.issue_services || [];
+    if (!allItems.length) {
         return '';
     }
+    const items = allItems.slice(0, ENV_HUB_MAX_VISIBLE_ISSUES);
     const envHref = sanitizeHttpHrefForDom(e.href) || '#';
     const rows = items
         .map(function (it) {
@@ -1294,7 +1297,7 @@ function buildEnvHubIssueList(e) {
             );
         })
         .join('');
-    const truncated = Number(e.issue_services_truncated || 0);
+    const truncated = Number(e.issue_services_truncated || 0) + Math.max(0, allItems.length - items.length);
     const more =
         truncated > 0
             ? '<a class="sm-hub-issue-more" href="' +

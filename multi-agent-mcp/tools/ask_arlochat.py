@@ -53,6 +53,7 @@ from tools.mcp_connect import (
     is_mintmcp_url,
     mcp_transport_label,
     open_mcp_session,
+    open_mcp_session_with_fallback,
 )
 
 
@@ -2153,8 +2154,8 @@ async def ask_arlo_with_bedrock_intelligence_async(question: str = "", context_f
         from tools.bedrock_tool import ask_bedrock
         
         print("🔗 Connecting to MCP server...")
-        async with open_mcp_session() as session:
-                
+        async with open_mcp_session_with_fallback() as session:
+
                 print("📋 Fetching available tools from MCP...")
                 mcp_tools_response = await session.list_tools()
                 mcp_tools_list = mcp_tools_response.tools

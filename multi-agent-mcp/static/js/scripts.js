@@ -3069,13 +3069,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sidebar widgets: defer until idle so first paint + /api/tools are not blocked
     const runSidebarMonitors = () => {
-        probeSnowExtension(1200);
-        loadStatusMonitor();
         loadPagerDutyMonitor();
         loadSplunkOutliersMonitor();
         loadSentinelCertificates();
-        bootServiceNowFromUrl();
-        observeServiceNowDashboardCard();
         loadUpcomingDeployments();
     };
     if (typeof requestIdleCallback === 'function') {
@@ -3085,11 +3081,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Auto-refresh status widgets every 6 minutes
-    setInterval(loadStatusMonitor, 360000);
     setInterval(loadPagerDutyMonitor, 360000);
     setInterval(loadSplunkOutliersMonitor, 360000);
     setInterval(loadSentinelCertificates, 360000);
-    setInterval(loadServiceNowDashboard, 360000);
     setInterval(loadUpcomingDeployments, 360000);
     
     // Update timestamp initially
